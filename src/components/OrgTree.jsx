@@ -28,22 +28,22 @@ function OrgNode({ node, depth = 0 }) {
         </span>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-gray-800">{node.name}</span>
+          <span className="text-sm font-semibold text-gray-800">{node.Name}</span>
           <span
             className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              ROLE_COLORS[node.role] ?? 'bg-gray-100 text-gray-600'
+              ROLE_COLORS[node.Role] ?? 'bg-gray-100 text-gray-600'
             }`}
           >
-            {node.role}
+            {node.Role}
           </span>
-          <span className="text-xs text-gray-400">{node.email}</span>
+          <span className="text-xs text-gray-400">{node.Email}</span>
         </div>
       </div>
 
       {open && hasChildren && (
         <div>
           {node.children.map((child) => (
-            <OrgNode key={child.email ?? child._id} node={child} depth={depth + 1} />
+            <OrgNode key={child.Email ?? child._id} node={child} depth={depth + 1} />
           ))}
         </div>
       )}
@@ -59,7 +59,7 @@ export default function OrgTree({ data }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       {roots.map((node) => (
-        <OrgNode key={node.email ?? node._id} node={node} depth={0} />
+        <OrgNode key={node.Email ?? node._id} node={node} depth={0} />
       ))}
     </div>
   )

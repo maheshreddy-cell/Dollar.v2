@@ -46,7 +46,7 @@ export default function AssignTargets() {
   useEffect(() => {
     if (!selected) return
     setExistingTarget(null)
-    getTargets(selected.email, month)
+    getTargets(selected.Email, month)
       .then((res) => {
         if (res.length > 0) {
           setExistingTarget(res[0])
@@ -83,7 +83,7 @@ export default function AssignTargets() {
     setSubmitting(true)
     try {
       await assignTarget({
-        email: selected.email,
+        email: selected.Email,
         month,
         targetAmount: Number(form.targetAmount),
         commissionStartDate: form.commissionStartDate || undefined,
@@ -138,21 +138,21 @@ export default function AssignTargets() {
             <div className="divide-y divide-gray-50">
               {team.map((member) => (
                 <button
-                  key={member.email}
+                  key={member.Email}
                   onClick={() => { setSelected(member); setSuccess(false); setFormError('') }}
                   className={`w-full text-left px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                    selected?.email === member.email ? 'bg-brand-50' : ''
+                    selected?.Email === member.Email ? 'bg-brand-50' : ''
                   }`}
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{member.name}</p>
-                    <p className="text-xs text-gray-400">{member.email}</p>
+                    <p className="text-sm font-medium text-gray-800">{member.Name}</p>
+                    <p className="text-xs text-gray-400">{member.Email}</p>
                     <span
                       className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                        ROLE_COLORS[member.role] ?? 'bg-gray-100 text-gray-600'
+                        ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      {member.role}
+                      {member.Role}
                     </span>
                   </div>
                   <ChevronRight
@@ -177,8 +177,8 @@ export default function AssignTargets() {
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-800">{selected.name}</h3>
-                  <p className="text-xs text-gray-400">{selected.email}</p>
+                  <h3 className="text-sm font-semibold text-gray-800">{selected.Name}</h3>
+                  <p className="text-xs text-gray-400">{selected.Email}</p>
                 </div>
                 {existingTarget && (
                   <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
