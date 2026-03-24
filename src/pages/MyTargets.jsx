@@ -16,7 +16,7 @@ const STATUS_COLORS = {
 }
 
 export default function MyTargets() {
-  const { user } = useAuth()
+  const { effectiveUser: user } = useAuth()
   const { month } = useMonth()
 
   const [target, setTarget] = useState(null)

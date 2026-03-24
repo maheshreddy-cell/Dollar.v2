@@ -3,7 +3,6 @@ import { login as apiLogin, activateInvite as apiActivate } from '../services/ap
 
 const AuthContext = createContext(null)
 
-// Session stored as plain object in localStorage — no JWT, no backend
 const SESSION_KEY = 'dollarUser'
 
 function readSession() {
@@ -16,14 +15,17 @@ function readSession() {
 }
 
 export function AuthProvider({ children }) {
-  // Read session synchronously — no loading spinner needed
-  const [user, setUser] = useState(() => readSession())
+  const [user, setUser]       = useState(() => readSession())
+  const [viewAs, setViewAs]   = useState(null)   // { email, name, role, managerEmail }
+
+  // What all pages see for data fetching — real user unless Admin is impersonating
+  const effectiveUser = viewAs || user
 
   const login = async (email, password) => {
-    // Apps Script verifies password (SHA-256 hashed server-side) and returns user data
     const userData = await apiLogin(email, password)
     localStorage.setItem(SESSION_KEY, JSON.stringify(userData))
     setUser(userData)
+    setViewAs(null)
     return userData
   }
 
@@ -37,6 +39,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem(SESSION_KEY)
     setUser(null)
+    setViewAs(null)
   }
 
   const isRole = (...roles) => {
@@ -45,7 +48,18 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading: false, login, activateInvite, logout, isRole }}>
+    <AuthContext.Provider value={{
+      user,
+      effectiveUser,
+      viewAs,
+      setViewAs,
+      clearViewAs: () => setViewAs(null),
+      loading: false,
+      login,
+      activateInvite,
+      logout,
+      isRole,
+    }}>
       {children}
     </AuthContext.Provider>
   )

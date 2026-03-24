@@ -13,7 +13,7 @@ const INITIAL_FORM = {
 }
 
 export default function Deals() {
-  const { user, isRole } = useAuth()
+  const { user: realUser, effectiveUser, isRole } = useAuth()
   const { month } = useMonth()
 
   const [deals, setDeals] = useState([])
@@ -26,7 +26,7 @@ export default function Deals() {
 
   const fetchDeals = () => {
     setLoading(true)
-    const email = isRole('Agent') ? user?.email : undefined
+    const email = effectiveUser?.role === 'Agent' ? effectiveUser?.email : undefined
     getDeals(email, month)
       .then((data) => setDeals(data ?? []))
       .catch(() => setError('Failed to load deals.'))
@@ -60,7 +60,7 @@ export default function Deals() {
         price: Number(form.price),
         dealDate: form.dealDate,
         month,
-        email: user.email,
+        email: realUser.email,
       })
       setForm(INITIAL_FORM)
       setShowForm(false)
@@ -76,7 +76,7 @@ export default function Deals() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-base font-semibold text-gray-800">Deals — {month}</h2>
-        {isRole('Agent') && (
+        {effectiveUser?.role === 'Agent' && (
           <button
             onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"

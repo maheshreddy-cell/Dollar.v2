@@ -8,7 +8,7 @@ import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, getAchievementPct } from '../utils/commission'
 
 export default function Dashboard() {
-  const { user, isRole } = useAuth()
+  const { user, effectiveUser, isRole } = useAuth()
   const { month } = useMonth()
 
   const [summary, setSummary] = useState(null)
@@ -21,17 +21,17 @@ export default function Dashboard() {
     setLoading(true)
     setError('')
 
-    const requests = [getSummary(user.email, month)]
-    if (isRole('Admin', 'SalesHead', 'VH', 'Manager')) {
-      requests.push(getLeaderboard(user.email, month))
+    const requests = [getSummary(effectiveUser.email, month)]
+    if (['Admin','SalesHead','VH','Manager'].includes(effectiveUser.role)) {
+      requests.push(getLeaderboard(effectiveUser.email, month))
     } else {
-      requests.push(getDeals(user?.email, month))
+      requests.push(getDeals(effectiveUser.email, month))
     }
 
     Promise.all(requests)
       .then(([summaryRes, secondRes]) => {
         setSummary(summaryRes)
-        if (isRole('Admin', 'SalesHead', 'VH', 'Manager')) {
+        if (['Admin','SalesHead','VH','Manager'].includes(effectiveUser.role)) {
           setLeaderboard((secondRes ?? []).slice(0, 5))
         } else {
           setRecentDeals((secondRes ?? []).slice(0, 5))
@@ -39,7 +39,7 @@ export default function Dashboard() {
       })
       .catch(() => setError('Failed to load dashboard data.'))
       .finally(() => setLoading(false))
-  }, [month, user?.email])
+  }, [month, effectiveUser?.email])
 
   if (loading) {
     return (
@@ -58,7 +58,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-800">
-            Welcome back, {user?.name?.split(' ')[0]}
+            Welcome back, {effectiveUser?.name?.split(' ')[0]}
           </h2>
           <p className="text-sm text-gray-500">Here's your overview for {month}</p>
         </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
         />
       </div>
 
-      {isRole('Admin', 'SalesHead', 'VH', 'Manager') && leaderboard.length > 0 && (
+      {['Admin','SalesHead','VH','Manager'].includes(effectiveUser?.role) && leaderboard.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Top Performers — {month}</h3>
           <div className="overflow-x-auto">
@@ -144,7 +144,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isRole('Agent') && (
+      {effectiveUser?.role === 'Agent' && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Recent Deals</h3>
           {recentDeals.length === 0 ? (

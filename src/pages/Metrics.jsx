@@ -37,7 +37,7 @@ function HorizontalBar({ label, value, max, color, deals }) {
 
 export default function Metrics() {
   const { month } = useMonth()
-  const { user } = useAuth()
+  const { effectiveUser: user } = useAuth()
 
   const [summary, setSummary]       = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
