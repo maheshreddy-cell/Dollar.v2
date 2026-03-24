@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Plus, Trash2, ChevronRight, CheckCircle } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, assignTarget, getTargets, getCommissionConfig } from '../services/api'
-import { getSlabForTarget, formatINR } from '../utils/commission'
-import { ChevronRight, CheckCircle } from 'lucide-react'
+import { getTeam, assignTarget, getTargets } from '../services/api'
+import { formatINR } from '../utils/commission'
 
 const ROLE_COLORS = {
   Admin:     'bg-red-100 text-red-700',
@@ -13,32 +13,33 @@ const ROLE_COLORS = {
   Agent:     'bg-gray-100 text-gray-700',
 }
 
+const EMPTY_SLAB = { targetAmount: '', commissionPct: '' }
+const DEFAULT_SLABS = [
+  { targetAmount: '', commissionPct: '' },
+  { targetAmount: '', commissionPct: '' },
+  { targetAmount: '', commissionPct: '' },
+  { targetAmount: '', commissionPct: '' },
+]
+
 export default function AssignTargets() {
   const { month } = useMonth()
   const { user } = useAuth()
 
   const [team, setTeam] = useState([])
-  const [slabs, setSlabs] = useState([])
   const [selected, setSelected] = useState(null)
   const [existingTarget, setExistingTarget] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
-  const [form, setForm] = useState({
-    targetAmount: '',
-    commissionStartDate: '',
-    commissionEndDate: '',
-  })
+  const [commissionStartDate, setCommissionStartDate] = useState('')
+  const [slabs, setSlabs] = useState(DEFAULT_SLABS)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    Promise.all([getTeam(user.email), getCommissionConfig()])
-      .then(([teamData, commData]) => {
-        setTeam(teamData ?? [])
-        setSlabs(commData ?? [])
-      })
+    getTeam(user.email)
+      .then(data => setTeam(data ?? []))
       .catch(() => setError('Failed to load team.'))
       .finally(() => setLoading(false))
   }, [])
@@ -46,59 +47,84 @@ export default function AssignTargets() {
   useEffect(() => {
     if (!selected) return
     setExistingTarget(null)
+    setSuccess(false)
+    setFormError('')
     getTargets(selected.Email, month)
-      .then((res) => {
+      .then(res => {
         if (res.length > 0) {
-          setExistingTarget(res[0])
-          setForm({
-            targetAmount: res[0].TargetAmount ?? '',
-            commissionStartDate: res[0].CommissionStartDate?.split('T')[0] ?? '',
-            commissionEndDate: res[0].CommissionEndDate?.split('T')[0] ?? '',
-          })
+          const t = res[0]
+          setCommissionStartDate(t.CommissionStartDate?.split('T')[0] ?? '')
+          // CommissionEndDate column repurposed → slabs JSON
+          try {
+            const parsed = JSON.parse(t.CommissionEndDate || '[]')
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setSlabs(parsed.map(s => ({
+                targetAmount:  String(s.targetAmount ?? ''),
+                commissionPct: String(s.commissionPct ?? ''),
+              })))
+              return
+            }
+          } catch { /* fall through to defaults */ }
+          // Legacy single-slab target
+          setSlabs([
+            { targetAmount: String(t.TargetAmount ?? ''), commissionPct: String(t.CommissionPct ?? '') },
+            EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB,
+          ])
         } else {
-          setForm({ targetAmount: '', commissionStartDate: '', commissionEndDate: '' })
+          setCommissionStartDate('')
+          setSlabs(DEFAULT_SLABS)
         }
       })
       .catch(() => {
-        setForm({ targetAmount: '', commissionStartDate: '', commissionEndDate: '' })
+        setCommissionStartDate('')
+        setSlabs(DEFAULT_SLABS)
       })
   }, [selected, month])
 
-  const matchedSlab = form.targetAmount
-    ? getSlabForTarget(Number(form.targetAmount), slabs)
-    : null
+  const totalTarget = slabs.reduce((s, sl) => s + (Number(sl.targetAmount) || 0), 0)
 
-  const handleFormChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+  const updateSlab = (i, field, val) =>
+    setSlabs(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s))
+
+  const addSlab = () => setSlabs(prev => [...prev, { ...EMPTY_SLAB }])
+
+  const removeSlab = (i) => {
+    if (slabs.length <= 1) return
+    setSlabs(prev => prev.filter((_, idx) => idx !== i))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError('')
     setSuccess(false)
-    if (!form.targetAmount || Number(form.targetAmount) <= 0) {
-      setFormError('Enter a valid target amount.')
-      return
+
+    const filled = slabs.filter(s => s.targetAmount !== '' || s.commissionPct !== '')
+    if (filled.length === 0) { setFormError('Add at least one slab with a target amount.'); return }
+
+    for (let i = 0; i < filled.length; i++) {
+      if (!filled[i].targetAmount || Number(filled[i].targetAmount) <= 0) {
+        setFormError(`Slab ${i + 1}: target amount is required.`); return
+      }
+      if (filled[i].commissionPct === '' || Number(filled[i].commissionPct) < 0) {
+        setFormError(`Slab ${i + 1}: commission % is required.`); return
+      }
     }
+
     setSubmitting(true)
     try {
       await assignTarget({
-        email: selected.Email,
+        email:               selected.Email,
         month,
-        targetAmount: Number(form.targetAmount),
-        commissionStartDate: form.commissionStartDate || undefined,
-        commissionEndDate: form.commissionEndDate || undefined,
-        slabName: matchedSlab?.SlabName,
-        commissionPct: matchedSlab?.CommissionPct,
+        targetAmount:        filled.reduce((s, sl) => s + Number(sl.targetAmount), 0),
+        commissionPct:       Number(filled[0].commissionPct),
+        commissionStartDate: commissionStartDate || undefined,
+        slabs:               filled.map(s => ({
+          targetAmount:  Number(s.targetAmount),
+          commissionPct: Number(s.commissionPct),
+        })),
       }, user.email)
       setSuccess(true)
-      setExistingTarget({
-        TargetAmount: Number(form.targetAmount),
-        CommissionStartDate: form.commissionStartDate,
-        CommissionEndDate: form.commissionEndDate,
-        slabName: matchedSlab?.SlabName,
-        commissionPct: matchedSlab?.CommissionPct,
-      })
+      setExistingTarget(true)
     } catch (err) {
       setFormError(err?.message ?? 'Failed to assign target.')
     } finally {
@@ -119,9 +145,7 @@ export default function AssignTargets() {
       <h2 className="text-base font-semibold text-gray-800">Assign Targets — {month}</h2>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -136,10 +160,10 @@ export default function AssignTargets() {
             <p className="text-sm text-gray-400 py-8 text-center">No direct reports.</p>
           ) : (
             <div className="divide-y divide-gray-50">
-              {team.map((member) => (
+              {team.map(member => (
                 <button
                   key={member.Email}
-                  onClick={() => { setSelected(member); setSuccess(false); setFormError('') }}
+                  onClick={() => setSelected(member)}
                   className={`w-full text-left px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors ${
                     selected?.Email === member.Email ? 'bg-brand-50' : ''
                   }`}
@@ -147,20 +171,11 @@ export default function AssignTargets() {
                   <div>
                     <p className="text-sm font-medium text-gray-800">{member.Name}</p>
                     <p className="text-xs text-gray-400">{member.Email}</p>
-                    <span
-                      className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                        ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
+                    <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'}`}>
                       {member.Role}
                     </span>
                   </div>
-                  <ChevronRight
-                    size={16}
-                    className={`flex-shrink-0 ${
-                      selected?.email === member.email ? 'text-brand-600' : 'text-gray-300'
-                    }`}
-                  />
+                  <ChevronRight size={16} className={selected?.Email === member.Email ? 'text-brand-600' : 'text-gray-300'} />
                 </button>
               ))}
             </div>
@@ -174,7 +189,8 @@ export default function AssignTargets() {
               <p className="text-gray-400 text-sm">Select a team member to assign a target.</p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
+            <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
+              {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-800">{selected.Name}</h3>
@@ -187,84 +203,104 @@ export default function AssignTargets() {
                 )}
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Target Amount (₹) *
+              {/* Commission Start Date */}
+              <div className="w-full sm:w-64">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  Commission Start Date
+                </label>
+                <input
+                  type="date"
+                  value={commissionStartDate}
+                  onChange={e => setCommissionStartDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              {/* Slabs */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Commission Slabs
                   </label>
-                  <input
-                    name="targetAmount"
-                    type="number"
-                    min="1"
-                    value={form.targetAmount}
-                    onChange={handleFormChange}
-                    required
-                    placeholder="e.g. 500000"
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
+                  <button
+                    type="button"
+                    onClick={addSlab}
+                    className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors"
+                  >
+                    <Plus size={13} /> Add Slab
+                  </button>
                 </div>
 
-                {matchedSlab && (
-                  <div className="bg-brand-50 border border-brand-100 rounded-xl px-4 py-3">
-                    <p className="text-xs font-medium text-brand-700">
-                      Applicable Slab: <span className="font-bold">{matchedSlab.SlabName}</span>
-                    </p>
-                    <p className="text-xs text-brand-600 mt-0.5">
-                      Commission: <span className="font-bold">{matchedSlab.CommissionPct}%</span>
-                      {' '}(max target: {formatINR(matchedSlab.MaxTarget)})
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      Commission Start Date
-                    </label>
-                    <input
-                      name="commissionStartDate"
-                      type="date"
-                      value={form.commissionStartDate}
-                      onChange={handleFormChange}
-                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      Commission End Date
-                    </label>
-                    <input
-                      name="commissionEndDate"
-                      type="date"
-                      value={form.commissionEndDate}
-                      onChange={handleFormChange}
-                      className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                  </div>
+                {/* Column headers */}
+                <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-3 px-1">
+                  <div />
+                  <p className="text-xs font-medium text-gray-400">Target Amount (₹)</p>
+                  <p className="text-xs font-medium text-gray-400">Commission %</p>
+                  <div />
                 </div>
 
-                {formError && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-                    {formError}
+                {slabs.map((slab, i) => (
+                  <div key={i} className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-3 items-center">
+                    <span className="text-xs font-semibold text-gray-400 text-center">S{i + 1}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 500000"
+                      value={slab.targetAmount}
+                      onChange={e => updateSlab(i, 'targetAmount', e.target.value)}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      placeholder="e.g. 2"
+                      value={slab.commissionPct}
+                      onChange={e => updateSlab(i, 'commissionPct', e.target.value)}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSlab(i)}
+                      disabled={slabs.length <= 1}
+                      className="flex items-center justify-center text-gray-300 hover:text-red-400 disabled:opacity-0 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                )}
+                ))}
+              </div>
 
-                {success && (
-                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
-                    <CheckCircle size={16} />
-                    Target assigned successfully.
-                  </div>
-                )}
+              {/* Total target */}
+              {totalTarget > 0 && (
+                <div className="bg-brand-50 border border-brand-100 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <p className="text-xs font-medium text-brand-700">Total Target Assigned</p>
+                  <p className="text-sm font-bold text-brand-700">{formatINR(totalTarget)}</p>
+                </div>
+              )}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
-                >
-                  {submitting ? 'Saving…' : existingTarget ? 'Update Target' : 'Assign Target'}
-                </button>
-              </form>
-            </div>
+              {formError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
+
+              {success && (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                  <CheckCircle size={16} />
+                  Target assigned successfully.
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
+              >
+                {submitting ? 'Saving…' : existingTarget ? 'Update Target' : 'Assign Target'}
+              </button>
+            </form>
           )}
         </div>
       </div>

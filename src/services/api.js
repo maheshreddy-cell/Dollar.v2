@@ -68,7 +68,8 @@ export const getTargets = async (filterEmail, month) => {
 }
 
 export const assignTarget = async (data, assignerEmail) => {
-  // data: { email, month, targetAmount, commissionPct, commissionStartDate, commissionEndDate }
+  // data: { email, month, targetAmount, commissionPct, commissionStartDate, slabs }
+  // slabs: [{targetAmount, commissionPct}, ...] — stored as JSON in CommissionEndDate column
   // Key = email_month ensures one target per agent per month
   const key = `${data.email.trim().toLowerCase()}_${data.month}`
   const row = [
@@ -76,9 +77,9 @@ export const assignTarget = async (data, assignerEmail) => {
     data.email.trim().toLowerCase(),
     data.month,
     Number(data.targetAmount),
-    Number(data.commissionPct),
+    Number(data.commissionPct || (data.slabs?.[0]?.commissionPct ?? 0)),
     data.commissionStartDate || '',
-    data.commissionEndDate   || '',
+    data.slabs ? JSON.stringify(data.slabs) : '',   // CommissionEndDate col repurposed → slabs JSON
     assignerEmail,
     new Date().toISOString(),
   ]
@@ -127,10 +128,10 @@ export const getSummary = async (userEmail, month) => {
     d.Email      === userEmail.trim().toLowerCase() &&
     d.Month      === month &&
     d.PaidActual  > 0 &&
-    isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, target.CommissionEndDate)
+    isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, null)
   )
   const achieved   = cleared.reduce((s, d) => s + d.PaidActual, 0)
-  const commission = achieved * Number(target.CommissionPct) / 100
+  const commission = calcTieredCommission(achieved, target)
 
   return {
     totalTarget:     Number(target.TargetAmount),
@@ -139,7 +140,6 @@ export const getSummary = async (userEmail, month) => {
     achievementPct:  target.TargetAmount > 0 ? Math.min((achieved / Number(target.TargetAmount)) * 100, 999) : 0,
     commissionPct:   Number(target.CommissionPct),
     commissionStart: target.CommissionStartDate,
-    commissionEnd:   target.CommissionEndDate,
   }
 }
 
@@ -162,7 +162,7 @@ export const getLeaderboard = async (rootEmail, month) => {
         d.Email      === agent.Email.trim().toLowerCase() &&
         d.Month      === month &&
         d.PaidActual  > 0 &&
-        (!target || isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, target.CommissionEndDate))
+        (!target || isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, null))
       )
       .reduce((s, d) => s + d.PaidActual, 0)
 
@@ -172,7 +172,7 @@ export const getLeaderboard = async (rootEmail, month) => {
       target:     tAmount,
       achieved,
       pct:        tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
-      commission: achieved * pct / 100,
+      commission: target ? calcTieredCommission(achieved, target) : 0,
     }
   }).sort((a, b) => b.achieved - a.achieved)
 }
@@ -219,9 +219,27 @@ function buildSubtree(users, rootEmail) {
   }
 }
 
-function isInCommissionPeriod(closedDate, startDate, endDate) {
-  if (!startDate || !endDate) return true  // no restriction set
+function isInCommissionPeriod(closedDate, startDate, _endDate) {
+  if (!startDate) return true
   if (!closedDate) return false
-  const d = new Date(closedDate)
-  return d >= new Date(startDate) && d <= new Date(endDate)
+  return new Date(closedDate) >= new Date(startDate)
+}
+
+function calcTieredCommission(achieved, target) {
+  // CommissionEndDate column repurposed to store slabs JSON
+  try {
+    const slabs = JSON.parse(target.CommissionEndDate || '[]')
+    if (Array.isArray(slabs) && slabs.length > 0) {
+      let remaining = achieved
+      return slabs.reduce((total, slab) => {
+        const cap = Number(slab.targetAmount) || 0
+        const pct = Number(slab.commissionPct) || 0
+        const inSlab = Math.min(remaining, cap)
+        remaining = Math.max(0, remaining - cap)
+        return total + (inSlab * pct / 100)
+      }, 0)
+    }
+  } catch { /* fall through */ }
+  // Legacy flat rate
+  return achieved * Number(target.CommissionPct) / 100
 }
