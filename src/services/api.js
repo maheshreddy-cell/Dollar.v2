@@ -181,6 +181,37 @@ export const getLeaderboard = async (rootEmail, month) => {
   }).sort((a, b) => b.achieved - a.achieved)
 }
 
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export const getSalesAnalytics = async (month) => {
+  const deals = await appsScript.getSalesSheet()
+  const rows = deals.filter(d => !month || d.Month === month)
+
+  const byTeam     = {}
+  const byVertical = {}
+
+  for (const d of rows) {
+    const team     = d.Team     || 'Unassigned'
+    const vertical = d.Vertical || 'Unassigned'
+    const val      = d.PaidActual || 0
+
+    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0 }
+    byTeam[team].achieved    += val
+    byTeam[team].deals       += 1
+
+    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0 }
+    byVertical[vertical].achieved += val
+    byVertical[vertical].deals    += 1
+  }
+
+  return {
+    byTeam:        Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
+    byVertical:    Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
+    totalAchieved: rows.reduce((s, d) => s + (d.PaidActual || 0), 0),
+    totalDeals:    rows.length,
+  }
+}
+
 // ─── Commission Config ────────────────────────────────────────────────────────
 
 export const getCommissionConfig = () => appsScript.getSheet('CommissionConfig')

@@ -36,6 +36,14 @@ async function callPost(params, body = {}) {
 
 // ─── Real sheet column mapper ─────────────────────────────────────────────────
 
+// Flexible column getter — handles trailing/leading spaces in header names
+function col(raw, name) {
+  if (raw[name] !== undefined) return raw[name]
+  const trimmed = name.trim()
+  const key = Object.keys(raw).find(k => k.trim() === trimmed)
+  return key !== undefined ? raw[key] : undefined
+}
+
 function normalizeMonth(val) {
   if (!val) return ''
   const str = String(val).trim()
@@ -59,14 +67,22 @@ function normalizeMonth(val) {
 
 function mapSaleRow(raw) {
   return {
-    Email:       (raw['Agent Email address'] || '').trim().toLowerCase(),
-    LeadName:    raw['Lead Name'] || '',
-    TotalValue:  Number(raw['Total sale Value']) || 0,
-    PaidActual:  Number(raw['Paid - Actual'])    || 0,
-    PaymentDate: raw['Payment date'] || '',
-    Month:       normalizeMonth(raw['Month']),
-    Team:        raw['Team']     || '',
-    Vertical:    raw['VERTICAL'] || '',
+    Email:         (col(raw, 'Agent Email address') || '').trim().toLowerCase(),
+    LeadName:      String(col(raw, 'Lead Name') || '').trim(),
+    CustomerEmail: String(col(raw, 'Customer E-mail id') || '').trim(),
+    TotalValue:    Number(col(raw, 'Total sale Value'))  || 0,
+    PaidActual:    Number(col(raw, 'Paid - Actual'))     || 0,
+    AmountCleared: Number(col(raw, 'Amount cleared'))    || 0,
+    PaymentDate:   String(col(raw, 'Payment date') || ''),
+    Month:         normalizeMonth(col(raw, 'Month')),
+    Team:          String(col(raw, 'Team')    || '').trim(),
+    Vertical:      String(col(raw, 'VERTICAL') || '').trim(),
+    Status:        String(col(raw, 'Status')  || '').trim(),
+    Course:        String(col(raw, 'Course')  || '').trim(),
+    Rating:        String(col(raw, 'Rating')  || '').trim(),
+    PaymentType:   String(col(raw, 'Payment Type') || '').trim(),
+    Profession:    String(col(raw, 'Profession')   || '').trim(),
+    Timestamp:     String(col(raw, 'Timestamp')    || ''),
   }
 }
 
