@@ -16,17 +16,18 @@ export const getInviteInfo = (token) =>
 // ─── Deals ───────────────────────────────────────────────────────────────────
 
 export const getDeals = async (filterEmail, month) => {
-  const deals = await appsScript.getSheet('Deals')
+  const deals = await appsScript.getSalesSheet()
   return deals.filter(d =>
-    (!filterEmail || d.Email === filterEmail) &&
+    (!filterEmail || d.Email === filterEmail.trim().toLowerCase()) &&
     (!month       || d.Month === month)
   )
 }
 
 export const getDealsForSubtree = async (emails, month) => {
-  const deals = await appsScript.getSheet('Deals')
+  const deals = await appsScript.getSalesSheet()
+  const lower = emails.map(e => e.trim().toLowerCase())
   return deals.filter(d =>
-    emails.includes(d.Email) &&
+    lower.includes(d.Email) &&
     (!month || d.Month === month)
   )
 }
@@ -68,8 +69,11 @@ export const getTargets = async (filterEmail, month) => {
 
 export const assignTarget = async (data, assignerEmail) => {
   // data: { email, month, targetAmount, commissionPct, commissionStartDate, commissionEndDate }
+  // Key = email_month ensures one target per agent per month
+  const key = `${data.email.trim().toLowerCase()}_${data.month}`
   const row = [
-    data.email,
+    key,
+    data.email.trim().toLowerCase(),
     data.month,
     Number(data.targetAmount),
     Number(data.commissionPct),
@@ -78,7 +82,7 @@ export const assignTarget = async (data, assignerEmail) => {
     assignerEmail,
     new Date().toISOString(),
   ]
-  return appsScript.upsertRow('Targets', 'Email', data.email, row)
+  return appsScript.upsertRow('Targets', 'Key', key, row)
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -118,13 +122,14 @@ export const getSummary = async (userEmail, month) => {
   const target = targets.find(t => t.Email === userEmail && t.Month === month)
   if (!target) return { totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0 }
 
+  // All rows for agent+month with actual payment count (no status filter)
   const cleared = deals.filter(d =>
-    d.Email  === userEmail &&
-    d.Month  === month &&
-    d.Status === 'Cleared' &&
-    isInCommissionPeriod(d.ClosedDate, target.CommissionStartDate, target.CommissionEndDate)
+    d.Email      === userEmail.trim().toLowerCase() &&
+    d.Month      === month &&
+    d.PaidActual  > 0 &&
+    isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, target.CommissionEndDate)
   )
-  const achieved   = cleared.reduce((s, d) => s + Number(d.Price), 0)
+  const achieved   = cleared.reduce((s, d) => s + d.PaidActual, 0)
   const commission = achieved * Number(target.CommissionPct) / 100
 
   return {
@@ -154,12 +159,12 @@ export const getLeaderboard = async (rootEmail, month) => {
 
     const achieved = deals
       .filter(d =>
-        d.Email  === agent.Email &&
-        d.Month  === month &&
-        d.Status === 'Cleared' &&
-        (!target || isInCommissionPeriod(d.ClosedDate, target.CommissionStartDate, target.CommissionEndDate))
+        d.Email      === agent.Email.trim().toLowerCase() &&
+        d.Month      === month &&
+        d.PaidActual  > 0 &&
+        (!target || isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, target.CommissionEndDate))
       )
-      .reduce((s, d) => s + Number(d.Price), 0)
+      .reduce((s, d) => s + d.PaidActual, 0)
 
     return {
       name:       agent.Name,
