@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { UserPlus, X } from 'lucide-react'
+import { UserPlus, X, Users, GitBranch } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, inviteUser } from '../services/api'
+import { getTeam, inviteUser, getSubtree } from '../services/api'
 import InviteLinkModal from '../components/InviteLinkModal'
 
 const ROLE_COLORS = {
@@ -12,17 +12,26 @@ const ROLE_COLORS = {
   Agent:     'bg-gray-100 text-gray-700',
 }
 
-const ROLE_HIERARCHY = {
-  Admin:     ['SalesHead'],
-  SalesHead: ['VH'],
-  VH:        ['Manager'],
+// What roles each rank can invite
+const INVITE_ROLES = {
+  Admin:     ['SalesHead', 'VH', 'Manager', 'Agent'],
+  SalesHead: ['VH', 'Manager', 'Agent'],
+  VH:        ['Manager', 'Agent'],
   Manager:   ['Agent'],
+}
+
+function flattenTree(node, result = []) {
+  if (!node) return result
+  result.push(node)
+  ;(node.children || []).forEach(child => flattenTree(child, result))
+  return result
 }
 
 export default function Team() {
   const { user } = useAuth()
-
-  const [team, setTeam] = useState([])
+  const [tab, setTab] = useState('direct')
+  const [directTeam, setDirectTeam] = useState([])
+  const [allMembers, setAllMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -32,18 +41,24 @@ export default function Team() {
   const [formError, setFormError] = useState('')
   const [inviteLink, setInviteLink] = useState(null)
 
-  const allowedRoles = ROLE_HIERARCHY[user?.role] ?? []
+  const allowedRoles = INVITE_ROLES[user?.role] ?? []
 
-  useEffect(() => {
-    getTeam(user.email)
-      .then((data) => setTeam(data ?? []))
+  const loadTeam = () => {
+    setLoading(true)
+    Promise.all([
+      getTeam(user.email),
+      getSubtree(user.email),
+    ])
+      .then(([direct, tree]) => {
+        setDirectTeam(direct ?? [])
+        const all = flattenTree(tree).filter(m => m.Email !== user.email)
+        setAllMembers(all)
+      })
       .catch(() => setError('Failed to load team.'))
       .finally(() => setLoading(false))
-  }, [])
-
-  const handleFormChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
+
+  useEffect(() => { loadTeam() }, [])
 
   const handleInvite = async (e) => {
     e.preventDefault()
@@ -54,23 +69,24 @@ export default function Team() {
     setSubmitting(true)
     try {
       const token = await inviteUser({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        role: form.role,
+        name:         form.name.trim(),
+        email:        form.email.trim().toLowerCase(),
+        role:         form.role,
         managerEmail: user?.email,
       })
       const link = window.location.origin + '/invite?token=' + token
       setInviteLink(link)
       setForm({ name: '', email: '', role: '' })
       setShowForm(false)
-      // Refresh team
-      getTeam(user.email).then((data) => setTeam(data ?? []))
+      loadTeam()
     } catch (err) {
-      setFormError(err?.message ?? 'Failed to send invite.')
+      setFormError(err?.message ?? 'Failed to create invite.')
     } finally {
       setSubmitting(false)
     }
   }
+
+  const displayed = tab === 'direct' ? directTeam : allMembers
 
   if (loading) {
     return (
@@ -82,11 +98,12 @@ export default function Team() {
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-base font-semibold text-gray-800">My Team</h2>
         {allowedRoles.length > 0 && (
           <button
-            onClick={() => { setShowForm((v) => !v); setFormError('') }}
+            onClick={() => { setShowForm(v => !v); setFormError('') }}
             className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
           >
             {showForm ? <X size={16} /> : <UserPlus size={16} />}
@@ -95,6 +112,7 @@ export default function Team() {
         )}
       </div>
 
+      {/* Invite form */}
       {showForm && (
         <form
           onSubmit={handleInvite}
@@ -103,45 +121,39 @@ export default function Team() {
           <h3 className="text-sm font-semibold text-gray-700">Invite New Member</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Full Name *
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Full Name *</label>
               <input
                 name="name"
                 value={form.name}
-                onChange={handleFormChange}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                 required
                 placeholder="Jane Doe"
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Email *
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Email *</label>
               <input
                 name="email"
                 type="email"
                 value={form.email}
-                onChange={handleFormChange}
+                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                 required
                 placeholder="jane@company.com"
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Role *
-              </label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Role *</label>
               <select
                 name="role"
                 value={form.role}
-                onChange={handleFormChange}
+                onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
                 required
                 className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="">Select role…</option>
-                {allowedRoles.map((r) => (
+                {allowedRoles.map(r => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
@@ -159,7 +171,7 @@ export default function Team() {
             disabled={submitting}
             className="bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
           >
-            {submitting ? 'Sending Invite…' : 'Send Invite'}
+            {submitting ? 'Creating Invite…' : 'Send Invite'}
           </button>
         </form>
       )}
@@ -170,29 +182,62 @@ export default function Team() {
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setTab('direct')}
+          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+            tab === 'direct' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users size={14} />
+          Direct Reports ({directTeam.length})
+        </button>
+        <button
+          onClick={() => setTab('all')}
+          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+            tab === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <GitBranch size={14} />
+          All Members ({allMembers.length})
+        </button>
+      </div>
+
+      {/* Member list */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Direct Reports ({team.length})
+            {tab === 'direct' ? `Direct Reports (${directTeam.length})` : `All Members in Subtree (${allMembers.length})`}
           </p>
         </div>
-        {team.length === 0 ? (
-          <p className="text-sm text-gray-400 py-10 text-center">No team members yet.</p>
+        {displayed.length === 0 ? (
+          <p className="text-sm text-gray-400 py-10 text-center">No members yet.</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {team.map((member) => (
-              <div key={member.email} className="flex items-center justify-between px-4 py-3.5">
+            {displayed.map(member => (
+              <div key={member.Email} className="flex items-center justify-between px-4 py-3.5">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{member.name}</p>
-                  <p className="text-xs text-gray-400">{member.email}</p>
+                  <p className="text-sm font-semibold text-gray-800">{member.Name}</p>
+                  <p className="text-xs text-gray-400">{member.Email}</p>
+                  {tab === 'all' && member.ManagerEmail && (
+                    <p className="text-xs text-gray-400 mt-0.5">Reports to: {member.ManagerEmail}</p>
+                  )}
                 </div>
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    ROLE_COLORS[member.role] ?? 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {member.role}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                      ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {member.Role}
+                  </span>
+                  {member.Status === 'pending' && (
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-700">
+                      Pending
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
