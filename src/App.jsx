@@ -95,7 +95,7 @@ export default function App() {
             <Route
               path="/metrics"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent']}>
                   <Metrics />
                 </RequireRole>
               }

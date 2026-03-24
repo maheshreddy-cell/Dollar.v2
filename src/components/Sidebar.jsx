@@ -12,54 +12,25 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 
 const NAV = [
-  {
-    to: '/dashboard',
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-    roles: ['Admin', 'SalesHead', 'VH', 'Manager', 'Agent'],
-  },
-  {
-    to: '/my-targets',
-    label: 'My Targets',
-    icon: Target,
-    roles: ['Agent'],
-  },
-  {
-    to: '/deals',
-    label: 'Deals',
-    icon: Briefcase,
-    roles: ['Admin', 'SalesHead', 'VH', 'Manager', 'Agent'],
-  },
-  {
-    to: '/assign-targets',
-    label: 'Assign Targets',
-    icon: DollarSign,
-    roles: ['Admin', 'SalesHead', 'VH', 'Manager'],
-  },
-  {
-    to: '/team',
-    label: 'My Team',
-    icon: Users,
-    roles: ['Admin', 'SalesHead', 'VH', 'Manager'],
-  },
-  {
-    to: '/metrics',
-    label: 'Metrics',
-    icon: BarChart2,
-    roles: ['Admin', 'SalesHead', 'VH', 'Manager'],
-  },
-  {
-    to: '/org',
-    label: 'Org',
-    icon: GitBranch,
-    roles: ['Admin', 'SalesHead', 'VH'],
-  },
-  {
-    to: '/commission-config',
-    label: 'Commission Config',
-    icon: Settings,
-    roles: ['Admin'],
-  },
+  // ── All roles ───────────────────────────────────────────
+  { to: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+
+  // ── Agent only ──────────────────────────────────────────
+  { to: '/my-targets',        label: 'My Targets',       icon: Target,          roles: ['Agent'] },
+
+  // ── Agent + managers ────────────────────────────────────
+  { to: '/metrics',           label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+
+  // ── Managers and above ──────────────────────────────────
+  { to: '/assign-targets',    label: 'Assign Targets',   icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
+  { to: '/team',              label: 'My Team',          icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
+  { to: '/deals',             label: 'Deals',            icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
+
+  // ── Leadership ──────────────────────────────────────────
+  { to: '/org',               label: 'Org Chart',        icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
+
+  // ── Admin only ──────────────────────────────────────────
+  { to: '/commission-config', label: 'Commission Config', icon: Settings,       roles: ['Admin'] },
 ]
 
 const ROLE_COLORS = {

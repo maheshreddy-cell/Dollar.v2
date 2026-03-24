@@ -122,7 +122,7 @@ export const inviteUser = async (data) => {
 export const getSummary = async (userEmail, month) => {
   const [targets, deals] = await Promise.all([
     appsScript.getSheet('Targets'),
-    appsScript.getSheet('Deals'),
+    appsScript.getSalesSheet(),
   ])
   const target = targets.find(t => t.Email === userEmail && t.Month === month)
   if (!target) return { totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0 }
@@ -151,7 +151,7 @@ export const getLeaderboard = async (rootEmail, month) => {
   const [users, targets, deals] = await Promise.all([
     appsScript.getSheet('Users'),
     appsScript.getSheet('Targets'),
-    appsScript.getSheet('Deals'),
+    appsScript.getSalesSheet(),
   ])
   const emails  = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
   const agents  = users.filter(u => emails.includes(u.Email) && u.Role === 'Agent')

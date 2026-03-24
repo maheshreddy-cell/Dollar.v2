@@ -37,7 +37,9 @@ function HorizontalBar({ label, value, max, color, deals }) {
 
 export default function Metrics() {
   const { month } = useMonth()
-  const { effectiveUser: user } = useAuth()
+  const { user: realUser, effectiveUser } = useAuth()
+  const user = effectiveUser
+  const isAgent = user?.role === 'Agent'
 
   const [summary, setSummary]       = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
@@ -50,8 +52,8 @@ export default function Metrics() {
     setError('')
     Promise.all([
       getSummary(user.email, month),
-      getLeaderboard(user.email, month),
-      getSalesAnalytics(month),
+      isAgent ? Promise.resolve([]) : getLeaderboard(user.email, month),
+      isAgent ? Promise.resolve(null) : getSalesAnalytics(month),
     ])
       .then(([sRes, lRes, aRes]) => {
         setSummary(sRes)
@@ -93,10 +95,10 @@ export default function Metrics() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricsCard title="My Target"          value={formatINR(summary?.totalTarget     ?? 0)} icon={Target}    color="blue"   />
-        <MetricsCard title="My Achieved"        value={formatINR(summary?.totalAchieved   ?? 0)} icon={TrendingUp} color="green"  />
-        <MetricsCard title="My Commission"      value={formatINR(summary?.totalCommission ?? 0)} icon={DollarSign} color="purple" />
-        <MetricsCard title="Achievement %"      value={`${achievedPct.toFixed(1)}%`}             icon={Percent}
+        <MetricsCard title={isAgent ? 'My Target'     : 'Team Target'}     value={formatINR(summary?.totalTarget     ?? 0)} icon={Target}    color="blue"   />
+        <MetricsCard title={isAgent ? 'My Achieved'   : 'Team Achieved'}   value={formatINR(summary?.totalAchieved   ?? 0)} icon={TrendingUp} color="green"  />
+        <MetricsCard title={isAgent ? 'My Commission' : 'My Commission'}   value={formatINR(summary?.totalCommission ?? 0)} icon={DollarSign} color="purple" />
+        <MetricsCard title="Achievement %" value={`${achievedPct.toFixed(1)}%`} icon={Percent}
           color={achievedPct >= 100 ? 'green' : achievedPct >= 50 ? 'orange' : 'red'} />
       </div>
 
