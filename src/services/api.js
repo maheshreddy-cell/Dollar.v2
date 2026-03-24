@@ -72,11 +72,15 @@ export const assignTarget = async (data, assignerEmail) => {
   // slabs: [{targetAmount, commissionPct}, ...] — stored as JSON in CommissionEndDate column
   // Key = email_month ensures one target per agent per month
   const key = `${data.email.trim().toLowerCase()}_${data.month}`
+  // Total target = highest slab threshold (not a sum — slabs are milestones)
+  const topTarget = data.slabs && data.slabs.length > 0
+    ? Math.max(...data.slabs.map(s => Number(s.targetAmount) || 0))
+    : Number(data.targetAmount)
   const row = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
-    Number(data.targetAmount),
+    topTarget,
     Number(data.commissionPct || (data.slabs?.[0]?.commissionPct ?? 0)),
     data.commissionStartDate || '',
     data.slabs ? JSON.stringify(data.slabs) : '',   // CommissionEndDate col repurposed → slabs JSON
@@ -227,17 +231,16 @@ function isInCommissionPeriod(closedDate, startDate, _endDate) {
 
 function calcTieredCommission(achieved, target) {
   // CommissionEndDate column repurposed to store slabs JSON
+  // Slabs are thresholds: hit >= threshold → that rate applies to total achieved
   try {
     const slabs = JSON.parse(target.CommissionEndDate || '[]')
     if (Array.isArray(slabs) && slabs.length > 0) {
-      let remaining = achieved
-      return slabs.reduce((total, slab) => {
-        const cap = Number(slab.targetAmount) || 0
-        const pct = Number(slab.commissionPct) || 0
-        const inSlab = Math.min(remaining, cap)
-        remaining = Math.max(0, remaining - cap)
-        return total + (inSlab * pct / 100)
-      }, 0)
+      const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+      let rate = 0
+      for (const slab of sorted) {
+        if (achieved >= Number(slab.targetAmount)) rate = Number(slab.commissionPct)
+      }
+      return achieved * rate / 100
     }
   } catch { /* fall through */ }
   // Legacy flat rate

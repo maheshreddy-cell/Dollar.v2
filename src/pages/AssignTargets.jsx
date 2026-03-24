@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, ChevronRight, CheckCircle } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, assignTarget, getTargets } from '../services/api'
+import { getTeam, getSubtree, assignTarget, getTargets } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 const ROLE_COLORS = {
@@ -38,10 +38,23 @@ export default function AssignTargets() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    getTeam(user.email)
-      .then(data => setTeam(data ?? []))
-      .catch(() => setError('Failed to load team.'))
-      .finally(() => setLoading(false))
+    const canSeeAll = ['Admin', 'SalesHead'].includes(user.role)
+    if (canSeeAll) {
+      getSubtree(user.email)
+        .then(tree => {
+          const flat = []
+          const walk = (node) => { if (!node) return; flat.push(node); (node.children || []).forEach(walk) }
+          walk(tree)
+          setTeam(flat.filter(m => m.Email !== user.email))
+        })
+        .catch(() => setError('Failed to load team.'))
+        .finally(() => setLoading(false))
+    } else {
+      getTeam(user.email)
+        .then(data => setTeam(data ?? []))
+        .catch(() => setError('Failed to load team.'))
+        .finally(() => setLoading(false))
+    }
   }, [])
 
   useEffect(() => {
@@ -81,7 +94,8 @@ export default function AssignTargets() {
       })
   }, [selected, month])
 
-  const totalTarget = slabs.reduce((s, sl) => s + (Number(sl.targetAmount) || 0), 0)
+  // Total target = highest slab threshold (slabs are milestones, not incremental)
+  const totalTarget = slabs.reduce((max, sl) => Math.max(max, Number(sl.targetAmount) || 0), 0)
 
   const updateSlab = (i, field, val) =>
     setSlabs(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s))
@@ -234,7 +248,7 @@ export default function AssignTargets() {
                 {/* Column headers */}
                 <div className="grid grid-cols-[2rem_1fr_1fr_2rem] gap-3 px-1">
                   <div />
-                  <p className="text-xs font-medium text-gray-400">Target Amount (₹)</p>
+                  <p className="text-xs font-medium text-gray-400">Min. Threshold (₹)</p>
                   <p className="text-xs font-medium text-gray-400">Commission %</p>
                   <div />
                 </div>
@@ -275,7 +289,7 @@ export default function AssignTargets() {
               {/* Total target */}
               {totalTarget > 0 && (
                 <div className="bg-brand-50 border border-brand-100 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <p className="text-xs font-medium text-brand-700">Total Target Assigned</p>
+                  <p className="text-xs font-medium text-brand-700">Top Slab Target</p>
                   <p className="text-sm font-bold text-brand-700">{formatINR(totalTarget)}</p>
                 </div>
               )}
