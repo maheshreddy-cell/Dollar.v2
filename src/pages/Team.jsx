@@ -36,12 +36,18 @@ export default function Team() {
   const [error, setError] = useState('')
 
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', role: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: '', managerEmail: '' })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [inviteLink, setInviteLink] = useState(null)
 
   const allowedRoles = INVITE_ROLES[user?.role] ?? []
+
+  // Potential managers = current user + all non-Agent subtree members
+  const managerOptions = [
+    { Email: user?.email, Name: user?.name + ' (you)', Role: user?.role },
+    ...allMembers.filter(m => m.Role !== 'Agent'),
+  ]
 
   const loadTeam = () => {
     setLoading(true)
@@ -72,11 +78,11 @@ export default function Team() {
         name:         form.name.trim(),
         email:        form.email.trim().toLowerCase(),
         role:         form.role,
-        managerEmail: user?.email,
+        managerEmail: form.managerEmail || user?.email,
       })
       const link = window.location.origin + '/invite?token=' + token
       setInviteLink(link)
-      setForm({ name: '', email: '', role: '' })
+      setForm({ name: '', email: '', role: '', managerEmail: '' })
       setShowForm(false)
       loadTeam()
     } catch (err) {
@@ -119,7 +125,7 @@ export default function Team() {
           className="bg-white rounded-xl border border-gray-200 p-5 space-y-4"
         >
           <h3 className="text-sm font-semibold text-gray-700">Invite New Member</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Full Name *</label>
               <input
@@ -155,6 +161,22 @@ export default function Team() {
                 <option value="">Select role…</option>
                 {allowedRoles.map(r => (
                   <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Reports To (Manager) *</label>
+              <select
+                name="managerEmail"
+                value={form.managerEmail || user?.email}
+                onChange={e => setForm(p => ({ ...p, managerEmail: e.target.value }))}
+                required
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                {managerOptions.map(m => (
+                  <option key={m.Email} value={m.Email}>
+                    {m.Name} — {m.Role}
+                  </option>
                 ))}
               </select>
             </div>
