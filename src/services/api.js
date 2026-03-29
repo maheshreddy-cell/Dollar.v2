@@ -170,29 +170,42 @@ export const getLeaderboard = async (rootEmail, month) => {
     appsScript.getSheet('Targets'),
     appsScript.getSalesSheet(),
   ])
-  const emails  = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
-  const agents  = users.filter(u => emails.includes(u.Email) && u.Role === 'Agent')
+  const emails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
+  const agents = users.filter(u => emails.includes(u.Email) && u.Role === 'Agent')
 
   return agents.map(agent => {
-    const target  = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
-    const tAmount = target ? Number(tf(target, 'TargetAmount') ?? 0) : 0
+    const target     = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
+    const tAmount    = target ? Number(tf(target, 'TargetAmount') ?? 0) : 0
+    const agentEmail = agent.Email.trim().toLowerCase()
 
-    const achieved = deals
-      .filter(d =>
-        d.Email      === agent.Email.trim().toLowerCase() &&
-        d.Month      === month &&
-        d.PaidActual  > 0 &&
-        (!target || isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null))
-      )
-      .reduce((s, d) => s + d.PaidActual, 0)
+    const agentDeals = deals.filter(d =>
+      d.Email === agentEmail &&
+      d.Month === month &&
+      (!target || isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null))
+    )
+
+    const achieved        = agentDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+    const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+
+    // Loan docs: count deals where LoanDocsCollected is a meaningful "yes" value
+    const loanDocsTotal = agentDeals.length
+    const loanDocsOk    = agentDeals.filter(d => {
+      const v = (d.LoanDocsCollected || '').trim().toLowerCase()
+      return v && !['no', 'pending', 'not collected', 'n/a', '-', ''].includes(v)
+    }).length
 
     return {
-      name:       agent.Name,
-      email:      agent.Email,
-      target:     tAmount,
+      name:              agent.Name,
+      email:             agent.Email,
+      target:            tAmount,
       achieved,
-      pct:        tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
-      commission: target ? calcTieredCommission(achieved, target) : 0,
+      totalSaleValue,
+      pendingCollection: Math.max(0, totalSaleValue - achieved),
+      loanDocsOk,
+      loanDocsTotal,
+      pct:               tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
+      commission:        target ? calcTieredCommission(achieved, target) : 0,
+      slabInfo:          getSlabInfo(achieved, target),
     }
   }).sort((a, b) => b.achieved - a.achieved)
 }
@@ -317,6 +330,66 @@ function resolvePresetLabel(commissionPct) {
   const id = String(commissionPct || '').trim().toLowerCase()
   const preset = AGENT_TARGET_PRESETS.find(p => p.id === id)
   return preset ? preset.label : null
+}
+
+// Returns slab eligibility, gap-to-next-slab, potential earnings, and progress info
+function getSlabInfo(achieved, target) {
+  if (!target) return null
+  const presetId = String(tf(target, 'CommissionPct') || '').trim().toLowerCase()
+  const preset   = AGENT_TARGET_PRESETS.find(p => p.id === presetId)
+
+  let slabs = []
+  if (preset) {
+    slabs = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
+  } else {
+    try {
+      const parsed = JSON.parse(tf(target, 'CommissionEndDate') || '[]')
+      if (Array.isArray(parsed) && parsed.length) {
+        slabs = [...parsed].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+      }
+    } catch { /* fall through */ }
+  }
+  if (!slabs.length) return null
+
+  const firstSlab  = slabs[0]
+  const eligible   = achieved >= Number(firstSlab.targetAmount)
+  const gapToSlab1 = Math.max(0, Number(firstSlab.targetAmount) - achieved)
+
+  // Highest slab threshold the agent has crossed
+  let currentSlabIdx = -1
+  for (let i = 0; i < slabs.length; i++) {
+    if (achieved >= Number(slabs[i].targetAmount)) currentSlabIdx = i
+  }
+
+  const nextSlabIdx    = currentSlabIdx + 1
+  const nextSlab       = nextSlabIdx < slabs.length ? slabs[nextSlabIdx] : null
+  const gapToNext      = nextSlab ? Math.max(0, Number(nextSlab.targetAmount) - achieved) : 0
+  const potentialAtNext = nextSlab
+    ? Number(nextSlab.targetAmount) * Number(nextSlab.commissionPct) / 100
+    : 0
+
+  // Progress bar: % of the way from current slab floor to next slab ceiling
+  const progressFrom = currentSlabIdx >= 0 ? Number(slabs[currentSlabIdx].targetAmount) : 0
+  const progressTo   = nextSlab
+    ? Number(nextSlab.targetAmount)
+    : Number(slabs[slabs.length - 1].targetAmount)
+  const progressPct  = progressTo > progressFrom
+    ? Math.min(100, Math.max(0, ((achieved - progressFrom) / (progressTo - progressFrom)) * 100))
+    : 100
+
+  return {
+    presetId:      preset ? presetId : null,
+    presetLabel:   preset ? preset.label : null,
+    slabs,
+    eligible,
+    gapToSlab1,
+    currentSlabIdx,
+    nextSlab,
+    gapToNext,
+    potentialAtNext,
+    progressPct,
+    firstSlabTarget: Number(firstSlab.targetAmount),
+  }
 }
 
 function calcTieredCommission(achieved, target) {

@@ -38,7 +38,7 @@ export default function Dashboard() {
             totalCommission,
             achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0,
           })
-          setLeaderboard(rows.slice(0, 5))
+          setLeaderboard(rows)   // show all agents, not just top 5
         })
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
@@ -116,39 +116,137 @@ export default function Dashboard() {
       </div>
 
       {isManager && leaderboard.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Top Performers — {month}</h3>
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Team Performance — {month}</h3>
+            <span className="text-xs text-gray-400">{leaderboard.length} agent{leaderboard.length !== 1 ? 's' : ''}</span>
+          </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[960px] w-full text-sm">
               <thead>
-                <tr className="text-left text-xs text-gray-500 uppercase">
-                  <th className="pb-3 font-medium">#</th>
-                  <th className="pb-3 font-medium">Name</th>
-                  <th className="pb-3 font-medium text-right">Target</th>
-                  <th className="pb-3 font-medium text-right">Achieved</th>
-                  <th className="pb-3 font-medium text-right">%</th>
-                  <th className="pb-3 font-medium text-right">Incentive</th>
+                <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                  <th className="px-4 py-3 text-left w-8 font-medium">#</th>
+                  <th className="px-4 py-3 text-left font-medium">Agent</th>
+                  <th className="px-4 py-3 text-right font-medium">Pipeline</th>
+                  <th className="px-4 py-3 text-right font-medium">Paid</th>
+                  <th className="px-4 py-3 font-medium min-w-[200px]">Slab Progress</th>
+                  <th className="px-4 py-3 text-center font-medium">Eligibility</th>
+                  <th className="px-4 py-3 text-right font-medium">Incentive</th>
+                  <th className="px-4 py-3 text-center font-medium">Docs</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {leaderboard.map((row, i) => (
-                  <tr key={row.email ?? i}>
-                    <td className="py-2.5 pr-3 text-gray-400 font-medium">{i + 1}</td>
-                    <td className="py-2.5 pr-3 font-medium text-gray-800">{row.name}</td>
-                    <td className="py-2.5 pr-3 text-right text-gray-600">{formatINR(row.target)}</td>
-                    <td className="py-2.5 pr-3 text-right text-gray-800 font-medium">{formatINR(row.achieved)}</td>
-                    <td className="py-2.5 pr-3 text-right">
-                      <span className={`text-xs font-semibold ${
-                        row.pct >= 100 ? 'text-green-600' : row.pct >= 50 ? 'text-blue-600' : 'text-orange-500'
-                      }`}>
-                        {(row.pct ?? 0).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right text-sm font-semibold text-purple-600">
-                      {formatINR(row.commission ?? 0)}
-                    </td>
-                  </tr>
-                ))}
+                {leaderboard.map((row, i) => {
+                  const si = row.slabInfo
+                  return (
+                    <tr key={row.email ?? i} className="hover:bg-gray-50/60 transition-colors">
+
+                      {/* Rank */}
+                      <td className="px-4 py-3.5 text-gray-400 text-xs font-medium">{i + 1}</td>
+
+                      {/* Agent name + preset badge */}
+                      <td className="px-4 py-3.5">
+                        <p className="font-medium text-gray-800">{row.name}</p>
+                        {si?.presetLabel ? (
+                          <span className={`mt-0.5 inline-block text-xs px-1.5 py-0.5 rounded font-medium ${
+                            si.presetId === 'basic'   ? 'bg-blue-50 text-blue-600' :
+                            si.presetId === 'average' ? 'bg-green-50 text-green-600' :
+                                                        'bg-purple-50 text-purple-600'
+                          }`}>{si.presetLabel}</span>
+                        ) : (
+                          <span className="text-xs text-gray-300">No target</span>
+                        )}
+                      </td>
+
+                      {/* Pipeline = Total Sale Value submitted */}
+                      <td className="px-4 py-3.5 text-right">
+                        <p className="text-sm font-medium text-gray-700">{formatINR(row.totalSaleValue)}</p>
+                        {row.pendingCollection > 0 && (
+                          <p className="text-xs text-orange-500">+{formatINR(row.pendingCollection)} pending</p>
+                        )}
+                      </td>
+
+                      {/* Paid (commission-counted) */}
+                      <td className="px-4 py-3.5 text-right">
+                        <p className="text-sm font-semibold text-gray-800">{formatINR(row.achieved)}</p>
+                        <p className="text-xs text-gray-400">of {formatINR(row.target)}</p>
+                      </td>
+
+                      {/* Slab progress bar + gap indicator */}
+                      <td className="px-4 py-3.5">
+                        {si ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    !si.eligible ? 'bg-red-400' :
+                                    si.nextSlab   ? 'bg-blue-500' : 'bg-green-500'
+                                  }`}
+                                  style={{ width: `${si.progressPct}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500 w-8 text-right">{si.progressPct.toFixed(0)}%</span>
+                            </div>
+                            {si.nextSlab ? (
+                              <p className="text-xs text-gray-400 leading-snug">
+                                {formatINR(si.gapToNext)} to Slab {si.currentSlabIdx + 2}
+                                <span className="text-green-600 font-medium"> → {formatINR(si.potentialAtNext)}</span>
+                              </p>
+                            ) : (
+                              <p className="text-xs text-green-600 font-medium">🎯 Max slab reached</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* Eligibility */}
+                      <td className="px-4 py-3.5 text-center">
+                        {si ? (
+                          si.eligible ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">
+                              ✓ Eligible
+                            </span>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <span className="inline-block text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full">
+                                Not Eligible
+                              </span>
+                              <p className="text-xs text-red-400">↑ {formatINR(si.gapToSlab1)} to recover</p>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+
+                      {/* Incentive earned + potential at next slab */}
+                      <td className="px-4 py-3.5 text-right">
+                        <p className="font-semibold text-purple-600">{formatINR(row.commission)}</p>
+                        {si?.nextSlab && (
+                          <p className="text-xs text-gray-400">→ {formatINR(si.potentialAtNext)} next</p>
+                        )}
+                      </td>
+
+                      {/* Loan Docs Collected */}
+                      <td className="px-4 py-3.5 text-center">
+                        {row.loanDocsTotal > 0 ? (
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                            row.loanDocsOk === row.loanDocsTotal ? 'bg-green-50 text-green-700' :
+                            row.loanDocsOk > 0                  ? 'bg-yellow-50 text-yellow-700' :
+                                                                   'bg-gray-100 text-gray-500'
+                          }`}>
+                            {row.loanDocsOk}/{row.loanDocsTotal}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

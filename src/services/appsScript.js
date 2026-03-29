@@ -124,8 +124,9 @@ function mapSaleRow(raw) {
     Course:        String(col(raw, 'Course')  || '').trim(),
     Rating:        String(col(raw, 'Rating')  || '').trim(),
     PaymentType:   String(col(raw, 'Payment Type') || '').trim(),
-    Profession:    String(col(raw, 'Profession')   || '').trim(),
-    Timestamp:     String(col(raw, 'Timestamp')    || ''),
+    Profession:       String(col(raw, 'Profession')              || '').trim(),
+    Timestamp:        String(col(raw, 'Timestamp')              || ''),
+    LoanDocsCollected:String(col(raw, 'Loan Documents Collected')|| '').trim(),
   }
 }
 
