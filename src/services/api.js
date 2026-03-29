@@ -65,7 +65,7 @@ export const getTargets = async (filterEmail, month) => {
   const lowerEmail = filterEmail?.trim().toLowerCase()
   const filtered = targets.filter(t => {
     const email = String(tf(t, 'Email') ?? '').trim().toLowerCase()
-    const mon   = String(tf(t, 'Month') ?? '').trim()
+    const mon   = normalizeMonth(tf(t, 'Month'))
     return (!filterEmail || email === lowerEmail) && (!month || mon === month)
   })
   // Sort newest-first so callers always get the latest assignment first
@@ -265,12 +265,28 @@ function tf(row, name) {
   return key !== undefined ? row[key] : undefined
 }
 
+// Normalizes month values from Google Sheets — Sheets auto-converts "2026-03"
+// to a date, which Apps Script returns as an ISO string like "2026-02-28T18:30:00.000Z"
+// (midnight IST = 18:30 UTC previous day). Converts back to "YYYY-MM".
+function normalizeMonth(val) {
+  if (!val) return ''
+  const str = String(val).trim()
+  if (/^\d{4}-\d{2}$/.test(str)) return str
+  const d = new Date(str)
+  if (!isNaN(d.getTime())) {
+    // Shift to IST (UTC+5:30) to get the correct local month
+    const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+    return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+  return str
+}
+
 // Returns the most-recently-assigned target for a given email + month
 function latestTarget(targets, lowerEmail, month) {
   return targets
     .filter(t => {
       const email = String(tf(t, 'Email') ?? '').trim().toLowerCase()
-      const mon   = String(tf(t, 'Month') ?? '').trim()
+      const mon   = normalizeMonth(tf(t, 'Month'))
       return email === lowerEmail && mon === month
     })
     .sort((a, b) => new Date(tf(b, 'AssignedAt') || 0) - new Date(tf(a, 'AssignedAt') || 0))[0] ?? null

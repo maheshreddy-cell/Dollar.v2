@@ -3,7 +3,6 @@ import { Target, TrendingUp, DollarSign, Percent } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getSummary, getLeaderboard, getDeals } from '../services/api'
-import { appsScript } from '../services/appsScript'
 import MetricsCard from '../components/MetricsCard'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, getAchievementPct } from '../utils/commission'
@@ -17,14 +16,10 @@ export default function Dashboard() {
   const [recentDeals, setRecentDeals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [debugTargets, setDebugTargets] = useState(null)
 
   useEffect(() => {
     setLoading(true)
     setError('')
-
-    // DEBUG: fetch raw Targets sheet to inspect column names + data
-    appsScript.getSheet('Targets').then(rows => setDebugTargets(rows)).catch(() => setDebugTargets([]))
 
     const requests = [getSummary(effectiveUser.email, month)]
     if (['Admin','SalesHead','VH','Manager'].includes(effectiveUser.role)) {
@@ -115,6 +110,7 @@ export default function Dashboard() {
                   <th className="pb-3 font-medium text-right">Target</th>
                   <th className="pb-3 font-medium text-right">Achieved</th>
                   <th className="pb-3 font-medium text-right">%</th>
+                  <th className="pb-3 font-medium text-right">Incentive</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -128,7 +124,7 @@ export default function Dashboard() {
                     <td className="py-2.5 pr-3 text-right text-gray-800 font-medium">
                       {formatINR(row.achieved)}
                     </td>
-                    <td className="py-2.5 text-right">
+                    <td className="py-2.5 pr-3 text-right">
                       <span
                         className={`text-xs font-semibold ${
                           row.pct >= 100
@@ -141,28 +137,14 @@ export default function Dashboard() {
                         {(row.pct ?? 0).toFixed(1)}%
                       </span>
                     </td>
+                    <td className="py-2.5 text-right text-sm font-semibold text-purple-600">
+                      {formatINR(row.commission ?? 0)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* TEMP DEBUG — remove once target issue is resolved */}
-      {user?.role === 'Admin' && debugTargets !== null && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4 text-xs font-mono space-y-2">
-          <p className="font-bold text-yellow-800">DEBUG — Raw Targets Sheet ({debugTargets.length} rows)</p>
-          {debugTargets.length === 0 ? (
-            <p className="text-red-600 font-bold">⚠ Sheet is EMPTY — appendRow is not writing to the sheet</p>
-          ) : (
-            <>
-              <p className="text-yellow-700">Column keys in row 0: <span className="text-blue-700">{JSON.stringify(Object.keys(debugTargets[0]))}</span></p>
-              {debugTargets.map((r, i) => (
-                <p key={i} className="text-gray-700 break-all">{JSON.stringify(r)}</p>
-              ))}
-            </>
-          )}
         </div>
       )}
 
