@@ -160,7 +160,6 @@ export const getLeaderboard = async (rootEmail, month) => {
   return agents.map(agent => {
     const target  = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
     const tAmount = target ? Number(target.TargetAmount) : 0
-    const pct     = target ? Number(target.CommissionPct) : 0
 
     const achieved = deals
       .filter(d =>

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { login as apiLogin, activateInvite as apiActivate } from '../services/api'
+import { warmCache } from '../services/appsScript'
 
 const AuthContext = createContext(null)
 
@@ -15,7 +16,11 @@ function readSession() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(() => readSession())
+  const [user, setUser]       = useState(() => {
+    const saved = readSession()
+    if (saved) warmCache()   // pre-warm on page refresh if already logged in
+    return saved
+  })
   const [viewAs, setViewAs]   = useState(null)   // { email, name, role, managerEmail }
 
   // What all pages see for data fetching — real user unless Admin is impersonating
@@ -26,6 +31,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem(SESSION_KEY, JSON.stringify(userData))
     setUser(userData)
     setViewAs(null)
+    warmCache()   // pre-warm immediately after login
     return userData
   }
 

@@ -8,7 +8,7 @@ if (!BASE_URL) {
 
 // ─── In-memory GET cache (30 s TTL) ──────────────────────────────────────────
 const _cache = new Map()
-const CACHE_TTL = 30_000
+const CACHE_TTL = 5 * 60_000   // 5 minutes
 
 function cacheGet(key) {
   const hit = _cache.get(key)
@@ -123,13 +123,22 @@ export const appsScript = {
   getInviteInfo:  (token)  => callGet({ action: 'getInviteInfo', token }),
 
   // Auth writes
-  login:          (email, password)                  => callPost({ action: 'login' },          { email, password }),
-  activateInvite: (token, password)                  => callPost({ action: 'activateInvite' }, { token, password }),
-  createUser:     (data)                             => callPost({ action: 'createUser' },      data),
+  login:          (email, password)                    => callPost({ action: 'login' },          { email, password }),
+  activateInvite: (token, password)                    => callPost({ action: 'activateInvite' }, { token, password }),
+  createUser:     (data)                               => callPost({ action: 'createUser' },      data),
 
   // Generic writes
-  appendRow:      (sheet, row)                       => callPost({ action: 'appendRow',  sheet }, { row }),
-  updateRow:      (sheet, matchCol, matchVal, updates) => callPost({ action: 'updateRow', sheet }, { matchCol, matchVal, updates }),
-  deleteRow:      (sheet, matchCol, matchVal)        => callPost({ action: 'deleteRow',  sheet }, { matchCol, matchVal }),
-  upsertRow:      (sheet, matchCol, matchVal, row)   => callPost({ action: 'upsertRow',  sheet }, { matchCol, matchVal, row }),
+  appendRow:      (sheet, row)                         => callPost({ action: 'appendRow',  sheet }, { row }),
+  updateRow:      (sheet, matchCol, matchVal, updates) => callPost({ action: 'updateRow',  sheet }, { matchCol, matchVal, updates }),
+  deleteRow:      (sheet, matchCol, matchVal)          => callPost({ action: 'deleteRow',  sheet }, { matchCol, matchVal }),
+}
+
+// Pre-warms the cache by fetching the three most-used sheets in parallel.
+// Call this immediately after login so data is ready before the user navigates.
+export function warmCache() {
+  Promise.all([
+    callGet({ action: 'getSheet', sheet: 'Users' }),
+    callGet({ action: 'getSheet', sheet: 'Targets' }),
+    callGet({ action: 'getSheet', sheet: 'Sales done raw dump' }),
+  ]).catch(() => { /* silent — just a best-effort pre-fetch */ })
 }
