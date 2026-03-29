@@ -63,12 +63,13 @@ export const deleteDeal = (id) =>
 export const getTargets = async (filterEmail, month) => {
   const targets = await appsScript.getSheet('Targets')
   const lowerEmail = filterEmail?.trim().toLowerCase()
-  const filtered = targets.filter(t =>
-    (!filterEmail || t.Email?.trim().toLowerCase() === lowerEmail) &&
-    (!month       || t.Month === month)
-  )
+  const filtered = targets.filter(t => {
+    const email = String(tf(t, 'Email') ?? '').trim().toLowerCase()
+    const mon   = String(tf(t, 'Month') ?? '').trim()
+    return (!filterEmail || email === lowerEmail) && (!month || mon === month)
+  })
   // Sort newest-first so callers always get the latest assignment first
-  return filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))
+  return filtered.sort((a, b) => new Date(tf(b, 'AssignedAt') || 0) - new Date(tf(a, 'AssignedAt') || 0))
 }
 
 export const assignTarget = async (data, assignerEmail) => {
@@ -137,14 +138,15 @@ export const getSummary = async (userEmail, month) => {
   const achieved   = cleared.reduce((s, d) => s + d.PaidActual, 0)
   const commission = calcTieredCommission(achieved, target)
 
-  const presetLabel = resolvePresetLabel(target.CommissionPct)
+  const tAmount     = Number(tf(target, 'TargetAmount') ?? 0)
+  const presetLabel = resolvePresetLabel(tf(target, 'CommissionPct'))
   return {
-    totalTarget:     Number(target.TargetAmount),
+    totalTarget:     tAmount,
     totalAchieved:   achieved,
     totalCommission: commission,
-    achievementPct:  target.TargetAmount > 0 ? Math.min((achieved / Number(target.TargetAmount)) * 100, 999) : 0,
-    commissionPct:   presetLabel ?? Number(target.CommissionPct),
-    commissionStart: target.CommissionStartDate,
+    achievementPct:  tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
+    commissionPct:   presetLabel ?? Number(tf(target, 'CommissionPct') ?? 0),
+    commissionStart: tf(target, 'CommissionStartDate'),
   }
 }
 
@@ -159,14 +161,14 @@ export const getLeaderboard = async (rootEmail, month) => {
 
   return agents.map(agent => {
     const target  = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
-    const tAmount = target ? Number(target.TargetAmount) : 0
+    const tAmount = target ? Number(tf(target, 'TargetAmount') ?? 0) : 0
 
     const achieved = deals
       .filter(d =>
         d.Email      === agent.Email.trim().toLowerCase() &&
         d.Month      === month &&
         d.PaidActual  > 0 &&
-        (!target || isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, null))
+        (!target || isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null))
       )
       .reduce((s, d) => s + d.PaidActual, 0)
 
@@ -254,11 +256,24 @@ function buildSubtree(users, rootEmail) {
   }
 }
 
+// Flexible field getter — handles column name casing/spacing differences
+// from Apps Script (e.g. "email", " Email", "EMAIL" all resolve correctly)
+function tf(row, name) {
+  if (row[name] !== undefined) return row[name]
+  const low = name.toLowerCase()
+  const key = Object.keys(row).find(k => k.trim().toLowerCase() === low)
+  return key !== undefined ? row[key] : undefined
+}
+
 // Returns the most-recently-assigned target for a given email + month
 function latestTarget(targets, lowerEmail, month) {
   return targets
-    .filter(t => t.Email?.trim().toLowerCase() === lowerEmail && t.Month === month)
-    .sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))[0] ?? null
+    .filter(t => {
+      const email = String(tf(t, 'Email') ?? '').trim().toLowerCase()
+      const mon   = String(tf(t, 'Month') ?? '').trim()
+      return email === lowerEmail && mon === month
+    })
+    .sort((a, b) => new Date(tf(b, 'AssignedAt') || 0) - new Date(tf(a, 'AssignedAt') || 0))[0] ?? null
 }
 
 function isInCommissionPeriod(closedDate, startDate, _endDate) {
@@ -278,11 +293,10 @@ function calcTieredCommission(achieved, target) {
   if (!achieved || achieved <= 0) return 0
 
   // 1. Check if CommissionPct is a preset ID ("basic","average","pro")
-  const presetId = String(target.CommissionPct || '').trim().toLowerCase()
+  const presetId = String(tf(target, 'CommissionPct') || '').trim().toLowerCase()
   const preset   = AGENT_TARGET_PRESETS.find(p => p.id === presetId)
   if (preset) {
     const sorted = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
-    // Start from the first slab's rate as the base — earning begins from first rupee
     let rate = sorted[0]?.commissionPct ?? 0
     for (const slab of sorted) {
       if (achieved >= slab.targetAmount) rate = slab.commissionPct
@@ -292,7 +306,7 @@ function calcTieredCommission(achieved, target) {
 
   // 2. Fall back to slabs JSON stored in CommissionEndDate
   try {
-    const slabs = JSON.parse(target.CommissionEndDate || '[]')
+    const slabs = JSON.parse(tf(target, 'CommissionEndDate') || '[]')
     if (Array.isArray(slabs) && slabs.length > 0) {
       const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
       let rate = Number(sorted[0]?.commissionPct ?? 0)
@@ -304,5 +318,5 @@ function calcTieredCommission(achieved, target) {
   } catch { /* fall through */ }
 
   // 3. Legacy flat rate
-  return achieved * Number(target.CommissionPct) / 100
+  return achieved * Number(tf(target, 'CommissionPct') ?? 0) / 100
 }
