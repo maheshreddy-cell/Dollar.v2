@@ -78,27 +78,24 @@ export const assignTarget = async (data, assignerEmail) => {
   const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
   const slabsJson = data.slabs ? JSON.stringify(data.slabs) : ''
   const now   = new Date().toISOString()
+  const row   = [key, email, data.month, Number(data.targetAmount), commissionPctValue, data.commissionStartDate || '', slabsJson, assignerEmail, now]
 
-  // Check whether a row already exists for this key
+  // Clear cache so we read fresh data after write
   clearCache()
-  const existing = await appsScript.getSheet('Targets')
-  const rowExists = existing.some(r => r.Key === key)
 
+  // Check if a row already exists; if so, delete it first (updateRow is unreliable)
+  // then always appendRow — proven to write reliably to the sheet
+  const existing = await appsScript.getSheet('Targets')
+  const rowExists = existing.some(r =>
+    String(r.Key ?? '').trim() === key
+  )
   if (rowExists) {
-    // UPDATE existing row — avoids upsertRow update bugs
-    return appsScript.updateRow('Targets', 'Key', key, {
-      TargetAmount:        Number(data.targetAmount),
-      CommissionPct:       commissionPctValue,
-      CommissionStartDate: data.commissionStartDate || '',
-      CommissionEndDate:   slabsJson,
-      AssignedBy:          assignerEmail,
-      AssignedAt:          now,
-    })
+    await appsScript.deleteRow('Targets', 'Key', key)
   }
 
-  // INSERT new row
-  const row = [key, email, data.month, Number(data.targetAmount), commissionPctValue, data.commissionStartDate || '', slabsJson, assignerEmail, now]
-  return appsScript.appendRow('Targets', row)
+  const result = await appsScript.appendRow('Targets', row)
+  clearCache()   // clear again so next read picks up the new row
+  return result
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
