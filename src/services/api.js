@@ -1,6 +1,7 @@
 // All API calls go directly to Apps Script — no Node.js backend needed
 import { appsScript } from './appsScript'
 import { v4 as uuidv4 } from 'uuid'
+import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -69,22 +70,23 @@ export const getTargets = async (filterEmail, month) => {
 }
 
 export const assignTarget = async (data, assignerEmail) => {
-  // data: { email, month, targetAmount, commissionPct, commissionStartDate, slabs }
-  // slabs: [{targetAmount, commissionPct}, ...] — stored as JSON in CommissionEndDate column
-  // Key = email_month ensures one target per agent per month
+  // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs }
+  // For agents: presetId = "basic"|"average"|"pro" — stored in CommissionPct column
+  // For others: commissionPct = numeric %, slabs stored as JSON in CommissionEndDate
   const key = `${data.email.trim().toLowerCase()}_${data.month}`
-  // Total target = highest slab threshold (not a sum — slabs are milestones)
   const topTarget = data.slabs && data.slabs.length > 0
     ? Math.max(...data.slabs.map(s => Number(s.targetAmount) || 0))
     : Number(data.targetAmount)
+  // CommissionPct column stores preset ID ("basic"/"average"/"pro") for agents, or numeric % for others
+  const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
   const row = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
     topTarget,
-    Number(data.commissionPct || (data.slabs?.[0]?.commissionPct ?? 0)),
+    commissionPctValue,
     data.commissionStartDate || '',
-    data.slabs ? JSON.stringify(data.slabs) : '',   // CommissionEndDate col repurposed → slabs JSON
+    data.slabs ? JSON.stringify(data.slabs) : '',
     assignerEmail,
     new Date().toISOString(),
   ]
@@ -139,12 +141,13 @@ export const getSummary = async (userEmail, month) => {
   const achieved   = cleared.reduce((s, d) => s + d.PaidActual, 0)
   const commission = calcTieredCommission(achieved, target)
 
+  const presetLabel = resolvePresetLabel(target.CommissionPct)
   return {
     totalTarget:     Number(target.TargetAmount),
     totalAchieved:   achieved,
     totalCommission: commission,
     achievementPct:  target.TargetAmount > 0 ? Math.min((achieved / Number(target.TargetAmount)) * 100, 999) : 0,
-    commissionPct:   Number(target.CommissionPct),
+    commissionPct:   presetLabel ?? Number(target.CommissionPct),
     commissionStart: target.CommissionStartDate,
   }
 }
@@ -262,9 +265,27 @@ function isInCommissionPeriod(closedDate, startDate, _endDate) {
   return new Date(closedDate) >= new Date(startDate)
 }
 
+// Returns the preset label ("Basic","Average","Pro") if CommissionPct is a preset ID, else null
+function resolvePresetLabel(commissionPct) {
+  const id = String(commissionPct || '').trim().toLowerCase()
+  const preset = AGENT_TARGET_PRESETS.find(p => p.id === id)
+  return preset ? preset.label : null
+}
+
 function calcTieredCommission(achieved, target) {
-  // CommissionEndDate column repurposed to store slabs JSON
-  // Slabs are thresholds: hit >= threshold → that rate applies to total achieved
+  // 1. Check if CommissionPct is a preset ID ("basic","average","pro")
+  const presetId = String(target.CommissionPct || '').trim().toLowerCase()
+  const preset   = AGENT_TARGET_PRESETS.find(p => p.id === presetId)
+  if (preset) {
+    const sorted = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
+    let rate = 0
+    for (const slab of sorted) {
+      if (achieved >= slab.targetAmount) rate = slab.commissionPct
+    }
+    return achieved * rate / 100
+  }
+
+  // 2. Fall back to slabs JSON stored in CommissionEndDate
   try {
     const slabs = JSON.parse(target.CommissionEndDate || '[]')
     if (Array.isArray(slabs) && slabs.length > 0) {
@@ -276,6 +297,7 @@ function calcTieredCommission(achieved, target) {
       return achieved * rate / 100
     }
   } catch { /* fall through */ }
-  // Legacy flat rate
+
+  // 3. Legacy flat rate
   return achieved * Number(target.CommissionPct) / 100
 }

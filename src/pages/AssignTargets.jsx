@@ -87,31 +87,41 @@ export default function AssignTargets() {
           setCommissionStartDate(t.CommissionStartDate?.split('T')[0] ?? '')
           setExistingTarget(true)
 
-          try {
-            const parsed = JSON.parse(t.CommissionEndDate || '[]')
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              if (selected.Role === 'Agent') {
-                // Try to match to a preset
-                const matchedPreset = AGENT_TARGET_PRESETS.find(p =>
+          if (selected.Role === 'Agent') {
+            // CommissionPct stores preset ID ("basic","average","pro")
+            const savedPresetId = String(t.CommissionPct || '').trim().toLowerCase()
+            const matched = AGENT_TARGET_PRESETS.find(p => p.id === savedPresetId)
+            if (matched) {
+              setSelectedPreset(matched.id)
+              return
+            }
+            // Fall back: try matching by slabs JSON
+            try {
+              const parsed = JSON.parse(t.CommissionEndDate || '[]')
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const matchedFromSlabs = AGENT_TARGET_PRESETS.find(p =>
                   p.slabs.length === parsed.length &&
                   p.slabs.every((s, i) =>
                     Number(s.targetAmount) === Number(parsed[i]?.targetAmount) &&
                     Number(s.commissionPct) === Number(parsed[i]?.commissionPct)
                   )
                 )
-                setSelectedPreset(matchedPreset?.id ?? null)
-              } else {
+                setSelectedPreset(matchedFromSlabs?.id ?? null)
+              }
+            } catch { /* leave preset unselected */ }
+          } else {
+            // Non-agent: load slabs JSON
+            try {
+              const parsed = JSON.parse(t.CommissionEndDate || '[]')
+              if (Array.isArray(parsed) && parsed.length > 0) {
                 setSlabs(parsed.map(s => ({
                   targetAmount:  String(s.targetAmount ?? ''),
                   commissionPct: String(s.commissionPct ?? ''),
                 })))
+                return
               }
-              return
-            }
-          } catch { /* fall through to defaults */ }
-
-          // Legacy single-slab
-          if (selected.Role !== 'Agent') {
+            } catch { /* fall through */ }
+            // Legacy single-slab
             setSlabs([
               { targetAmount: String(t.TargetAmount ?? ''), commissionPct: String(t.CommissionPct ?? '') },
               EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB,
@@ -172,7 +182,8 @@ export default function AssignTargets() {
         email:               selected.Email,
         month,
         targetAmount:        Math.max(...filledSlabs.map(s => Number(s.targetAmount))),
-        commissionPct:       Number(filledSlabs[0].commissionPct),
+        presetId:            isAgent ? selectedPreset : undefined,
+        commissionPct:       isAgent ? undefined : Number(filledSlabs[0].commissionPct),
         commissionStartDate: commissionStartDate || undefined,
         slabs:               filledSlabs,
       }, user.email)
