@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Target, TrendingUp, DollarSign, Percent, BarChart2,
-  Users, Activity, ShoppingCart,
+  Users, Activity, CheckCircle, AlertTriangle, ClipboardCheck,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -16,7 +16,6 @@ const COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#f9
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Compact INR for chart axes: ₹1.2Cr, ₹5.8L, ₹72k
 function axisINR(v) {
   if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`
   if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)}L`
@@ -24,21 +23,15 @@ function axisINR(v) {
   return `₹${v}`
 }
 
-// Working days from today (or month start if future) to end of given "YYYY-MM" month
 function workingDaysLeft(month) {
   if (!month) return 0
   const [yr, mo] = month.split('-').map(Number)
   const now      = new Date()
-  const lastDay  = new Date(yr, mo, 0)              // last day of the month
-  const start    = new Date(yr, mo - 1, 1)          // first day of the month
-
-  // If the month is already over, 0 days left
+  const lastDay  = new Date(yr, mo, 0)
+  const start    = new Date(yr, mo - 1, 1)
   if (now > lastDay) return 0
-
-  // Start from today if we're inside the month, else from month start
   const cursor = new Date(Math.max(now, start))
   cursor.setHours(0, 0, 0, 0)
-
   let count = 0
   const end = new Date(lastDay)
   end.setHours(23, 59, 59)
@@ -102,9 +95,9 @@ function EligibilityBadge({ slabInfo }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Metrics() {
-  const { month }                        = useMonth()
-  const { effectiveUser: user }          = useAuth()
-  const isAgent                          = user?.role === 'Agent'
+  const { month }               = useMonth()
+  const { effectiveUser: user } = useAuth()
+  const isAgent                 = user?.role === 'Agent'
 
   const [summary,     setSummary]     = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
@@ -134,7 +127,6 @@ export default function Metrics() {
         } else {
           const lb = [...(res1 ?? [])].sort((a, b) => b.achieved - a.achieved)
           setLeaderboard(lb)
-          // Derive team-wide totals from leaderboard (same approach as Dashboard)
           const teamTarget     = lb.reduce((s, r) => s + r.target,     0)
           const teamAchieved   = lb.reduce((s, r) => s + r.achieved,   0)
           const teamCommission = lb.reduce((s, r) => s + (r.commission ?? 0), 0)
@@ -164,19 +156,19 @@ export default function Metrics() {
     )
   }
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  // ── Derived values ─────────────────────────────────────────────────────────
   const achievedPct  = summary ? getAchievementPct(summary.totalTarget, summary.totalAchieved) : 0
-  const asp          = analytics && analytics.totalDeals > 0
-    ? analytics.totalAchieved / analytics.totalDeals
-    : null
+  const projectedPct = isAgent && (summary?.totalTarget ?? 0) > 0
+    ? Math.min(999, ((summary.totalSaleValue ?? 0) / summary.totalTarget) * 100)
+    : 0
 
-  const daysLeft     = workingDaysLeft(month)
-  const recTarget    = summary?.totalTarget   ?? 0
-  const recAchieved  = summary?.totalAchieved ?? 0
-  const recGap       = Math.max(0, recTarget - recAchieved)
-  const dailyRate    = recGap > 0 && daysLeft > 0 ? Math.ceil(recGap / daysLeft) : 0
+  const daysLeft   = workingDaysLeft(month)
+  const recTarget  = summary?.totalTarget   ?? 0
+  const recAchieved = summary?.totalAchieved ?? 0
+  const recGap     = Math.max(0, recTarget - recAchieved)
+  const dailyRate  = recGap > 0 && daysLeft > 0 ? Math.ceil(recGap / daysLeft) : 0
 
-  const chartData    = leaderboard.slice(0, 10).map(r => ({
+  const chartData   = leaderboard.slice(0, 10).map(r => ({
     name:     r.name?.split(' ')[0] ?? r.email,
     achieved: r.achieved ?? 0,
   }))
@@ -184,49 +176,204 @@ export default function Metrics() {
   const teamMax     = analytics?.byTeam?.[0]?.achieved     || 1
   const verticalMax = analytics?.byVertical?.[0]?.achieved || 1
 
-  const isAdmin = user?.role === 'Admin'
+  const isAdmin  = user?.role === 'Admin'
   const orgLabel = isAdmin ? 'Org' : 'Team'
 
   return (
     <div className="space-y-6">
       <h2 className="text-base font-semibold text-gray-800">Metrics — {month}</h2>
 
-      {/* ── KPI cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricsCard
-          title={isAgent ? 'My Target'   : 'Team Target'}
-          value={formatINR(summary?.totalTarget ?? 0)}
-          icon={Target} color="blue"
-        />
-        <MetricsCard
-          title={isAgent ? 'My Achieved'   : 'Team Achieved'}
-          value={formatINR(summary?.totalAchieved ?? 0)}
-          icon={TrendingUp} color="green"
-        />
-        <MetricsCard
-          title={isAgent ? 'My Commission' : 'Team Incentives'}
-          value={formatINR(summary?.totalCommission ?? 0)}
-          icon={DollarSign} color="purple"
-        />
-        <MetricsCard
-          title="Achievement %"
-          value={`${achievedPct.toFixed(1)}%`}
-          icon={Percent}
-          color={achievedPct >= 100 ? 'green' : achievedPct >= 50 ? 'orange' : 'red'}
-        />
-        {!isAgent && (
-          <MetricsCard
-            title="Team ASP"
-            value={asp != null ? formatINR(Math.round(asp)) : '—'}
-            sub="Avg revenue per deal"
-            icon={ShoppingCart} color="blue"
-          />
-        )}
-      </div>
+      {/* ═══════════════════════════════════════════════
+          AGENT VIEW
+      ═══════════════════════════════════════════════ */}
+      {isAgent && (
+        <>
+          {/* 6-card KPI grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <MetricsCard
+              title="My Target"
+              value={formatINR(summary?.totalTarget ?? 0)}
+              icon={Target} color="blue"
+            />
+            <MetricsCard
+              title="Total Sale Value"
+              value={formatINR(summary?.totalSaleValue ?? 0)}
+              sub="Pipeline value (all deals)"
+              icon={TrendingUp} color="blue"
+            />
+            <MetricsCard
+              title="Achieved (Paid)"
+              value={formatINR(summary?.totalAchieved ?? 0)}
+              sub={`${summary?.totalDeals ?? 0} paid deal${(summary?.totalDeals ?? 0) !== 1 ? 's' : ''}`}
+              icon={TrendingUp} color="green"
+            />
+            <MetricsCard
+              title="Commission Earned"
+              value={formatINR(summary?.totalCommission ?? 0)}
+              sub={
+                summary?.slabInfo
+                  ? summary.slabInfo.eligible
+                    ? '✓ Slab eligible'
+                    : `₹${Math.round((summary.slabInfo.gapToSlab1 ?? 0) / 1000)}k to reach Slab 1`
+                  : undefined
+              }
+              icon={DollarSign} color="purple"
+            />
+            <MetricsCard
+              title="Achievement %"
+              value={`${achievedPct.toFixed(1)}%`}
+              sub={
+                summary?.slabInfo
+                  ? `Slab 1 at ${formatINR(summary.slabInfo.firstSlabTarget)}`
+                  : undefined
+              }
+              icon={Percent}
+              color={achievedPct >= 100 ? 'green' : achievedPct >= 50 ? 'orange' : 'red'}
+            />
+            <MetricsCard
+              title="Projected"
+              value={`${projectedPct.toFixed(1)}%`}
+              sub="If full pipeline pays in full"
+              icon={BarChart2}
+              color={projectedPct >= 100 ? 'green' : projectedPct >= 75 ? 'orange' : 'blue'}
+            />
+          </div>
 
-      {/* ── Team Revenue / Deals / ASP big numbers ── */}
+          {/* Eligibility banner */}
+          {(summary?.totalTarget ?? 0) > 0 && (
+            achievedPct >= 100 ? (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center gap-3">
+                <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">Eligible to Claim Incentives ✓</p>
+                  <p className="text-xs text-green-600 mt-0.5">
+                    You have met 100% of your monthly target. Raise your incentive claim with your manager.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle size={20} className="text-orange-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-orange-800">Need to Recover More</p>
+                    <p className="text-xs text-orange-600 mt-0.5">
+                      {formatINR(recGap)} more needed to hit 100% target and unlock full incentive claim.
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-orange-700 bg-orange-100 border border-orange-300 px-3 py-1.5 rounded-lg">
+                  {achievedPct.toFixed(1)}% achieved
+                </span>
+              </div>
+            )
+          )}
+
+          {/* Slab Progress & Earnings Potential */}
+          {(summary?.slabInfo?.slabs?.length ?? 0) > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <SectionHeader icon={Target} title="Slab Progress & Earnings Potential" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {summary.slabInfo.slabs.map((slab, i) => {
+                  const threshold = Number(slab.targetAmount)
+                  const rate      = Number(slab.commissionPct)
+                  const achieved  = summary.totalAchieved ?? 0
+                  const hit       = achieved >= threshold
+                  const gap       = Math.max(0, threshold - achieved)
+                  const potential = Math.round(threshold * rate / 100)
+                  const fillPct   = Math.min(100, (achieved / threshold) * 100)
+                  return (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-xl border ${
+                        hit ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-600">Slab {i + 1}</span>
+                        {hit ? (
+                          <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Hit</span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full">Not yet</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-gray-800">{formatINR(threshold)}</p>
+                      <p className="text-[11px] text-gray-500">{rate}% commission</p>
+                      <p className="text-[11px] font-semibold text-purple-700 mt-0.5">
+                        Potential: {formatINR(potential)}
+                      </p>
+                      {!hit && gap > 0 && (
+                        <p className="text-[10px] text-orange-600 mt-0.5">{formatINR(gap)} to go</p>
+                      )}
+                      <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${hit ? 'bg-green-500' : 'bg-brand-500'}`}
+                          style={{ width: `${fillPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Loan Documents Collected breakdown */}
+          {Object.keys(summary?.loanDocs ?? {}).length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <SectionHeader icon={ClipboardCheck} title="Loan Documents Collected" />
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(summary.loanDocs)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([label, count]) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200"
+                    >
+                      <span>{label}</span>
+                      <span className="bg-white text-gray-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-gray-200">
+                        {count}
+                      </span>
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════
+          MANAGER / ADMIN VIEW — 4 KPI cards (no ASP)
+      ═══════════════════════════════════════════════ */}
+      {!isAgent && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricsCard
+            title="Team Target"
+            value={formatINR(summary?.totalTarget ?? 0)}
+            icon={Target} color="blue"
+          />
+          <MetricsCard
+            title="Team Achieved"
+            value={formatINR(summary?.totalAchieved ?? 0)}
+            icon={TrendingUp} color="green"
+          />
+          <MetricsCard
+            title="Team Incentives"
+            value={formatINR(summary?.totalCommission ?? 0)}
+            icon={DollarSign} color="purple"
+          />
+          <MetricsCard
+            title="Achievement %"
+            value={`${achievedPct.toFixed(1)}%`}
+            icon={Percent}
+            color={achievedPct >= 100 ? 'green' : achievedPct >= 50 ? 'orange' : 'red'}
+          />
+        </div>
+      )}
+
+      {/* ── Team Revenue + Deals (no ASP tile) ── */}
       {analytics && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <p className="text-xs text-gray-500">{orgLabel} Revenue ({month})</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{formatINR(analytics.totalAchieved)}</p>
@@ -235,16 +382,10 @@ export default function Metrics() {
             <p className="text-xs text-gray-500">{orgLabel} Deals ({month})</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{analytics.totalDeals.toLocaleString('en-IN')}</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-            <p className="text-xs text-gray-500">{orgLabel} ASP ({month})</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
-              {asp != null ? formatINR(Math.round(asp)) : '—'}
-            </p>
-          </div>
         </div>
       )}
 
-      {/* ── Recovery Snapshot ── */}
+      {/* ── Recovery Snapshot (both roles) ── */}
       {recTarget > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <SectionHeader icon={Activity} title="Recovery Snapshot" />
@@ -348,7 +489,7 @@ export default function Metrics() {
         )}
       </div>
 
-      {/* ── Agent Leaderboard table ── */}
+      {/* ── Agent Leaderboard ── */}
       {leaderboard.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">

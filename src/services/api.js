@@ -140,25 +140,46 @@ export const getSummary = async (userEmail, month) => {
   ])
   const lowerUser = userEmail?.trim().toLowerCase()
   const target = latestTarget(targets, lowerUser, month)
-  if (!target) return { totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0 }
+  if (!target) return {
+    totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0,
+    totalSaleValue: 0, totalDeals: 0, loanDocs: {}, slabInfo: null,
+  }
 
-  // All rows for agent+month with actual payment count (no status filter)
-  const cleared = deals.filter(d =>
-    d.Email      === userEmail.trim().toLowerCase() &&
-    d.Month      === month &&
-    d.PaidActual  > 0 &&
-    isInCommissionPeriod(d.PaymentDate, target.CommissionStartDate, null)
+  // All deals for this agent+month (used for pipeline / loan docs breakdown)
+  const agentDeals = deals.filter(d =>
+    d.Email === lowerUser && d.Month === month
   )
-  const achieved   = cleared.reduce((s, d) => s + d.PaidActual, 0)
-  const commission = calcTieredCommission(achieved, target)
+
+  // Commission-eligible paid deals only
+  const cleared = agentDeals.filter(d =>
+    d.PaidActual > 0 &&
+    isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null)
+  )
+
+  const achieved        = cleared.reduce((s, d) => s + d.PaidActual, 0)
+  const commission      = calcTieredCommission(achieved, target)
+  const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+
+  // Loan Documents Collected — count each unique dropdown value
+  const loanDocs = {}
+  for (const d of agentDeals) {
+    const v = (d.LoanDocsCollected || '').trim() || '—'
+    loanDocs[v] = (loanDocs[v] || 0) + 1
+  }
 
   const tAmount     = Number(tf(target, 'TargetAmount') ?? 0)
+  const slabInfo    = getSlabInfo(achieved, target)
   const presetLabel = resolvePresetLabel(tf(target, 'CommissionPct'))
+
   return {
     totalTarget:     tAmount,
     totalAchieved:   achieved,
     totalCommission: commission,
     achievementPct:  tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
+    totalSaleValue,
+    totalDeals:      cleared.length,
+    loanDocs,
+    slabInfo,
     commissionPct:   presetLabel ?? Number(tf(target, 'CommissionPct') ?? 0),
     commissionStart: tf(target, 'CommissionStartDate'),
   }
