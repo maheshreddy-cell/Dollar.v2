@@ -61,8 +61,9 @@ export const deleteDeal = (id) =>
 
 export const getTargets = async (filterEmail, month) => {
   const targets = await appsScript.getSheet('Targets')
+  const lowerEmail = filterEmail?.trim().toLowerCase()
   return targets.filter(t =>
-    (!filterEmail || t.Email === filterEmail) &&
+    (!filterEmail || t.Email?.trim().toLowerCase() === lowerEmail) &&
     (!month       || t.Month === month)
   )
 }
@@ -124,7 +125,8 @@ export const getSummary = async (userEmail, month) => {
     appsScript.getSheet('Targets'),
     appsScript.getSalesSheet(),
   ])
-  const target = targets.find(t => t.Email === userEmail && t.Month === month)
+  const lowerUser = userEmail?.trim().toLowerCase()
+  const target = targets.find(t => t.Email?.trim().toLowerCase() === lowerUser && t.Month === month)
   if (!target) return { totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0 }
 
   // All rows for agent+month with actual payment count (no status filter)
@@ -157,7 +159,7 @@ export const getLeaderboard = async (rootEmail, month) => {
   const agents  = users.filter(u => emails.includes(u.Email) && u.Role === 'Agent')
 
   return agents.map(agent => {
-    const target  = targets.find(t => t.Email === agent.Email && t.Month === month)
+    const target  = targets.find(t => t.Email?.trim().toLowerCase() === agent.Email?.trim().toLowerCase() && t.Month === month)
     const tAmount = target ? Number(target.TargetAmount) : 0
     const pct     = target ? Number(target.CommissionPct) : 0
 
