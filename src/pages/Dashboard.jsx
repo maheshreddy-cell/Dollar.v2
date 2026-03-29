@@ -7,8 +7,10 @@ import MetricsCard from '../components/MetricsCard'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, getAchievementPct } from '../utils/commission'
 
+const MANAGER_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
+
 export default function Dashboard() {
-  const { user, effectiveUser, isRole } = useAuth()
+  const { effectiveUser } = useAuth()
   const { month } = useMonth()
 
   const [summary, setSummary] = useState(null)
@@ -17,28 +19,41 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
+
   useEffect(() => {
     setLoading(true)
     setError('')
 
-    const requests = [getSummary(effectiveUser.email, month)]
-    if (['Admin','SalesHead','VH','Manager'].includes(effectiveUser.role)) {
-      requests.push(getLeaderboard(effectiveUser.email, month))
+    if (isManager) {
+      // Single call — derive team totals directly from leaderboard rows
+      getLeaderboard(effectiveUser.email, month)
+        .then(rows => {
+          const totalTarget     = rows.reduce((s, r) => s + r.target, 0)
+          const totalAchieved   = rows.reduce((s, r) => s + r.achieved, 0)
+          const totalCommission = rows.reduce((s, r) => s + r.commission, 0)
+          setSummary({
+            totalTarget,
+            totalAchieved,
+            totalCommission,
+            achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0,
+          })
+          setLeaderboard(rows.slice(0, 5))
+        })
+        .catch(() => setError('Failed to load dashboard data.'))
+        .finally(() => setLoading(false))
     } else {
-      requests.push(getDeals(effectiveUser.email, month))
+      Promise.all([
+        getSummary(effectiveUser.email, month),
+        getDeals(effectiveUser.email, month),
+      ])
+        .then(([summaryRes, dealsRes]) => {
+          setSummary(summaryRes)
+          setRecentDeals((dealsRes ?? []).slice(0, 5))
+        })
+        .catch(() => setError('Failed to load dashboard data.'))
+        .finally(() => setLoading(false))
     }
-
-    Promise.all(requests)
-      .then(([summaryRes, secondRes]) => {
-        setSummary(summaryRes)
-        if (['Admin','SalesHead','VH','Manager'].includes(effectiveUser.role)) {
-          setLeaderboard((secondRes ?? []).slice(0, 5))
-        } else {
-          setRecentDeals((secondRes ?? []).slice(0, 5))
-        }
-      })
-      .catch(() => setError('Failed to load dashboard data.'))
-      .finally(() => setLoading(false))
   }, [month, effectiveUser?.email])
 
   if (loading) {
@@ -60,7 +75,9 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-gray-800">
             Welcome back, {effectiveUser?.name?.split(' ')[0]}
           </h2>
-          <p className="text-sm text-gray-500">Here's your overview for {month}</p>
+          <p className="text-sm text-gray-500">
+            {isManager ? 'Team overview for' : "Here's your overview for"} {month}
+          </p>
         </div>
         <DaysLeftBadge month={month} />
       </div>
@@ -73,19 +90,19 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricsCard
-          title="Total Target"
+          title={isManager ? 'Team Target' : 'Total Target'}
           value={formatINR(summary?.totalTarget ?? 0)}
           icon={Target}
           color="blue"
         />
         <MetricsCard
-          title="Achieved"
+          title={isManager ? 'Team Achieved' : 'Achieved'}
           value={formatINR(summary?.totalAchieved ?? 0)}
           icon={TrendingUp}
           color="green"
         />
         <MetricsCard
-          title="Commission Earned"
+          title={isManager ? 'Total Incentives' : 'Commission Earned'}
           value={formatINR(summary?.totalCommission ?? 0)}
           icon={DollarSign}
           color="purple"
@@ -98,7 +115,7 @@ export default function Dashboard() {
         />
       </div>
 
-      {['Admin','SalesHead','VH','Manager'].includes(effectiveUser?.role) && leaderboard.length > 0 && (
+      {isManager && leaderboard.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Top Performers — {month}</h3>
           <div className="overflow-x-auto">
@@ -118,22 +135,12 @@ export default function Dashboard() {
                   <tr key={row.email ?? i}>
                     <td className="py-2.5 pr-3 text-gray-400 font-medium">{i + 1}</td>
                     <td className="py-2.5 pr-3 font-medium text-gray-800">{row.name}</td>
-                    <td className="py-2.5 pr-3 text-right text-gray-600">
-                      {formatINR(row.target)}
-                    </td>
-                    <td className="py-2.5 pr-3 text-right text-gray-800 font-medium">
-                      {formatINR(row.achieved)}
-                    </td>
+                    <td className="py-2.5 pr-3 text-right text-gray-600">{formatINR(row.target)}</td>
+                    <td className="py-2.5 pr-3 text-right text-gray-800 font-medium">{formatINR(row.achieved)}</td>
                     <td className="py-2.5 pr-3 text-right">
-                      <span
-                        className={`text-xs font-semibold ${
-                          row.pct >= 100
-                            ? 'text-green-600'
-                            : row.pct >= 50
-                            ? 'text-blue-600'
-                            : 'text-orange-500'
-                        }`}
-                      >
+                      <span className={`text-xs font-semibold ${
+                        row.pct >= 100 ? 'text-green-600' : row.pct >= 50 ? 'text-blue-600' : 'text-orange-500'
+                      }`}>
                         {(row.pct ?? 0).toFixed(1)}%
                       </span>
                     </td>
@@ -161,28 +168,22 @@ export default function Dashboard() {
                   className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{deal.CustomerName}</p>
+                    <p className="text-sm font-medium text-gray-800">{deal.LeadName || deal.CustomerName}</p>
                     <p className="text-xs text-gray-400">
-                      {deal.DealDate ? new Date(deal.DealDate).toLocaleDateString('en-IN') : '—'}
+                      {deal.PaymentDate ? new Date(deal.PaymentDate).toLocaleDateString('en-IN') : '—'}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-800">
-                      {formatINR(deal.Price)}
-                    </p>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        deal.Status === 'Cleared'
-                          ? 'bg-green-100 text-green-700'
-                          : deal.Status === 'AtRisk'
-                          ? 'bg-red-100 text-red-700'
-                          : deal.Status === 'OnHold'
-                          ? 'bg-orange-100 text-orange-700'
-                          : deal.Status === 'Lost'
-                          ? 'bg-gray-100 text-gray-600'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}
-                    >
+                    <p className="text-sm font-semibold text-gray-800">{formatINR(deal.PaidActual)}</p>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      deal.Status === 'Cleared'
+                        ? 'bg-green-100 text-green-700'
+                        : deal.Status === 'AtRisk'
+                        ? 'bg-red-100 text-red-700'
+                        : deal.Status === 'OnHold'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
                       {deal.Status}
                     </span>
                   </div>
