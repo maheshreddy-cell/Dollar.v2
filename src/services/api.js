@@ -326,12 +326,25 @@ function stripSensitive(u) {
 }
 
 function collectEmails(users, rootEmail) {
+  // Case-insensitive traversal — ManagerEmail entries in the sheet may not
+  // exactly match the casing of the Email column.
   const emails  = [rootEmail]
-  const queue   = [rootEmail]
+  const visited = new Set([(rootEmail || '').trim().toLowerCase()])
+  const queue   = [(rootEmail || '').trim().toLowerCase()]
+
   while (queue.length) {
     const current  = queue.shift()
-    const children = users.filter(u => u.ManagerEmail === current).map(u => u.Email)
-    children.forEach(e => { emails.push(e); queue.push(e) })
+    const children = users.filter(
+      u => (u.ManagerEmail || '').trim().toLowerCase() === current
+    )
+    for (const u of children) {
+      const lower = (u.Email || '').trim().toLowerCase()
+      if (!visited.has(lower)) {
+        visited.add(lower)
+        emails.push(u.Email)
+        queue.push(lower)
+      }
+    }
   }
   return emails
 }

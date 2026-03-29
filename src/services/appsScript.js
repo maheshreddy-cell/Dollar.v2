@@ -90,7 +90,23 @@ function col(raw, name) {
 function normalizeMonth(val) {
   if (!val) return ''
   const str = String(val).trim()
-  if (/^\d{4}-\d{2}$/.test(str)) return str  // already YYYY-MM
+  if (!str) return ''
+
+  // Already YYYY-MM
+  if (/^\d{4}-\d{2}$/.test(str)) return str
+
+  // ISO date / date-only strings — Google Sheets returns these when cells are
+  // date-formatted.  Shift to IST (UTC+5:30) so "2026-02-28T18:30:00.000Z"
+  // correctly resolves to "2026-03" instead of "2026-02".
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const d = new Date(str)
+    if (!isNaN(d.getTime())) {
+      const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+      return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
+    }
+  }
+
+  // Named month strings: "March 2026", "Mar 2026", "march-2026" etc.
   const names = {
     january:1,february:2,march:3,april:4,may:5,june:6,
     july:7,august:8,september:9,october:10,november:11,december:12,
@@ -103,8 +119,16 @@ function normalizeMonth(val) {
   }
   const yearMatch = str.match(/\b(20\d{2})\b/)
   if (monthNum && yearMatch) {
-    return `${yearMatch[1]}-${String(monthNum).padStart(2,'0')}`
+    return `${yearMatch[1]}-${String(monthNum).padStart(2, '0')}`
   }
+
+  // Last resort: try generic Date parse + IST shift
+  const d = new Date(str)
+  if (!isNaN(d.getTime())) {
+    const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+    return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+
   return str
 }
 
