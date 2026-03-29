@@ -8,71 +8,91 @@ import {
   GitBranch,
   Settings,
   DollarSign,
+  MessageCircle,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-const NAV = [
-  // ── All roles ───────────────────────────────────────────
-  { to: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
-
-  // ── Agent only ──────────────────────────────────────────
-  { to: '/my-targets',        label: 'My Targets',       icon: Target,          roles: ['Agent'] },
-
-  // ── Agent + managers ────────────────────────────────────
-  { to: '/metrics',           label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
-
-  // ── Managers and above ──────────────────────────────────
-  { to: '/assign-targets',    label: 'Assign Targets',   icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
-  { to: '/team',              label: 'My Team',          icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
-  { to: '/deals',             label: 'Deals',            icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
-
-  // ── Leadership ──────────────────────────────────────────
-  { to: '/org',               label: 'Org Chart',        icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
-
-  // ── Admin only ──────────────────────────────────────────
-  { to: '/commission-config', label: 'Commission Config', icon: Settings,       roles: ['Admin'] },
+// ── Nav definition ────────────────────────────────────────────────────────────
+// Agents see ONLY: Dashboard, My Targets, FAQ
+// All others see their role-scoped items + FAQ
+const NAV_GROUPS = [
+  {
+    label: null,   // no section header
+    items: [
+      { to: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+      { to: '/my-targets',     label: 'My Targets',       icon: Target,          roles: ['Agent'] },
+      { to: '/metrics',        label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/assign-targets', label: 'Assign Targets',   icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/team',           label: 'My Team',          icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/deals',          label: 'Deals',            icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/org',            label: 'Org Chart',        icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
+      { to: '/commission-config', label: 'Commission Config', icon: Settings,    roles: ['Admin'] },
+    ],
+  },
+  {
+    label: 'Support',
+    items: [
+      { to: '/faq', label: 'FAQ / AI Help', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+    ],
+  },
 ]
 
 const ROLE_COLORS = {
-  Admin: 'bg-red-100 text-red-700',
+  Admin:     'bg-red-100 text-red-700',
   SalesHead: 'bg-purple-100 text-purple-700',
-  VH: 'bg-blue-100 text-blue-700',
-  Manager: 'bg-green-100 text-green-700',
-  Agent: 'bg-gray-100 text-gray-700',
+  VH:        'bg-blue-100 text-blue-700',
+  Manager:   'bg-green-100 text-green-700',
+  Agent:     'bg-gray-100 text-gray-700',
 }
 
 export default function Sidebar() {
   const { user, isRole } = useAuth()
 
-  const visible = NAV.filter((item) => isRole(...item.roles))
-
   return (
-    <aside className="w-60 min-h-screen bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 bg-gradient-to-b from-white to-gray-50/80">
+      {/* Logo */}
       <div className="px-5 py-5 border-b border-gray-100">
         <span className="text-xl font-bold text-brand-700 tracking-tight">Dollar.v2</span>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {visible.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`
-            }
-          >
-            <Icon size={18} className="flex-shrink-0" />
-            {label}
-          </NavLink>
-        ))}
+      {/* Nav groups */}
+      <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+        {NAV_GROUPS.map((group, gi) => {
+          const visible = group.items.filter(item => isRole(...item.roles))
+          if (!visible.length) return null
+          return (
+            <div key={gi}>
+              {group.label && (
+                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {visible.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-brand-50 text-brand-700 shadow-sm'
+                          : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
+                      }`
+                    }
+                  >
+                    <Icon size={17} className="flex-shrink-0" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </nav>
 
+      {/* User profile footer */}
       {user && (
-        <div className="px-4 py-4 border-t border-gray-100">
+        <div className="px-4 py-4 border-t border-gray-100 bg-white/60">
           <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
           <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
           <span

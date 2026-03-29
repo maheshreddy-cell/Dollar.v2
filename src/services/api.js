@@ -184,7 +184,9 @@ export const getLeaderboard = async (rootEmail, month) => {
       (!target || isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null))
     )
 
-    const achieved        = agentDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+    const paidDeals       = agentDeals.filter(d => d.PaidActual > 0)
+    const achieved        = paidDeals.reduce((s, d) => s + d.PaidActual, 0)
+    const dealsCount      = paidDeals.length
     const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
 
     // Loan docs: count deals where LoanDocsCollected is a meaningful "yes" value
@@ -199,6 +201,7 @@ export const getLeaderboard = async (rootEmail, month) => {
       email:             agent.Email,
       target:            tAmount,
       achieved,
+      dealsCount,
       totalSaleValue,
       pendingCollection: Math.max(0, totalSaleValue - achieved),
       loanDocsOk,
@@ -215,6 +218,47 @@ export const getLeaderboard = async (rootEmail, month) => {
 export const getSalesAnalytics = async (month) => {
   const deals = await appsScript.getSalesSheet()
   const rows = deals.filter(d => !month || d.Month === month)
+
+  const byTeam     = {}
+  const byVertical = {}
+
+  for (const d of rows) {
+    const team     = d.Team     || 'Unassigned'
+    const vertical = d.Vertical || 'Unassigned'
+    const val      = d.PaidActual || 0
+
+    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0 }
+    byTeam[team].achieved    += val
+    byTeam[team].deals       += 1
+
+    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0 }
+    byVertical[vertical].achieved += val
+    byVertical[vertical].deals    += 1
+  }
+
+  return {
+    byTeam:        Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
+    byVertical:    Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
+    totalAchieved: rows.reduce((s, d) => s + (d.PaidActual || 0), 0),
+    totalDeals:    rows.length,
+  }
+}
+
+// Team-scoped analytics — filters deals to the subtree under rootEmail.
+// Pass fullOrg=true (Admin) to skip email filter and count all deals.
+export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) => {
+  const [users, deals] = await Promise.all([
+    fullOrg ? Promise.resolve([]) : appsScript.getSheet('Users'),
+    appsScript.getSalesSheet(),
+  ])
+
+  let rows
+  if (fullOrg) {
+    rows = deals.filter(d => !month || d.Month === month)
+  } else {
+    const emails = collectEmails(users, rootEmail).map(e => e.trim().toLowerCase())
+    rows = deals.filter(d => emails.includes(d.Email) && (!month || d.Month === month))
+  }
 
   const byTeam     = {}
   const byVertical = {}
@@ -320,8 +364,8 @@ function latestTarget(targets, lowerEmail, month) {
 }
 
 function isInCommissionPeriod(closedDate, startDate, _endDate) {
-  if (!startDate) return true
-  if (!closedDate) return false
+  // If either date is missing, include the deal — don't penalise missing PaymentDate
+  if (!startDate || !closedDate) return true
   return new Date(closedDate) >= new Date(startDate)
 }
 

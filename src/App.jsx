@@ -14,10 +14,11 @@ import Team from './pages/Team'
 import Metrics from './pages/Metrics'
 import OrgPage from './pages/OrgPage'
 import CommissionConfig from './pages/CommissionConfig'
+import FAQ from './pages/FAQ'
 
 function AppLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-[#F9F8F6]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
@@ -116,6 +117,7 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route path="/faq" element={<FAQ />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
