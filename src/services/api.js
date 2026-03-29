@@ -71,25 +71,24 @@ export const getTargets = async (filterEmail, month) => {
 
 export const assignTarget = async (data, assignerEmail) => {
   // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs }
-  // For agents: presetId = "basic"|"average"|"pro" — stored in CommissionPct column
-  // For others: commissionPct = numeric %, slabs stored as JSON in CommissionEndDate
+  // For agents: presetId = "basic"|"average"|"pro" stored in CommissionPct; targetAmount is manager-set
+  // For others: commissionPct = numeric %, slabs JSON in CommissionEndDate
   const key = `${data.email.trim().toLowerCase()}_${data.month}`
-  const topTarget = data.slabs && data.slabs.length > 0
-    ? Math.max(...data.slabs.map(s => Number(s.targetAmount) || 0))
-    : Number(data.targetAmount)
-  // CommissionPct column stores preset ID ("basic"/"average"/"pro") for agents, or numeric % for others
   const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
   const row = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
-    topTarget,
-    commissionPctValue,
+    Number(data.targetAmount),         // manager-assigned target amount (e.g. 4L, 8L)
+    commissionPctValue,                // "basic"/"average"/"pro" or numeric %
     data.commissionStartDate || '',
     data.slabs ? JSON.stringify(data.slabs) : '',
     assignerEmail,
     new Date().toISOString(),
   ]
+  // Clear cache so subsequent reads see the new row
+  const { clearCache } = await import('./appsScript')
+  clearCache()
   return appsScript.upsertRow('Targets', 'Key', key, row)
 }
 

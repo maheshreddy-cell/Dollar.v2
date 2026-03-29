@@ -6,15 +6,45 @@ if (!BASE_URL) {
   console.error('[appsScript] VITE_APPS_SCRIPT_URL is not set in .env')
 }
 
+// ─── In-memory GET cache (30 s TTL) ──────────────────────────────────────────
+const _cache = new Map()
+const CACHE_TTL = 30_000
+
+function cacheGet(key) {
+  const hit = _cache.get(key)
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.data
+  return null
+}
+function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
+export function clearCache() { _cache.clear() }
+
+// ─── In-flight deduplication ──────────────────────────────────────────────────
+const _inflight = new Map()
+
 async function callGet(params) {
+  const key = JSON.stringify(params)
+  const cached = cacheGet(key)
+  if (cached) return cached
+
+  // Deduplicate concurrent identical requests
+  if (_inflight.has(key)) return _inflight.get(key)
+
   const url = new URL(BASE_URL)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v)
   })
-  const res  = await fetch(url.toString())
-  const data = await res.json()
-  if (!data.success) throw new Error(data.error || 'Apps Script error')
-  return data.data
+  const promise = fetch(url.toString())
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.error || 'Apps Script error')
+      cacheSet(key, data.data)
+      _inflight.delete(key)
+      return data.data
+    })
+    .catch(err => { _inflight.delete(key); throw err })
+
+  _inflight.set(key, promise)
+  return promise
 }
 
 async function callPost(params, body = {}) {
