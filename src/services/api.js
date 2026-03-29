@@ -1,5 +1,5 @@
 // All API calls go directly to Apps Script — no Node.js backend needed
-import { appsScript } from './appsScript'
+import { appsScript, clearCache } from './appsScript'
 import { v4 as uuidv4 } from 'uuid'
 import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 
@@ -73,23 +73,32 @@ export const assignTarget = async (data, assignerEmail) => {
   // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs }
   // For agents: presetId = "basic"|"average"|"pro" stored in CommissionPct; targetAmount is manager-set
   // For others: commissionPct = numeric %, slabs JSON in CommissionEndDate
-  const key = `${data.email.trim().toLowerCase()}_${data.month}`
+  const key   = `${data.email.trim().toLowerCase()}_${data.month}`
+  const email = data.email.trim().toLowerCase()
   const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
-  const row = [
-    key,
-    data.email.trim().toLowerCase(),
-    data.month,
-    Number(data.targetAmount),         // manager-assigned target amount (e.g. 4L, 8L)
-    commissionPctValue,                // "basic"/"average"/"pro" or numeric %
-    data.commissionStartDate || '',
-    data.slabs ? JSON.stringify(data.slabs) : '',
-    assignerEmail,
-    new Date().toISOString(),
-  ]
-  // Clear cache so subsequent reads see the new row
-  const { clearCache } = await import('./appsScript')
+  const slabsJson = data.slabs ? JSON.stringify(data.slabs) : ''
+  const now   = new Date().toISOString()
+
+  // Check whether a row already exists for this key
   clearCache()
-  return appsScript.upsertRow('Targets', 'Key', key, row)
+  const existing = await appsScript.getSheet('Targets')
+  const rowExists = existing.some(r => r.Key === key)
+
+  if (rowExists) {
+    // UPDATE existing row — avoids upsertRow update bugs
+    return appsScript.updateRow('Targets', 'Key', key, {
+      TargetAmount:        Number(data.targetAmount),
+      CommissionPct:       commissionPctValue,
+      CommissionStartDate: data.commissionStartDate || '',
+      CommissionEndDate:   slabsJson,
+      AssignedBy:          assignerEmail,
+      AssignedAt:          now,
+    })
+  }
+
+  // INSERT new row
+  const row = [key, email, data.month, Number(data.targetAmount), commissionPctValue, data.commissionStartDate || '', slabsJson, assignerEmail, now]
+  return appsScript.appendRow('Targets', row)
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
