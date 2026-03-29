@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, CheckCircle } from 'lucide-react'
+import { ChevronRight, CheckCircle, Trash2 } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, getSubtree, assignTarget, getTargets } from '../services/api'
+import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 
@@ -33,6 +33,8 @@ export default function AssignTargets() {
   const [error, setError]             = useState('')
   const [success, setSuccess]         = useState(false)
   const [submitting, setSubmitting]   = useState(false)
+  const [deleting, setDeleting]       = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [formError, setFormError]     = useState('')
 
   // Shared
@@ -71,6 +73,7 @@ export default function AssignTargets() {
     setExisting(false)
     setSuccess(false)
     setFormError('')
+    setConfirmDelete(false)
     setSelectedPreset(null)
     setAgentTarget('')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
@@ -153,6 +156,25 @@ export default function AssignTargets() {
     }
   }
 
+  const handleDelete = async () => {
+    setDeleting(true)
+    setFormError('')
+    try {
+      await deleteTarget(selected.Email, month)
+      setExisting(false)
+      setSuccess(false)
+      setConfirmDelete(false)
+      setSelectedPreset(null)
+      setAgentTarget('')
+      setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
+      setCommissionStartDate('')
+    } catch {
+      setFormError('Failed to delete target.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const updateSlab = (i, field, val) =>
     setSlabs(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s))
 
@@ -223,9 +245,39 @@ export default function AssignTargets() {
                   <p className="text-xs text-gray-400">{selected.Email}</p>
                 </div>
                 {existingTarget && (
-                  <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
-                    Target exists for {month}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
+                      Target exists for {month}
+                    </span>
+                    {confirmDelete ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-red-600 font-medium">Confirm delete?</span>
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          className="text-xs bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg font-medium disabled:opacity-60"
+                        >
+                          {deleting ? 'Deleting…' : 'Yes, delete'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(false)}
+                          className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(true)}
+                        className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2.5 py-1 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 

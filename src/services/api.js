@@ -72,6 +72,20 @@ export const getTargets = async (filterEmail, month) => {
   return filtered.sort((a, b) => new Date(tf(b, 'AssignedAt') || 0) - new Date(tf(a, 'AssignedAt') || 0))
 }
 
+export const deleteTarget = async (email, month) => {
+  const key = `${email.trim().toLowerCase()}_${month}`
+  // Delete all rows for this email+month (may be multiple history entries)
+  let deleted = true
+  while (deleted) {
+    try {
+      await appsScript.deleteRow('Targets', 'Key', key)
+    } catch {
+      deleted = false
+    }
+  }
+  clearCache()
+}
+
 export const assignTarget = async (data, assignerEmail) => {
   // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs }
   // For agents: presetId = "basic"|"average"|"pro" stored in CommissionPct; targetAmount is manager-set
