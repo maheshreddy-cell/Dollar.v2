@@ -6,9 +6,15 @@ if (!BASE_URL) {
   console.error('[appsScript] VITE_APPS_SCRIPT_URL is not set in .env')
 }
 
-// ─── In-memory GET cache (30 s TTL) ──────────────────────────────────────────
+// ─── In-memory GET cache (5 min TTL) ─────────────────────────────────────────
 const _cache = new Map()
-const CACHE_TTL = 5 * 60_000   // 5 minutes
+const CACHE_TTL = 5 * 60_000
+
+// Generation counter — incremented on every clearCache().
+// In-flight fetches capture their generation and only write to cache
+// if it still matches, preventing stale warmCache responses from
+// overwriting fresh data after a post-write cache clear.
+let _gen = 0
 
 function cacheGet(key) {
   const hit = _cache.get(key)
@@ -16,7 +22,11 @@ function cacheGet(key) {
   return null
 }
 function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
-export function clearCache() { _cache.clear() }
+
+export function clearCache() {
+  _cache.clear()
+  _gen++   // invalidate any in-flight fetches
+}
 
 // ─── In-flight deduplication ──────────────────────────────────────────────────
 const _inflight = new Map()
@@ -33,11 +43,14 @@ async function callGet(params) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v)
   })
+
+  const gen = _gen   // capture generation at fetch start
   const promise = fetch(url.toString())
     .then(r => r.json())
     .then(data => {
       if (!data.success) throw new Error(data.error || 'Apps Script error')
-      cacheSet(key, data.data)
+      // Only cache if clearCache() wasn't called while this fetch was in-flight
+      if (_gen === gen) cacheSet(key, data.data)
       _inflight.delete(key)
       return data.data
     })
