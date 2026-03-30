@@ -21,7 +21,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
       { to: '/my-targets',     label: 'My Targets',       icon: Target,          roles: ['Agent'] },
-      { to: '/metrics',        label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/metrics',        label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
       { to: '/assign-targets', label: 'Assign Targets',   icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/team',           label: 'My Team',          icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/deals',          label: 'Deals',            icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },

@@ -5,6 +5,7 @@ import { getTargets, getDeals } from '../services/api'
 import SlabDisplay from '../components/SlabDisplay'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, calculateCommission, getAchievementPct } from '../utils/commission'
+import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 import { Target, Calendar } from 'lucide-react'
 
 const STATUS_COLORS = {
@@ -77,6 +78,22 @@ export default function MyTargets() {
   const commissionPct = target.CommissionPct ?? target.commissionPct ?? 0
   const commissionEarned = calculateCommission(clearedAmount, commissionPct)
 
+  // Resolve preset label ("Pro Tier") when CommissionPct is a preset ID
+  const presetMatch = AGENT_TARGET_PRESETS.find(
+    p => p.id === String(commissionPct).trim().toLowerCase()
+  )
+  const commissionRateDisplay = presetMatch
+    ? `${presetMatch.label} Tier`
+    : `${commissionPct}%`
+
+  // CommissionEndDate column is repurposed to store slabs JSON — only show it
+  // as a date when it's actually a parseable date string (not JSON)
+  const endDateRaw   = target.CommissionEndDate ?? target.commissionEndDate ?? ''
+  const endDateIsValid = endDateRaw &&
+    !String(endDateRaw).trim().startsWith('[') &&
+    !isNaN(new Date(endDateRaw).getTime())
+  const startDateRaw = target.CommissionStartDate ?? target.commissionStartDate
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -95,9 +112,9 @@ export default function MyTargets() {
           <p className="text-xs text-gray-500 uppercase font-medium tracking-wide mb-1">
             Commission Rate
           </p>
-          <p className="text-2xl font-bold text-green-700">{commissionPct}%</p>
-          {(target.SlabName ?? target.slabName) && (
-            <p className="text-xs text-gray-400 mt-0.5">Slab: {target.SlabName ?? target.slabName}</p>
+          <p className="text-2xl font-bold text-green-700">{commissionRateDisplay}</p>
+          {presetMatch && (
+            <p className="text-xs text-gray-400 mt-0.5">{presetMatch.description}</p>
           )}
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -107,11 +124,12 @@ export default function MyTargets() {
               <p className="text-xs text-gray-500 uppercase font-medium tracking-wide mb-1">
                 Commission Period
               </p>
-              {(target.CommissionStartDate ?? target.commissionStartDate) && (target.CommissionEndDate ?? target.commissionEndDate) ? (
+              {startDateRaw ? (
                 <p className="text-sm font-semibold text-gray-800">
-                  {new Date(target.CommissionStartDate ?? target.commissionStartDate).toLocaleDateString('en-IN')}
-                  {' — '}
-                  {new Date(target.CommissionEndDate ?? target.commissionEndDate).toLocaleDateString('en-IN')}
+                  {new Date(startDateRaw).toLocaleDateString('en-IN')}
+                  {endDateIsValid && (
+                    <> — {new Date(endDateRaw).toLocaleDateString('en-IN')}</>
+                  )}
                 </p>
               ) : (
                 <p className="text-sm text-gray-400">Not set</p>
