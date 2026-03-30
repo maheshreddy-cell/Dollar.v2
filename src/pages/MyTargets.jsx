@@ -66,12 +66,12 @@ export default function MyTargets() {
   }
 
   const clearedAmount = deals
-    .filter((d) => d.Status === 'Cleared')
-    .reduce((s, d) => s + Number(d.Price), 0)
+    .filter((d) => d.PaidActual > 0)
+    .reduce((s, d) => s + d.PaidActual, 0)
 
   const breakdownByStatus = ['Cleared', 'Pending', 'AtRisk', 'OnHold', 'Lost'].map((s) => ({
     status: s,
-    amount: deals.filter((d) => d.Status === s).reduce((acc, d) => acc + Number(d.Price), 0),
+    amount: deals.filter((d) => d.Status === s).reduce((acc, d) => acc + (d.TotalValue || 0), 0),
     count: deals.filter((d) => d.Status === s).length,
   }))
 

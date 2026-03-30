@@ -106,6 +106,13 @@ export default function AssignTargets() {
     }).catch(() => {})
   }, [selected, month])
 
+  const [targetHistory, setTargetHistory] = useState([])
+
+  useEffect(() => {
+    if (!selected) { setTargetHistory([]); return }
+    getTargets(selected.Email, null).then(res => setTargetHistory(res ?? [])).catch(() => {})
+  }, [selected])
+
   // Auto-fill target amount when preset changes (first slab threshold as default)
   useEffect(() => {
     if (!selectedPreset) return
@@ -187,6 +194,19 @@ export default function AssignTargets() {
   }
 
   const previewPreset = selectedPreset ? AGENT_TARGET_PRESETS.find(p => p.id === selectedPreset) : null
+
+  function normalizeHistoryMonth(t) {
+    const raw = t.Month ?? t.month ?? ''
+    if (!raw) return '—'
+    const str = String(raw).trim()
+    if (/^\d{4}-\d{2}$/.test(str)) return str
+    const d = new Date(str)
+    if (!isNaN(d.getTime())) {
+      const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
+      return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
+    }
+    return str
+  }
 
   return (
     <div className="space-y-4">
@@ -281,9 +301,9 @@ export default function AssignTargets() {
                 )}
               </div>
 
-              {/* Commission Start Date */}
+              {/* Incentive Start Date */}
               <div className="w-full sm:w-64">
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Commission Start Date</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Incentive Start Date</label>
                 <input
                   type="date"
                   value={commissionStartDate}
@@ -440,6 +460,41 @@ export default function AssignTargets() {
               >
                 {submitting ? 'Saving…' : existingTarget ? 'Update Target' : 'Assign Target'}
               </button>
+
+              {targetHistory.length > 0 && (
+                <div className="mt-2 pt-4 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Target History — All Months</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-gray-400 border-b border-gray-100">
+                          <th className="text-left pb-1.5 font-medium">Month</th>
+                          <th className="text-right pb-1.5 font-medium">Target</th>
+                          <th className="text-left pb-1.5 font-medium pl-3">Tier / Rate</th>
+                          <th className="text-left pb-1.5 font-medium pl-3">Incentive Start</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {[...new Map(targetHistory.map(t => [normalizeHistoryMonth(t), t])).values()].map((t, i) => {
+                          const mon      = normalizeHistoryMonth(t)
+                          const rate     = String(t.CommissionPct ?? t.commissionPct ?? '')
+                          const preset   = AGENT_TARGET_PRESETS.find(p => p.id === rate.trim().toLowerCase())
+                          const rateLabel = preset ? `${preset.label} Tier` : (rate ? `${rate}%` : '—')
+                          const start    = t.CommissionStartDate ?? t.commissionStartDate ?? ''
+                          return (
+                            <tr key={i} className={`hover:bg-gray-50 ${mon === month ? 'font-semibold text-brand-700' : 'text-gray-600'}`}>
+                              <td className="py-1.5">{mon}{mon === month && <span className="ml-1.5 text-[10px] bg-brand-100 text-brand-700 px-1 rounded">current</span>}</td>
+                              <td className="py-1.5 text-right">{formatINR(Number(t.TargetAmount ?? t.targetAmount ?? 0))}</td>
+                              <td className="py-1.5 pl-3">{rateLabel}</td>
+                              <td className="py-1.5 pl-3 text-gray-400">{start ? start.split('T')[0] : '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </form>
           )}
         </div>

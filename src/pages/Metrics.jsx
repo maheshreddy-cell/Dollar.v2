@@ -409,7 +409,7 @@ export default function Metrics() {
       {/* ── KPI Cards (6-grid for all roles) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {cards.map((card, i) => (
-          <FadeIn key={card.title} delay={i * 55}>
+          <FadeIn key={card.title} delay={i * 25}>
             <MetricsCard {...card} />
           </FadeIn>
         ))}
@@ -422,7 +422,7 @@ export default function Metrics() {
         <>
           {/* Eligibility Banner */}
           {recTarget > 0 && (
-            <FadeIn delay={380}>
+            <FadeIn delay={120}>
               {achievedPct >= 100 ? (
                 <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center gap-3 hover:shadow-sm transition-shadow">
                   <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
@@ -452,9 +452,21 @@ export default function Metrics() {
             </FadeIn>
           )}
 
+          {/* No-data hint */}
+          {(summary?.totalTarget ?? 0) > 0 && (summary?.totalSaleValue ?? 0) === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-800">
+                No deal data found for this period. If you have submitted deals, verify the email in your sales
+                submission matches your profile email:{' '}
+                <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-xs">{user?.email}</span>
+              </p>
+            </div>
+          )}
+
           {/* Slab Progress — arc gauge cards */}
           {(summary?.slabInfo?.slabs?.length ?? 0) > 0 && (
-            <FadeIn delay={440}>
+            <FadeIn delay={150}>
               <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
                 <SectionHeader icon={Target} title="Slab Progress & Earnings Potential" />
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -499,7 +511,7 @@ export default function Metrics() {
 
           {/* Loan Documents Collected */}
           {Object.keys(summary?.loanDocs ?? {}).length > 0 && (
-            <FadeIn delay={500}>
+            <FadeIn delay={160}>
               <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
                 <SectionHeader icon={ClipboardCheck} title="Loan Documents Collected" />
                 <div className="flex flex-wrap gap-2">
@@ -529,7 +541,7 @@ export default function Metrics() {
           MANAGER / ADMIN SECTIONS
       ══════════════════════════════════════ */}
       {!isAgent && analytics && (
-        <FadeIn delay={370}>
+        <FadeIn delay={120}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-default">
               <p className="text-xs text-gray-500">{orgLabel} Revenue ({month})</p>
@@ -549,7 +561,7 @@ export default function Metrics() {
 
       {/* ── Recovery Snapshot (both roles — enhanced) ── */}
       {recTarget > 0 && (
-        <FadeIn delay={isAgent ? 560 : 420}>
+        <FadeIn delay={isAgent ? 180 : 140}>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
             <SectionHeader icon={Activity} title="Recovery Snapshot" />
 
@@ -619,7 +631,7 @@ export default function Metrics() {
 
       {/* ── Top 10 Agents — Achieved vs Pipeline bar chart ── */}
       {chartData.length > 0 && (
-        <FadeIn delay={isAgent ? 0 : 480}>
+        <FadeIn delay={isAgent ? 0 : 160}>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
             <SectionHeader icon={BarChart2} title="Top 10 Agents — Achieved vs Pipeline" />
             <ResponsiveContainer width="100%" height={260}>
@@ -656,7 +668,7 @@ export default function Metrics() {
       {/* ── Performance by Team / Vertical ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {analytics?.byTeam?.length > 0 && (
-          <FadeIn delay={540}>
+          <FadeIn delay={170}>
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
               <SectionHeader icon={Users} title="Performance by Team" />
               <div className="space-y-3">
@@ -672,7 +684,7 @@ export default function Metrics() {
           </FadeIn>
         )}
         {analytics?.byVertical?.length > 0 && (
-          <FadeIn delay={580}>
+          <FadeIn delay={190}>
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
               <SectionHeader icon={BarChart2} title="Performance by Vertical" />
               <div className="space-y-3">
@@ -691,7 +703,7 @@ export default function Metrics() {
 
       {/* ── Agent Leaderboard ── */}
       {leaderboard.length > 0 && (
-        <FadeIn delay={600}>
+        <FadeIn delay={200}>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-700">Agent Leaderboard</h3>

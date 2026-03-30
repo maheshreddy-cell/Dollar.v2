@@ -14,8 +14,8 @@ export default {
         },
       },
       animation: {
-        'fade-in-up': 'fadeInUp 0.45s ease-out both',
-        'fade-in':    'fadeIn 0.3s ease-out both',
+        'fade-in-up': 'fadeInUp 0.22s ease-out both',
+        'fade-in':    'fadeIn 0.18s ease-out both',
       },
       keyframes: {
         fadeInUp: {
