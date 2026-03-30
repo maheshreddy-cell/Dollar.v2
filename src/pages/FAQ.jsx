@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Send, MessageCircle, HelpCircle, FileText } from 'lucide-react'
+import { useAuth }  from '../contexts/AuthContext'
+import { useMonth } from '../contexts/MonthContext'
+import { getSummary, getLeaderboard } from '../services/api'
+import { formatINR } from '../utils/commission'
+import { MANAGER_ROLES } from '../utils/roles'
 
 // ── Knowledge base derived from internal Airtribe documents ──────────────────
 //   Each entry carries: question, answer, source (doc name), tags (for bot search)
@@ -203,25 +208,71 @@ function getBotReply(message) {
 }
 
 // ── Claude API integration ────────────────────────────────────────────────────
-const CLAUDE_SYSTEM_PROMPT =
-  "You are an AI assistant for Airtribe's sales team. You have deep knowledge of the company's internal policies, sales processes, and programs. Here is the knowledge base:\n\n" +
-  KNOWLEDGE_BASE.map(entry => `Q: ${entry.q}\nA: ${entry.a}`).join('\n\n')
 
-async function getClaudeReply(messages, userMessage) {
+// Base knowledge prompt (static, built once)
+const KB_PROMPT =
+  "You are an AI assistant for Airtribe's sales team. You have deep knowledge of the company's internal policies, sales processes, and programs.\n\n" +
+  "=== INTERNAL KNOWLEDGE BASE ===\n" +
+  KNOWLEDGE_BASE.map(e => `Q: ${e.q}\nA: ${e.a}`).join('\n\n')
+
+// Build a personalised context block from the logged-in user's live data
+function buildUserContext(user, month, liveData) {
+  if (!user) return ''
+  const isManager = MANAGER_ROLES.includes(user.role)
+  const lines = [
+    '\n\n=== CURRENT USER CONTEXT ===',
+    `Name: ${user.name}`,
+    `Role: ${user.role}`,
+    `Email: ${user.email}`,
+    `Viewing month: ${month}`,
+  ]
+  if (liveData) {
+    if (isManager) {
+      lines.push(
+        `Team Target: ${formatINR(liveData.totalTarget ?? 0)}`,
+        `Team Achieved (Paid): ${formatINR(liveData.totalAchieved ?? 0)}`,
+        `Team Achievement %: ${(liveData.achievementPct ?? 0).toFixed(1)}%`,
+        `Team Commission: ${formatINR(liveData.totalCommission ?? 0)}`,
+        `Team T+2 Incentives: ${formatINR(liveData.totalT2Amount ?? 0)}`,
+        `Team Total Money Made: ${formatINR(liveData.totalMoneyMade ?? 0)}`,
+      )
+    } else {
+      const eligible = liveData.slabInfo?.eligible
+      lines.push(
+        `My Target: ${formatINR(liveData.totalTarget ?? 0)}`,
+        `Achieved (Paid): ${formatINR(liveData.totalAchieved ?? 0)}`,
+        `Total Sale Value (Pipeline): ${formatINR(liveData.totalSaleValue ?? 0)}`,
+        `Achievement %: ${(liveData.achievementPct ?? 0).toFixed(1)}%`,
+        `Deals this month: ${liveData.totalDeals ?? 0}`,
+        `Commission Earned: ${formatINR(liveData.totalCommission ?? 0)}`,
+        `T+2 Incentives: ${formatINR(liveData.totalT2Amount ?? 0)}`,
+        `Kickers: ${formatINR(liveData.totalKickers ?? 0)}`,
+        `Total Money Made: ${formatINR(liveData.totalMoneyMade ?? 0)}`,
+        `Incentive Eligibility: ${eligible ? 'Eligible ✓' : `Not yet — ₹${Math.ceil((liveData.slabInfo?.gapToSlab1 ?? 0) / 1000)}k gap to Slab 1`}`,
+        `Commission Preset: ${liveData.slabInfo?.presetLabel ?? 'Not set'}`,
+      )
+    }
+  }
+  lines.push(
+    '\nUse this data when the user asks personal questions like "what is my target?", "how much have I earned?", "am I eligible?", etc.',
+    'Give precise ₹ amounts from the data above. Be conversational, concise, and encouraging.'
+  )
+  return lines.join('\n')
+}
+
+async function getClaudeReply(messages, userMessage, systemPrompt) {
   try {
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
     if (!apiKey) throw new Error('No API key')
 
-    // Take last 5 user+bot pairs (10 messages), excluding the initial greeting
+    // Last 5 user+bot pairs as history (skip initial greeting)
     const history = messages
-      .filter((_, i) => i > 0) // skip initial greeting at index 0
+      .filter((_, i) => i > 0)
       .slice(-10)
       .map(msg => ({
         role: msg.from === 'user' ? 'user' : 'assistant',
         content: msg.text,
       }))
-
-    // Append the new user message
     history.push({ role: 'user', content: userMessage })
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -235,13 +286,12 @@ async function getClaudeReply(messages, userMessage) {
       body: JSON.stringify({
         model: 'claude-3-5-haiku-20241022',
         max_tokens: 1024,
-        system: CLAUDE_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: history,
       }),
     })
 
     if (!response.ok) throw new Error(`API error: ${response.status}`)
-
     const data = await response.json()
     return data.content?.[0]?.text ?? getBotReply(userMessage).text
   } catch {
@@ -300,17 +350,41 @@ function ChatBubble({ from, text, source }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function FAQ() {
+  const { effectiveUser } = useAuth()
+  const { month }         = useMonth()
+  const isManager         = MANAGER_ROLES.includes(effectiveUser?.role)
+
   const [activeCategory, setActiveCategory] = useState('All')
-  const [messages, setMessages] = useState([
+  const [liveData,        setLiveData]       = useState(null)
+  const [messages, setMessages] = useState(() => [
     {
       from: 'bot',
-      text: "Hi! Ask me anything about sales processes, MTNUT framework, incentive slabs, PIP policy, SOP after payment, or the Gen AI / PM Launchpad programs. I'll pull the answer from our internal docs.",
+      text: `Hi${effectiveUser?.name ? `, ${effectiveUser.name.split(' ')[0]}` : ''}! Ask me anything about your numbers, sales processes, MTNUT, incentive slabs, PIP policy, or our programs. I have access to your live data for ${new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}.`,
       source: null,
     },
   ])
-  const [input, setInput] = useState('')
+  const [input,    setInput]    = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const bottomRef = useRef(null)
+
+  // ── Fetch live user data for Claude context ──────────────────────────────────
+  useEffect(() => {
+    if (!effectiveUser?.email) return
+    const fetch = isManager
+      ? getLeaderboard(effectiveUser.email, month).then(rows => ({
+          totalTarget:     rows.reduce((s, r) => s + r.target,             0),
+          totalAchieved:   rows.reduce((s, r) => s + r.achieved,           0),
+          totalCommission: rows.reduce((s, r) => s + (r.commission  ?? 0), 0),
+          totalT2Amount:   rows.reduce((s, r) => s + (r.totalT2Amount ?? 0), 0),
+          totalMoneyMade:  rows.reduce((s, r) => s + (r.moneyMade    ?? 0), 0),
+          achievementPct:  0,
+        }))
+      : getSummary(effectiveUser.email, month)
+    fetch.then(setLiveData).catch(() => {})
+  }, [effectiveUser?.email, month])
+
+  // System prompt rebuilt whenever live data changes
+  const systemPrompt = KB_PROMPT + buildUserContext(effectiveUser, month, liveData)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -319,22 +393,15 @@ export default function FAQ() {
   const sendMessage = async (text) => {
     if (!text) return
 
-    // Capture current messages before state update for context
     setMessages(prev => {
       const withUser = [...prev, { from: 'user', text, source: null }]
-      // Kick off async Claude call with snapshot of prev messages
       setIsTyping(true)
-      getClaudeReply(prev, text).then(replyText => {
+      getClaudeReply(prev, text, systemPrompt).then(replyText => {
         setMessages(current => {
-          // Keep only last 5 user+bot pairs (10 messages) after the initial greeting
           const greeting = current[0]
-          const convo = current.slice(1)
-          const trimmed = convo.slice(-9) // 9 existing + 1 bot reply we're about to add = 10
-          return [
-            greeting,
-            ...trimmed,
-            { from: 'bot', text: replyText, source: null },
-          ]
+          const convo    = current.slice(1)
+          const trimmed  = convo.slice(-9)
+          return [greeting, ...trimmed, { from: 'bot', text: replyText, source: null }]
         })
         setIsTyping(false)
       })
