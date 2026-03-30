@@ -260,9 +260,11 @@ export default function Metrics() {
           const lb = [...(res1 ?? [])].sort((a, b) => b.achieved - a.achieved)
           setLeaderboard(lb)
           const teamTarget     = lb.reduce((s, r) => s + r.target,               0)
-          const teamAchieved   = lb.reduce((s, r) => s + r.achieved,             0)
           const teamCommission = lb.reduce((s, r) => s + (r.commission ?? 0),    0)
-          const teamSaleValue  = lb.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
+          // Prefer analytics totals — includes all subtree emails (manager's
+          // own deals + agents). Leaderboard only counts Agent-role users.
+          const teamAchieved  = res2?.totalAchieved  ?? lb.reduce((s, r) => s + r.achieved,             0)
+          const teamSaleValue = res2?.totalSaleValue ?? lb.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
           setSummary({
             totalTarget:     teamTarget,
             totalAchieved:   teamAchieved,

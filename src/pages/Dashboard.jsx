@@ -3,11 +3,13 @@ import { Target, TrendingUp, DollarSign, Percent } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getSummary, getLeaderboard, getDeals } from '../services/api'
+import { clearCache } from '../services/appsScript'
 import MetricsCard from '../components/MetricsCard'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, getAchievementPct } from '../utils/commission'
 
 const MANAGER_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
+const REFRESH_MS    = 30_000
 
 export default function Dashboard() {
   const { effectiveUser } = useAuth()
@@ -18,15 +20,21 @@ export default function Dashboard() {
   const [recentDeals, setRecentDeals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [tick, setTick]   = useState(0)
 
   const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
 
+  // 30-second live refresh
   useEffect(() => {
-    setLoading(true)
+    const id = setInterval(() => { clearCache(); setTick(t => t + 1) }, REFRESH_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (tick === 0) setLoading(true)
     setError('')
 
     if (isManager) {
-      // Single call — derive team totals directly from leaderboard rows
       getLeaderboard(effectiveUser.email, month)
         .then(rows => {
           const totalTarget     = rows.reduce((s, r) => s + r.target, 0)
@@ -38,7 +46,7 @@ export default function Dashboard() {
             totalCommission,
             achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0,
           })
-          setLeaderboard(rows)   // show all agents, not just top 5
+          setLeaderboard(rows)
         })
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
@@ -54,7 +62,7 @@ export default function Dashboard() {
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     }
-  }, [month, effectiveUser?.email])
+  }, [month, effectiveUser?.email, tick])
 
   if (loading) {
     return (

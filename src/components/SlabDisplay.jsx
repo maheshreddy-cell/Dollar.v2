@@ -1,8 +1,19 @@
 import { formatINR, getAchievementPct } from '../utils/commission'
+import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 import ProgressBar from './ProgressBar'
 
 export default function SlabDisplay({ target, achieved, commission, commissionPct }) {
   const pct = getAchievementPct(target, achieved)
+
+  // Resolve preset ID ("pro") → human label ("Pro Tier"); keep numeric rates as "X%"
+  const presetMatch = AGENT_TARGET_PRESETS.find(
+    p => p.id === String(commissionPct ?? '').trim().toLowerCase()
+  )
+  const rateLabel = presetMatch
+    ? `${presetMatch.label} Tier`
+    : commissionPct != null
+      ? `${commissionPct}%`
+      : null
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
@@ -21,8 +32,8 @@ export default function SlabDisplay({ target, achieved, commission, commissionPc
             Commission Earned
           </p>
           <p className="text-base font-bold text-green-700">{formatINR(commission)}</p>
-          {commissionPct != null && (
-            <p className="text-xs text-gray-400">@ {commissionPct}%</p>
+          {rateLabel && (
+            <p className="text-xs text-gray-400">@ {rateLabel}</p>
           )}
         </div>
       </div>
