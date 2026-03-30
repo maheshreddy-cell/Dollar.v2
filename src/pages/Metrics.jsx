@@ -265,10 +265,14 @@ export default function Metrics() {
           // own deals + agents). Leaderboard only counts Agent-role users.
           const teamAchieved  = res2?.totalAchieved  ?? lb.reduce((s, r) => s + r.achieved,             0)
           const teamSaleValue = res2?.totalSaleValue ?? lb.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
+          const teamT2Amount  = res2?.totalT2Amount  ?? lb.reduce((s, r) => s + (r.totalT2Amount  ?? 0), 0)
+          const teamMoneyMade = teamCommission + teamT2Amount
           setSummary({
             totalTarget:     teamTarget,
             totalAchieved:   teamAchieved,
             totalCommission: teamCommission,
+            totalT2Amount:   teamT2Amount,
+            totalMoneyMade:  teamMoneyMade,
             totalSaleValue:  teamSaleValue,
             achievementPct:  teamTarget > 0 ? Math.min((teamAchieved / teamTarget) * 100, 999) : 0,
           })
@@ -344,13 +348,9 @@ export default function Metrics() {
       icon: TrendingUp, color: 'green',
     },
     {
-      title: 'Commission Earned',
-      value: formatINR(summary?.totalCommission ?? 0),
-      sub: summary?.slabInfo
-        ? summary.slabInfo.eligible
-          ? 'Slab eligible'
-          : `₹${Math.ceil((summary.slabInfo.gapToSlab1 ?? 0) / 1000)}k to Slab 1`
-        : undefined,
+      title: 'Total Money Made',
+      value: formatINR((summary?.totalMoneyMade) ?? (summary?.totalCommission ?? 0)),
+      sub: 'Commission + T+2 + Kickers',
       icon: DollarSign, color: 'purple', highlight: true,
     },
     {
@@ -373,7 +373,7 @@ export default function Metrics() {
     { title: `${orgLabel} Target`,     value: formatINR(recTarget),                       icon: Target,    color: 'blue'   },
     { title: `${orgLabel} Sale Value`, value: formatINR(recSaleValue), sub: 'Full pipeline', icon: TrendingUp,color: 'blue'   },
     { title: `${orgLabel} Achieved`,   value: formatINR(recAchieved),                     icon: TrendingUp,color: 'green'  },
-    { title: `${orgLabel} Incentives`, value: formatINR(summary?.totalCommission ?? 0),    icon: DollarSign,color: 'purple', highlight: true },
+    { title: `${orgLabel} Money Made`, value: formatINR(summary?.totalMoneyMade ?? summary?.totalCommission ?? 0), sub: 'Commission + T+2 + Kickers', icon: DollarSign, color: 'purple', highlight: true },
     {
       title: 'Achievement %',
       value: `${achievedPct.toFixed(1)}%`,

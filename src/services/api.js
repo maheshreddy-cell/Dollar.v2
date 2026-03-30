@@ -158,7 +158,10 @@ export const getSummary = async (userEmail, month) => {
 
   const achieved        = cleared.reduce((s, d) => s + d.PaidActual, 0)
   const commission      = calcTieredCommission(achieved, target)
-  const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+  const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
+  const totalT2Amount   = agentDeals.reduce((s, d) => s + (d.T2Amount    || 0), 0)
+  const totalKickers    = 0   // placeholder — kicker announcements not yet stored in sheets
+  const totalMoneyMade  = commission + totalT2Amount + totalKickers
 
   // Loan Documents Collected — count each unique dropdown value
   const loanDocs = {}
@@ -175,6 +178,9 @@ export const getSummary = async (userEmail, month) => {
     totalTarget:     tAmount,
     totalAchieved:   achieved,
     totalCommission: commission,
+    totalT2Amount,
+    totalKickers,
+    totalMoneyMade,
     achievementPct:  tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
     totalSaleValue,
     totalDeals:      cleared.length,
@@ -208,7 +214,10 @@ export const getLeaderboard = async (rootEmail, month) => {
     const paidDeals       = agentDeals.filter(d => d.PaidActual > 0)
     const achieved        = paidDeals.reduce((s, d) => s + d.PaidActual, 0)
     const dealsCount      = paidDeals.length
-    const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+    const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
+    const totalT2Amount   = agentDeals.reduce((s, d) => s + (d.T2Amount    || 0), 0)
+    const commission      = target ? calcTieredCommission(achieved, target) : 0
+    const moneyMade       = commission + totalT2Amount  // kickers = 0 until feature built
 
     // Loan docs: count deals where LoanDocsCollected is a meaningful "yes" value
     const loanDocsTotal = agentDeals.length
@@ -224,11 +233,13 @@ export const getLeaderboard = async (rootEmail, month) => {
       achieved,
       dealsCount,
       totalSaleValue,
+      totalT2Amount,
+      moneyMade,
       pendingCollection: Math.max(0, totalSaleValue - achieved),
       loanDocsOk,
       loanDocsTotal,
       pct:               tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
-      commission:        target ? calcTieredCommission(achieved, target) : 0,
+      commission,
       slabInfo:          getSlabInfo(achieved, target),
     }
   }).sort((a, b) => b.achieved - a.achieved)
@@ -290,22 +301,31 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
     const paid     = d.PaidActual  || 0
     const tsv      = d.TotalValue  || 0
 
-    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0, totalSaleValue: 0 }
+    const t2 = d.T2Amount || 0
+
+    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0, totalSaleValue: 0, totalT2Amount: 0 }
     byTeam[team].achieved       += paid
     byTeam[team].deals          += 1
     byTeam[team].totalSaleValue += tsv
+    byTeam[team].totalT2Amount  += t2
 
-    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0, totalSaleValue: 0 }
+    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0, totalSaleValue: 0, totalT2Amount: 0 }
     byVertical[vertical].achieved       += paid
     byVertical[vertical].deals          += 1
     byVertical[vertical].totalSaleValue += tsv
+    byVertical[vertical].totalT2Amount  += t2
   }
+
+  const totalAchieved  = rows.reduce((s, d) => s + (d.PaidActual || 0), 0)
+  const totalSaleValue = rows.reduce((s, d) => s + (d.TotalValue  || 0), 0)
+  const totalT2Amount  = rows.reduce((s, d) => s + (d.T2Amount    || 0), 0)
 
   return {
     byTeam:         Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
     byVertical:     Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
-    totalAchieved:  rows.reduce((s, d) => s + (d.PaidActual || 0), 0),
-    totalSaleValue: rows.reduce((s, d) => s + (d.TotalValue  || 0), 0),
+    totalAchieved,
+    totalSaleValue,
+    totalT2Amount,
     totalDeals:     rows.length,
   }
 }

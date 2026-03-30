@@ -151,6 +151,7 @@ function mapSaleRow(raw) {
     Profession:       String(col(raw, 'Profession')              || '').trim(),
     Timestamp:        String(col(raw, 'Timestamp')              || ''),
     LoanDocsCollected:String(col(raw, 'Loan Documents Collected')|| '').trim(),
+    T2Amount:         Number(col(raw, 'T+2 Amount'))              || 0,
   }
 }
 
