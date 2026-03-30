@@ -184,6 +184,15 @@ function SourceTag({ source }) {
 function getBotReply(message) {
   const lower = message.toLowerCase()
 
+  // Personal data questions — Claude should answer these; fallback gives helpful nudge
+  const personalKeywords = ['target', 'my target', 'commission', 'achieved', 'earned', 'eligible', 'money made', 'kicker', 'incentive', 'how much', 'my number', 'my data', 'my sales', 'my deals']
+  if (personalKeywords.some(k => lower.includes(k))) {
+    return {
+      text: "I can answer that once I'm connected — your live numbers aren't available right now. Try refreshing the page, or check your Dashboard for real-time stats.",
+      source: null,
+    }
+  }
+
   // Score each KB entry by how many tag keywords match
   const scored = KNOWLEDGE_BASE.map(entry => {
     const hits = entry.tags.filter(t => lower.includes(t)).length
@@ -263,16 +272,15 @@ function buildUserContext(user, month, liveData) {
 async function getClaudeReply(messages, userMessage, systemPrompt) {
   try {
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-    if (!apiKey) throw new Error('No API key')
+    if (!apiKey) {
+      console.warn('[FAQ] VITE_ANTHROPIC_API_KEY not set — using keyword fallback')
+      return { text: getBotReply(userMessage).text, isClaudeFallback: true }
+    }
 
-    // Last 5 user+bot pairs as history (skip initial greeting)
     const history = messages
       .filter((_, i) => i > 0)
       .slice(-10)
-      .map(msg => ({
-        role: msg.from === 'user' ? 'user' : 'assistant',
-        content: msg.text,
-      }))
+      .map(msg => ({ role: msg.from === 'user' ? 'user' : 'assistant', content: msg.text }))
     history.push({ role: 'user', content: userMessage })
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -291,11 +299,17 @@ async function getClaudeReply(messages, userMessage, systemPrompt) {
       }),
     })
 
-    if (!response.ok) throw new Error(`API error: ${response.status}`)
+    if (!response.ok) {
+      const err = await response.text()
+      console.error('[FAQ] Claude API error:', response.status, err)
+      return { text: getBotReply(userMessage).text, isClaudeFallback: true }
+    }
     const data = await response.json()
-    return data.content?.[0]?.text ?? getBotReply(userMessage).text
-  } catch {
-    return getBotReply(userMessage).text
+    const text = data.content?.[0]?.text ?? getBotReply(userMessage).text
+    return { text, isClaudeFallback: false }
+  } catch (err) {
+    console.error('[FAQ] Claude API exception:', err)
+    return { text: getBotReply(userMessage).text, isClaudeFallback: true }
   }
 }
 
@@ -324,7 +338,7 @@ function FAQItem({ question, answer, source }) {
   )
 }
 
-function ChatBubble({ from, text, source }) {
+function ChatBubble({ from, text, source, isClaudeFallback }) {
   return (
     <div className={`flex items-end gap-2 ${from === 'user' ? 'justify-end' : 'justify-start'}`}>
       {from === 'bot' && (
@@ -343,6 +357,11 @@ function ChatBubble({ from, text, source }) {
           {text}
         </div>
         {from === 'bot' && source && <SourceTag source={source} />}
+        {from === 'bot' && isClaudeFallback && (
+          <span className="text-[10px] text-amber-500 flex items-center gap-1">
+            ⚠ Keyword search (Claude unavailable)
+          </span>
+        )}
       </div>
     </div>
   )
@@ -356,6 +375,7 @@ export default function FAQ() {
 
   const [activeCategory, setActiveCategory] = useState('All')
   const [liveData,        setLiveData]       = useState(null)
+  const [dataLoading,     setDataLoading]    = useState(true)
   const [messages, setMessages] = useState(() => [
     {
       from: 'bot',
@@ -380,7 +400,7 @@ export default function FAQ() {
           achievementPct:  0,
         }))
       : getSummary(effectiveUser.email, month)
-    fetch.then(setLiveData).catch(() => {})
+    fetch.then(data => { setLiveData(data); setDataLoading(false) }).catch(() => { setDataLoading(false) })
   }, [effectiveUser?.email, month])
 
   // System prompt rebuilt whenever live data changes
@@ -396,12 +416,12 @@ export default function FAQ() {
     setMessages(prev => {
       const withUser = [...prev, { from: 'user', text, source: null }]
       setIsTyping(true)
-      getClaudeReply(prev, text, systemPrompt).then(replyText => {
+      getClaudeReply(prev, text, systemPrompt).then(({ text: replyText, isClaudeFallback }) => {
         setMessages(current => {
           const greeting = current[0]
           const convo    = current.slice(1)
           const trimmed  = convo.slice(-9)
-          return [greeting, ...trimmed, { from: 'bot', text: replyText, source: null }]
+          return [greeting, ...trimmed, { from: 'bot', text: replyText, source: null, isClaudeFallback }]
         })
         setIsTyping(false)
       })
@@ -467,6 +487,9 @@ export default function FAQ() {
             <span className="text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5">
               Powered by Claude
             </span>
+            {dataLoading && (
+              <span className="text-[10px] text-gray-400 animate-pulse">Loading your data…</span>
+            )}
             <span className="ml-auto text-xs text-gray-400 hidden sm:block">Searches internal docs</span>
           </div>
 
@@ -493,7 +516,7 @@ export default function FAQ() {
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {messages.map((msg, i) => (
-              <ChatBubble key={i} from={msg.from} text={msg.text} source={msg.source} />
+              <ChatBubble key={i} from={msg.from} text={msg.text} source={msg.source} isClaudeFallback={msg.isClaudeFallback} />
             ))}
             {isTyping && (
               <div className="flex items-end gap-2 justify-start">
