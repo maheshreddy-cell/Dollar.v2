@@ -46,7 +46,11 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
           const visible = group.items.filter(item => {
-            if (!isRole(...item.roles)) return false
+            // In ViewAs mode use the viewed agent's role, not the real user's role
+            const roleMatch = isViewAs
+              ? item.roles.includes(effectiveUser.role)
+              : isRole(...item.roles)
+            if (!roleMatch) return false
             if (isViewAs) return VIEWAS_ALLOWED.includes(item.to)
             return true
           })
