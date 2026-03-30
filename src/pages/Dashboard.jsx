@@ -1,25 +1,18 @@
 import { useState, useEffect } from 'react'
 import {
-  Target, TrendingUp, DollarSign, Percent,
-  BarChart2, AlertTriangle, CheckCircle, Zap, Award,
+  DollarSign, AlertTriangle, CheckCircle, Zap, Award,
+  Target, TrendingUp, BarChart2, Percent, Flame,
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getDeals, getTeamSalesAnalytics } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics } from '../services/api'
 import MetricsCard   from '../components/MetricsCard'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { useRefresh } from '../hooks/useRefresh'
+import { useBackground } from '../hooks/useBackground'
 import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
-
-// Status pill helper for recent deals
-const STATUS_COLORS = {
-  Cleared: 'bg-green-100 text-green-700',
-  AtRisk:  'bg-red-100 text-red-700',
-  OnHold:  'bg-orange-100 text-orange-700',
-}
-const statusColor = (s) => STATUS_COLORS[s] ?? 'bg-yellow-100 text-yellow-700'
 
 // Preset slab badge color
 const PRESET_COLOR = {
@@ -28,18 +21,66 @@ const PRESET_COLOR = {
   pro:     'bg-purple-50 text-purple-600',
 }
 
+function workingDaysLeft(month) {
+  if (!month) return 0
+  const [yr, mo] = month.split('-').map(Number)
+  const now = new Date()
+  const lastDay = new Date(yr, mo, 0)
+  if (now > lastDay) return 0
+  const cursor = new Date(now); cursor.setHours(0, 0, 0, 0)
+  let count = 0
+  while (cursor <= lastDay) {
+    if (cursor.getDay() !== 0) count++ // Mon-Sat (skip Sunday only)
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return count
+}
+
+function calendarDaysLeft(month) {
+  if (!month) return 0
+  const [yr, mo] = month.split('-').map(Number)
+  const lastDay = new Date(yr, mo, 0)
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  if (now > lastDay) return 0
+  return Math.ceil((lastDay - now) / (1000 * 60 * 60 * 24)) + 1
+}
+
+function getMotivMessages(name, achieved, target, wipSlabHint) {
+  const firstName = (name || '').split(' ')[0]
+  const pct = target > 0 ? Math.round((achieved / target) * 100) : 0
+  return [
+    // Data-driven
+    wipSlabHint?.neededForSlab > 0
+      ? `🔥 ${formatINR(wipSlabHint.neededForSlab)} away from ${wipSlabHint.slabName}. Close strong!`
+      : pct >= 100
+        ? `🏆 Target achieved! You're eligible for incentives!`
+        : `🔥 You're ${pct}% there. Push hard this week!`,
+    // Warm
+    `Keep going ${firstName}, every deal counts! 💪`,
+    // Short + emoji
+    `🎯 ${pct}% done! 🚀 Sprint to finish!`,
+  ]
+}
+
 export default function Dashboard() {
-  const { effectiveUser } = useAuth()
-  const { month }         = useMonth()
+  const { effectiveUser, user } = useAuth()
+  const { month }               = useMonth()
+  const bgStyle                 = useBackground()
 
   const [summary,     setSummary]     = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
-  const [recentDeals, setRecentDeals] = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
+  const [motivIdx,    setMotivIdx]    = useState(0)
 
   const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
   const tick      = useRefresh()
+
+  // Rotate motivational message every 120s
+  useEffect(() => {
+    const id = setInterval(() => setMotivIdx(i => (i + 1) % 3), 120_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (tick === 0) setLoading(true)
@@ -53,7 +94,7 @@ export default function Dashboard() {
         .then(([rows, anal]) => {
           const totalTarget     = rows.reduce((s, r) => s + r.target,             0)
           const totalCommission = rows.reduce((s, r) => s + (r.commission  ?? 0), 0)
-          const totalAchieved   = anal?.totalAchieved  ?? rows.reduce((s, r) => s + r.achieved,             0)
+          const totalAchieved   = anal?.totalAchieved  ?? rows.reduce((s, r) => s + r.achieved, 0)
           const totalSaleValue  = anal?.totalSaleValue ?? rows.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
           const totalT2Amount   = anal?.totalT2Amount  ?? rows.reduce((s, r) => s + (r.totalT2Amount  ?? 0), 0)
           setSummary({
@@ -61,19 +102,17 @@ export default function Dashboard() {
             totalT2Amount, totalMoneyMade: totalCommission + totalT2Amount,
             totalSaleValue,
             achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0,
+            teamWipAmount: anal?.teamWipAmount ?? 0,
+            teamWipAgentCount: anal?.teamWipAgentCount ?? 0,
           })
           setLeaderboard(rows)
         })
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     } else {
-      Promise.all([
-        getSummary(effectiveUser.email, month),
-        getDeals(effectiveUser.email, month),
-      ])
-        .then(([summaryRes, dealsRes]) => {
+      getSummary(effectiveUser.email, month)
+        .then((summaryRes) => {
           setSummary(summaryRes)
-          setRecentDeals((dealsRes ?? []).slice(0, 5))
         })
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
@@ -94,22 +133,21 @@ export default function Dashboard() {
     : 0
   const gap = Math.max(0, (summary?.totalTarget ?? 0) - (summary?.totalAchieved ?? 0))
 
-  const cards = [
+  const managerCards = [
     {
-      title: isManager ? 'Team Target'     : 'My Target',
+      title: 'Team Target',
       value: formatINR(summary?.totalTarget ?? 0),
       icon: Target, color: 'blue',
     },
     {
-      title: isManager ? 'Team Sale Value' : 'Total Sale Value',
+      title: 'Team Sale Value',
       value: formatINR(summary?.totalSaleValue ?? 0),
       sub:   'Pipeline (all deals)',
       icon: TrendingUp, color: 'blue',
     },
     {
-      title: isManager ? 'Team Achieved'   : 'Achieved (Paid)',
+      title: 'Team Achieved',
       value: formatINR(summary?.totalAchieved ?? 0),
-      sub:   isManager ? undefined : `${summary?.totalDeals ?? 0} paid deal${(summary?.totalDeals ?? 0) !== 1 ? 's' : ''}`,
       icon: TrendingUp, color: 'green',
     },
     {
@@ -143,41 +181,52 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
 
-      {/* ── Header ── */}
-      <FadeIn>
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800">
-              Welcome back, {effectiveUser?.name?.split(' ')[0]}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {isManager ? 'Team overview for' : "Here's your overview for"} {month}
-            </p>
-          </div>
-          <DaysLeftBadge month={month} />
-        </div>
-      </FadeIn>
-
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* ── KPI cards — staggered fade-in ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((card, i) => (
-          <FadeIn key={card.title} delay={i * 40}>
-            <MetricsCard {...card} />
-          </FadeIn>
-        ))}
-      </div>
-
       {/* ══════════════════════════════════
           AGENT VIEW
       ══════════════════════════════════ */}
       {!isManager && (
         <div className="space-y-4">
+
+          {/* ── Header with background and motivational note ── */}
+          <FadeIn>
+            <div
+              className="relative rounded-2xl overflow-hidden mb-2"
+              style={bgStyle ? { ...bgStyle, minHeight: 140 } : { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', minHeight: 140 }}
+            >
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-white/75 backdrop-blur-[2px]" />
+              <div className="relative px-6 py-5 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Welcome back, {effectiveUser?.name?.split(' ')[0]} ✨
+                  </h2>
+                  {/* Mini stat row */}
+                  {summary && (summary.totalTarget ?? 0) > 0 && (
+                    <div className="flex items-center gap-4 mt-1 flex-wrap">
+                      <span className="text-sm text-gray-600">Target <span className="font-bold text-gray-800">{formatINR(summary.totalTarget)}</span></span>
+                      <span className="text-gray-300 text-xs">|</span>
+                      <span className="text-sm text-gray-600"><span className={`font-bold ${achievedPct >= 100 ? 'text-green-600' : 'text-orange-600'}`}>{achievedPct.toFixed(0)}%</span> done</span>
+                      <span className="text-gray-300 text-xs">|</span>
+                      <span className="text-sm text-gray-600">Earned <span className="font-bold text-purple-600">{formatINR(summary.totalMoneyMade ?? 0)}</span></span>
+                    </div>
+                  )}
+                  {/* Rotating motivational note */}
+                  {summary && (
+                    <p className="text-sm text-gray-700 mt-2 font-medium transition-all duration-500">
+                      {getMotivMessages(effectiveUser?.name, summary.totalAchieved ?? 0, summary.totalTarget ?? 0, summary.wipSlabHint)[motivIdx]}
+                    </p>
+                  )}
+                </div>
+                <DaysLeftBadge month={month} />
+              </div>
+            </div>
+          </FadeIn>
 
           {/* No-data / email-mismatch hint */}
           {(summary?.totalTarget ?? 0) > 0 && (summary?.totalSaleValue ?? 0) === 0 && (
@@ -203,8 +252,9 @@ export default function Dashboard() {
                         </div>
                       ))}
                       <p className="text-xs text-red-600 mt-1">
-                        Fix the Agent Email in "Sales done raw dump". If the Users sheet email was recently updated,
-                        exit "View As" and re-select this agent to reload with the new email.
+                        {effectiveUser?.email !== user?.email
+                          ? 'Exit "View As" and re-select this agent to reload the updated email.'
+                          : 'Fix the Agent Email address in "Sales done raw dump" Google Sheet.'}
                       </p>
                     </div>
                   )}
@@ -240,13 +290,72 @@ export default function Dashboard() {
             </FadeIn>
           )}
 
+          {/* Recovery Snapshot — compact card */}
+          {(summary?.totalTarget ?? 0) > 0 && (
+            <FadeIn delay={300}>
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">📊 Performance Snapshot</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Target</p>
+                    <p className="text-sm font-bold text-gray-800">{formatINR(summary.totalTarget)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Achieved</p>
+                    <p className="text-sm font-bold text-green-600">{formatINR(summary.totalAchieved)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Sale Value</p>
+                    <p className="text-sm font-bold text-blue-600">{formatINR(summary.totalSaleValue)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Proj %</p>
+                    <p className={`text-sm font-bold ${projectedPct >= 100 ? 'text-green-600' : 'text-orange-600'}`}>{projectedPct.toFixed(0)}%</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-3 border-t border-gray-100">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Gap to Target</p>
+                    <p className="text-sm font-bold text-orange-600">{formatINR(gap)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Days Left</p>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <p className="text-sm font-bold text-gray-800">{workingDaysLeft(month)} <span className="text-xs font-normal text-gray-400">working</span></p>
+                      <p className="text-xs text-gray-400">{calendarDaysLeft(month)} calendar</p>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Need/Day</p>
+                    <p className="text-sm font-bold text-red-600">
+                      {workingDaysLeft(month) > 0 ? formatINR(Math.ceil(gap / workingDaysLeft(month))) : '—'}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-0.5">Daily Avg (Paid)</p>
+                    {(() => {
+                      const [yr, mo] = month.split('-').map(Number)
+                      const firstDay = new Date(yr, mo - 1, 1)
+                      const now = new Date()
+                      const endDate = now < new Date(yr, mo, 0) ? now : new Date(yr, mo, 0)
+                      let worked = 0
+                      const cur = new Date(firstDay)
+                      while (cur <= endDate) { if (cur.getDay() !== 0) worked++; cur.setDate(cur.getDate() + 1) }
+                      return <p className="text-sm font-bold text-gray-700">{worked > 0 ? formatINR(Math.round(summary.totalAchieved / worked)) : '—'}</p>
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
           {/* ── Incentives breakdown ── */}
           <FadeIn delay={320}>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">💰 Incentives Breakdown</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 <MetricsCard
-                  title="Commission Earned"
+                  title="Incentives Earned"
                   value={formatINR(summary?.totalCommission ?? 0)}
                   icon={DollarSign} color="purple" sub={slabSub}
                 />
@@ -264,10 +373,10 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Total Money Made — hero row */}
+              {/* Total Incentives — hero row */}
               <div className="rounded-xl px-5 py-4 bg-purple-50 border-2 border-purple-200 ring-1 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Money Made</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Incentives</p>
                   <p className="text-2xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
                   <p className="text-xs text-purple-400 mt-0.5">Commission + T+2 + Kickers</p>
                 </div>
@@ -276,160 +385,207 @@ export default function Dashboard() {
             </div>
           </FadeIn>
 
-          {/* Recent Deals */}
-          <FadeIn delay={360}>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Deals</h3>
-              {recentDeals.length === 0 ? (
-                <p className="text-sm text-gray-400 py-4 text-center">No deals this month.</p>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {recentDeals.map((deal) => (
-                    <div key={deal.ID || deal.LeadName} className="flex items-center justify-between py-2.5">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">{deal.LeadName || deal.CustomerName}</p>
-                        <p className="text-xs text-gray-400">
-                          {deal.PaymentDate ? new Date(deal.PaymentDate).toLocaleDateString('en-IN') : '—'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-gray-800">{formatINR(deal.TotalValue || deal.PaidActual)}</p>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(deal.Status)}`}>
-                          {deal.Status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+          {/* WIP Pipeline Opportunity card */}
+          {summary?.wipSlabHint && (
+            <FadeIn delay={380}>
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">💡</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-purple-800 mb-1">Pipeline Opportunity</p>
+                    <p className="text-sm text-purple-700">
+                      {formatINR(summary.wipSlabHint.wipAmount)} in Work in Progress
+                    </p>
+                    {summary.wipSlabHint.neededForSlab > 0 ? (
+                      <p className="text-sm text-purple-600 mt-1">
+                        Convert {formatINR(summary.wipSlabHint.neededForSlab)} more → unlock {summary.wipSlabHint.slabName}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-green-600 font-semibold mt-1">
+                        Your pipeline covers {summary.wipSlabHint.slabName}! 🎯
+                      </p>
+                    )}
+                    <p className="text-xs text-purple-500 mt-1.5">
+                      💰 Earn {formatINR(summary.wipSlabHint.slabPayout)} commission · 🎯 You're halfway there — one push this week!
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </FadeIn>
+              </div>
+            </FadeIn>
+          )}
 
         </div>
       )}
 
       {/* ══════════════════════════════════
-          MANAGER LEADERBOARD
+          MANAGER VIEW
       ══════════════════════════════════ */}
-      {isManager && leaderboard.length > 0 && (
-        <FadeIn delay={240}>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-700">Team Performance — {month}</h3>
-              <span className="text-xs text-gray-400">{leaderboard.length} agent{leaderboard.length !== 1 ? 's' : ''}</span>
+      {isManager && (
+        <div className="space-y-6">
+
+          {/* ── Manager Header ── */}
+          <FadeIn>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Welcome back, {effectiveUser?.name?.split(' ')[0]}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Team overview for {month}
+                </p>
+              </div>
+              <DaysLeftBadge month={month} />
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[1120px] w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
-                    <th className="px-4 py-3 text-left w-8 font-medium">#</th>
-                    <th className="px-4 py-3 text-left font-medium">Agent</th>
-                    <th className="px-4 py-3 text-right font-medium">Pipeline</th>
-                    <th className="px-4 py-3 text-right font-medium">Paid</th>
-                    <th className="px-4 py-3 font-medium min-w-[180px]">Slab Progress</th>
-                    <th className="px-4 py-3 text-center font-medium">Eligibility</th>
-                    <th className="px-4 py-3 text-right font-medium">Commission</th>
-                    <th className="px-4 py-3 text-right font-medium">T+2</th>
-                    <th className="px-4 py-3 text-right font-medium">Money Made</th>
-                    <th className="px-4 py-3 text-center font-medium">Docs</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {leaderboard.map((row, i) => {
-                    const si = row.slabInfo
-                    return (
-                      <tr key={row.email ?? i} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="px-4 py-3.5 text-gray-400 text-xs font-medium">{i + 1}</td>
-                        <td className="px-4 py-3.5">
-                          <p className="font-medium text-gray-800">{row.name}</p>
-                          {si?.presetLabel
-                            ? <span className={`mt-0.5 inline-block text-xs px-1.5 py-0.5 rounded font-medium ${PRESET_COLOR[si.presetId] ?? PRESET_COLOR.pro}`}>{si.presetLabel}</span>
-                            : <span className="text-xs text-gray-300">No target</span>
-                          }
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-medium text-gray-700">{formatINR(row.totalSaleValue)}</p>
-                          {row.pendingCollection > 0 && (
-                            <p className="text-xs text-orange-500">+{formatINR(row.pendingCollection)} pending</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-semibold text-gray-800">{formatINR(row.achieved)}</p>
-                          <p className="text-xs text-gray-400">of {formatINR(row.target)}</p>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          {si ? (
-                            <div className="space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${
-                                      !si.eligible ? 'bg-red-400' : si.nextSlab ? 'bg-blue-500' : 'bg-green-500'
-                                    }`}
-                                    style={{ width: `${si.progressPct}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs text-gray-500 w-8 text-right">{si.progressPct.toFixed(0)}%</span>
-                              </div>
-                              {si.nextSlab ? (
-                                <p className="text-xs text-gray-400 leading-snug">
-                                  {formatINR(si.gapToNext)} to Slab {si.currentSlabIdx + 2}
-                                  <span className="text-green-600 font-medium"> → {formatINR(si.potentialAtNext)}</span>
-                                </p>
-                              ) : (
-                                <p className="text-xs text-green-600 font-medium">Max slab reached</p>
-                              )}
-                            </div>
-                          ) : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          {si ? (
-                            si.eligible ? (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">
-                                ✓ Eligible
-                              </span>
-                            ) : (
-                              <div className="space-y-0.5">
-                                <span className="inline-block text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full">
-                                  Not Eligible
-                                </span>
-                                <p className="text-xs text-red-400">↑ {formatINR(si.gapToSlab1)} to recover</p>
-                              </div>
-                            )
-                          ) : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="font-semibold text-purple-600">{formatINR(row.commission)}</p>
-                          {si?.nextSlab && (
-                            <p className="text-xs text-gray-400">→ {formatINR(si.potentialAtNext)} next</p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-medium text-blue-600">{formatINR(row.totalT2Amount ?? 0)}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          {row.loanDocsTotal > 0 ? (
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                              row.loanDocsOk === row.loanDocsTotal ? 'bg-green-50 text-green-700'
-                              : row.loanDocsOk > 0                  ? 'bg-yellow-50 text-yellow-700'
-                              :                                        'bg-gray-100 text-gray-500'
-                            }`}>
-                              {row.loanDocsOk}/{row.loanDocsTotal}
-                            </span>
-                          ) : <span className="text-xs text-gray-300">—</span>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+          </FadeIn>
+
+          {/* ── KPI cards — staggered fade-in ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {managerCards.map((card, i) => (
+              <FadeIn key={card.title} delay={i * 40}>
+                <MetricsCard {...card} />
+              </FadeIn>
+            ))}
           </div>
-        </FadeIn>
+
+          {/* ── Leaderboard ── */}
+          {leaderboard.length > 0 && (
+            <FadeIn delay={240}>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-700">Team Performance — {month}</h3>
+                  <span className="text-xs text-gray-400">{leaderboard.length} agent{leaderboard.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1120px] w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                        <th className="px-4 py-3 text-left w-8 font-medium">#</th>
+                        <th className="px-4 py-3 text-left font-medium">Agent</th>
+                        <th className="px-4 py-3 text-right font-medium">Pipeline</th>
+                        <th className="px-4 py-3 text-right font-medium">Paid</th>
+                        <th className="px-4 py-3 font-medium min-w-[180px]">Slab Progress</th>
+                        <th className="px-4 py-3 text-center font-medium">Eligibility</th>
+                        <th className="px-4 py-3 text-right font-medium">Commission</th>
+                        <th className="px-4 py-3 text-right font-medium">T+2</th>
+                        <th className="px-4 py-3 text-right font-medium">Money Made</th>
+                        <th className="px-4 py-3 text-center font-medium">Docs</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {leaderboard.map((row, i) => {
+                        const si = row.slabInfo
+                        return (
+                          <tr key={row.email ?? i} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-4 py-3.5 text-gray-400 text-xs font-medium">{i + 1}</td>
+                            <td className="px-4 py-3.5">
+                              <p className="font-medium text-gray-800">{row.name}</p>
+                              {si?.presetLabel
+                                ? <span className={`mt-0.5 inline-block text-xs px-1.5 py-0.5 rounded font-medium ${PRESET_COLOR[si.presetId] ?? PRESET_COLOR.pro}`}>{si.presetLabel}</span>
+                                : <span className="text-xs text-gray-300">No target</span>
+                              }
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <p className="text-sm font-medium text-gray-700">{formatINR(row.totalSaleValue)}</p>
+                              {row.pendingCollection > 0 && (
+                                <p className="text-xs text-orange-500">+{formatINR(row.pendingCollection)} pending</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <p className="text-sm font-semibold text-gray-800">{formatINR(row.achieved)}</p>
+                              <p className="text-xs text-gray-400">of {formatINR(row.target)}</p>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {si ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all ${
+                                          !si.eligible ? 'bg-red-400' : si.nextSlab ? 'bg-blue-500' : 'bg-green-500'
+                                        }`}
+                                        style={{ width: `${si.progressPct}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-xs text-gray-500 w-8 text-right">{si.progressPct.toFixed(0)}%</span>
+                                  </div>
+                                  {si.nextSlab ? (
+                                    <p className="text-xs text-gray-400 leading-snug">
+                                      {formatINR(si.gapToNext)} to Slab {si.currentSlabIdx + 2}
+                                      <span className="text-green-600 font-medium"> → {formatINR(si.potentialAtNext)}</span>
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-green-600 font-medium">Max slab reached</p>
+                                  )}
+                                </div>
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              {si ? (
+                                si.eligible ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">
+                                    ✓ Eligible
+                                  </span>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    <span className="inline-block text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full">
+                                      Not Eligible
+                                    </span>
+                                    <p className="text-xs text-red-400">↑ {formatINR(si.gapToSlab1)} to recover</p>
+                                  </div>
+                                )
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <p className="font-semibold text-purple-600">{formatINR(row.commission)}</p>
+                              {si?.nextSlab && (
+                                <p className="text-xs text-gray-400">→ {formatINR(si.potentialAtNext)} next</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <p className="text-sm font-medium text-blue-600">{formatINR(row.totalT2Amount ?? 0)}</p>
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <p className="text-sm font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              {row.loanDocsTotal > 0 ? (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                                  row.loanDocsOk === row.loanDocsTotal ? 'bg-green-50 text-green-700'
+                                  : row.loanDocsOk > 0                  ? 'bg-yellow-50 text-yellow-700'
+                                  :                                        'bg-gray-100 text-gray-500'
+                                }`}>
+                                  {row.loanDocsOk}/{row.loanDocsTotal}
+                                </span>
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* Team WIP Pipeline card */}
+          {summary?.teamWipAmount > 0 && (
+            <FadeIn delay={300}>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4 flex items-center gap-4">
+                <span className="text-2xl">📊</span>
+                <div>
+                  <p className="text-sm font-semibold text-indigo-800">Team Pipeline in Progress</p>
+                  <p className="text-sm text-indigo-700 mt-0.5">
+                    {formatINR(summary.teamWipAmount)} across {summary.teamWipAgentCount ?? 'multiple'} agent{(summary.teamWipAgentCount ?? 2) !== 1 ? 's' : ''} in WIP or Almost There stages
+                  </p>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+        </div>
       )}
+
     </div>
   )
 }

@@ -24,6 +24,119 @@ export const getDeals = async (filterEmail, month) => {
   )
 }
 
+// Stage category definitions
+const STAGE_MAP = {
+  'payment cleared':          'PAID',
+  'e-mandate signed':         'PARTIALLY_PAID',
+  'part payment by airtribe': 'PARTIALLY_PAID',
+  'waiting for disbursement': 'ALMOST_THERE',
+  'awaiting for docs':        'WIP',
+  'post_approval pending':    'WIP',
+  'pushed for loan':          'WIP',
+  'will pay by credit card':  'WIP',
+  'access removed':           'LOST',
+  'loan rejected':            'LOST',
+}
+
+function getStageCategory(loanDocValue) {
+  const key = (loanDocValue || '').trim().toLowerCase()
+  return STAGE_MAP[key] ?? 'WIP'
+}
+
+function workingDaysSince(dateStr) {
+  if (!dateStr) return 0
+  const start = new Date(dateStr)
+  if (isNaN(start)) return 0
+  const now = new Date()
+  let count = 0
+  const cur = new Date(start)
+  while (cur < now) {
+    const d = cur.getDay()
+    if (d !== 0) count++ // Mon–Sat (skip Sunday only)
+    cur.setDate(cur.getDate() + 1)
+  }
+  return count
+}
+
+export const getDealsGrouped = async (email, month) => {
+  const [targets, deals] = await Promise.all([
+    appsScript.getSheet('Targets'),
+    appsScript.getSalesSheet(),
+  ])
+  const lowerEmail = (email || '').trim().toLowerCase()
+  const target = latestTarget(targets, lowerEmail, month)
+  const tAmount = target ? Number(tf(target, 'TargetAmount') ?? 0) : 0
+
+  const agentDeals = deals.filter(d =>
+    d.Email === lowerEmail && d.Month === month
+  )
+
+  // Group by category
+  const groups = { PAID: [], PARTIALLY_PAID: [], ALMOST_THERE: [], WIP: [], LOST: [] }
+  for (const d of agentDeals) {
+    const cat = getStageCategory(d.LoanDocsCollected)
+    const daysInStage = workingDaysSince(d.Timestamp || d.PaymentDate)
+    const isAtRisk = (
+      ['Awaiting for Docs', 'Post_Approval pending'].includes(d.LoanDocsCollected?.trim()) &&
+      daysInStage >= 3
+    )
+    groups[cat].push({ ...d, daysInStage, isAtRisk })
+  }
+
+  // Totals per group
+  const totals = {}
+  let totalPipeline = 0
+  let atRiskAmount = 0
+  for (const [cat, arr] of Object.entries(groups)) {
+    const val = arr.reduce((s, d) => s + (d.TotalValue || 0), 0)
+    totals[cat] = { value: val, count: arr.length }
+    totalPipeline += val
+    if (cat === 'WIP' || cat === 'ALMOST_THERE') {
+      atRiskAmount += arr.filter(d => d.isAtRisk).reduce((s, d) => s + (d.TotalValue || 0), 0)
+    }
+  }
+
+  const paidAmount = totals.PAID.value + totals.PARTIALLY_PAID.value
+  const wipAmount = totals.WIP.value + totals.ALMOST_THERE.value
+
+  // WIP slab hint: how much more needed to unlock next slab
+  const achieved = groups.PAID.reduce((s, d) => s + (d.PaidActual || 0), 0)
+  const slabInfo = getSlabInfo(achieved, target)
+  let wipSlabHint = null
+  if (slabInfo && wipAmount > 0) {
+    if (!slabInfo.eligible && slabInfo.gapToSlab1 > 0) {
+      wipSlabHint = {
+        wipAmount,
+        neededForSlab: slabInfo.gapToSlab1,
+        slabName: 'Slab 1',
+        slabPayout: slabInfo.firstSlabTarget * (slabInfo.slabs[0]?.commissionPct ?? 0) / 100,
+        canReachSlab: wipAmount >= slabInfo.gapToSlab1,
+      }
+    } else if (slabInfo.nextSlab) {
+      wipSlabHint = {
+        wipAmount,
+        neededForSlab: slabInfo.gapToNext,
+        slabName: `Slab ${slabInfo.currentSlabIdx + 2}`,
+        slabPayout: slabInfo.potentialAtNext,
+        canReachSlab: wipAmount >= slabInfo.gapToNext,
+      }
+    }
+  }
+
+  return {
+    groups,
+    totals,
+    totalPipeline,
+    paidAmount,
+    wipAmount,
+    atRiskAmount,
+    wipSlabHint,
+    tAmount,
+    commissionPreset: resolvePresetLabel(tf(target, 'CommissionPct')) ?? tf(target, 'CommissionPct'),
+    achieved,
+  }
+}
+
 export const getDealsForSubtree = async (emails, month) => {
   const deals = await appsScript.getSalesSheet()
   const lower = emails.map(e => e.trim().toLowerCase())
@@ -179,6 +292,33 @@ export const getSummary = async (userEmail, month) => {
   const slabInfo    = getSlabInfo(achieved, target)
   const presetLabel = resolvePresetLabel(tf(target, 'CommissionPct'))
 
+  // WIP pipeline opportunity
+  const wipDeals = agentDeals.filter(d => {
+    const cat = getStageCategory(d.LoanDocsCollected)
+    return cat === 'WIP' || cat === 'ALMOST_THERE'
+  })
+  const wipAmount = wipDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+  let wipSlabHint = null
+  if (slabInfo && wipAmount > 0) {
+    if (!slabInfo.eligible && slabInfo.gapToSlab1 > 0) {
+      wipSlabHint = {
+        wipAmount,
+        neededForSlab: slabInfo.gapToSlab1,
+        slabName: 'Slab 1',
+        slabPayout: slabInfo.firstSlabTarget * (slabInfo.slabs[0]?.commissionPct ?? 0) / 100,
+        canReachSlab: wipAmount >= slabInfo.gapToSlab1,
+      }
+    } else if (slabInfo?.nextSlab) {
+      wipSlabHint = {
+        wipAmount,
+        neededForSlab: slabInfo.gapToNext,
+        slabName: `Slab ${slabInfo.currentSlabIdx + 2}`,
+        slabPayout: slabInfo.potentialAtNext,
+        canReachSlab: wipAmount >= slabInfo.gapToNext,
+      }
+    }
+  }
+
   return {
     totalTarget:     tAmount,
     totalAchieved:   achieved,
@@ -194,6 +334,8 @@ export const getSummary = async (userEmail, month) => {
     commissionPct:   presetLabel ?? Number(tf(target, 'CommissionPct') ?? 0),
     commissionStart: tf(target, 'CommissionStartDate'),
     suggestedEmails,
+    wipAmount,
+    wipSlabHint,
   }
 }
 
@@ -325,6 +467,18 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
   const totalSaleValue = rows.reduce((s, d) => s + (d.TotalValue  || 0), 0)
   const totalT2Amount  = rows.reduce((s, d) => s + (d.T2Amount    || 0), 0)
 
+  const teamWipAmount = rows.filter(d => {
+    const cat = getStageCategory(d.LoanDocsCollected)
+    return cat === 'WIP' || cat === 'ALMOST_THERE'
+  }).reduce((s, d) => s + (d.TotalValue || 0), 0)
+
+  const teamWipAgentCount = new Set(
+    rows.filter(d => {
+      const cat = getStageCategory(d.LoanDocsCollected)
+      return cat === 'WIP' || cat === 'ALMOST_THERE'
+    }).map(d => d.Email)
+  ).size
+
   return {
     byTeam:         Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
     byVertical:     Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
@@ -332,6 +486,8 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
     totalSaleValue,
     totalT2Amount,
     totalDeals:     rows.length,
+    teamWipAmount,
+    teamWipAgentCount,
   }
 }
 

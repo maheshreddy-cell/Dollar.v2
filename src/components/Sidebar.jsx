@@ -1,25 +1,24 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, Target, Briefcase, Users,
+  LayoutDashboard, Briefcase, Users,
   BarChart2, GitBranch, Settings, DollarSign, MessageCircle,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_COLORS } from '../utils/roles'
 
 // Nav items grouped by section.
-// PreSales sees the same pages as Agent.
+// PreSales only sees Dashboard + FAQ.
 const NAV_GROUPS = [
   {
     label: null,
     items: [
-      { to: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/my-targets',       label: 'My Targets',        icon: Target,          roles: ['Agent','PreSales'] },
-      { to: '/metrics',          label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/assign-targets',   label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/team',             label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/deals',            label: 'Deals',             icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/org',              label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
-      { to: '/commission-config',label: 'Commission Config',  icon: Settings,        roles: ['Admin'] },
+      { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/deals',             label: 'My Deals',          icon: Briefcase,       roles: ['Agent'] },
+      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/team',              label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
+      { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin'] },
     ],
   },
   {
@@ -30,8 +29,11 @@ const NAV_GROUPS = [
   },
 ]
 
+const VIEWAS_ALLOWED = ['/dashboard', '/deals', '/metrics', '/faq']
+
 export default function Sidebar() {
-  const { user, isRole } = useAuth()
+  const { user, effectiveUser, isRole } = useAuth()
+  const isViewAs = effectiveUser && effectiveUser.email !== user?.email
 
   return (
     <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 bg-gradient-to-b from-white to-gray-50/80">
@@ -43,7 +45,11 @@ export default function Sidebar() {
       {/* Nav groups */}
       <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
-          const visible = group.items.filter(item => isRole(...item.roles))
+          const visible = group.items.filter(item => {
+            if (!isRole(...item.roles)) return false
+            if (isViewAs) return VIEWAS_ALLOWED.includes(item.to)
+            return true
+          })
           if (!visible.length) return null
           return (
             <div key={gi}>

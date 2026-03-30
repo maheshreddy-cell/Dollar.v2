@@ -41,7 +41,7 @@ function workingDaysLeft(month) {
   let count = 0
   while (cursor <= lastDay) {
     const d = cursor.getDay()
-    if (d !== 0 && d !== 6) count++
+    if (d !== 0) count++
     cursor.setDate(cursor.getDate() + 1)
   }
   return count
@@ -536,9 +536,9 @@ export default function Metrics() {
         </FadeIn>
       )}
 
-      {/* ── Recovery Snapshot (both roles — enhanced) ── */}
-      {recTarget > 0 && (
-        <FadeIn delay={isAgent ? 180 : 140}>
+      {/* ── Recovery Snapshot (managers only — moved to Dashboard for agents) ── */}
+      {!isAgent && recTarget > 0 && (
+        <FadeIn delay={140}>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
             <SectionHeader icon={Activity} title="Recovery Snapshot" />
 

@@ -218,64 +218,44 @@ function getBotReply(message) {
 
 // ── Claude API integration ────────────────────────────────────────────────────
 
-// Base knowledge prompt (static, built once)
-const KB_PROMPT =
-  "You are an AI assistant for Airtribe's sales team. You have deep knowledge of the company's internal policies, sales processes, and programs.\n\n" +
-  "=== INTERNAL KNOWLEDGE BASE ===\n" +
-  KNOWLEDGE_BASE.map(e => `Q: ${e.q}\nA: ${e.a}`).join('\n\n')
+// Select the most relevant KB entries for a given question
+function getRelevantEntries(question, allEntries, maxCount = 5) {
+  const q = question.toLowerCase()
+  const scored = allEntries.map(e => {
+    const text = (e.q + ' ' + (e.tags?.join(' ') ?? '') + ' ' + e.a).toLowerCase()
+    let score = 0
+    q.split(' ').forEach(word => { if (word.length > 3 && text.includes(word)) score++ })
+    return { ...e, score }
+  })
+  return scored.sort((a, b) => b.score - a.score).slice(0, maxCount)
+}
 
-// Build a personalised context block from the logged-in user's live data
-function buildUserContext(user, month, liveData) {
-  if (!user) return ''
-  const isManager = MANAGER_ROLES.includes(user.role)
+// Build a compact, personalised system prompt
+function buildSystemPrompt(userCtx, relevantEntries) {
   const lines = [
-    '\n\n=== CURRENT USER CONTEXT ===',
-    `Name: ${user.name}`,
-    `Role: ${user.role}`,
-    `Email: ${user.email}`,
-    `Viewing month: ${month}`,
-  ]
-  if (liveData) {
-    if (isManager) {
-      lines.push(
-        `Team Target: ${formatINR(liveData.totalTarget ?? 0)}`,
-        `Team Achieved (Paid): ${formatINR(liveData.totalAchieved ?? 0)}`,
-        `Team Achievement %: ${(liveData.achievementPct ?? 0).toFixed(1)}%`,
-        `Team Commission: ${formatINR(liveData.totalCommission ?? 0)}`,
-        `Team T+2 Incentives: ${formatINR(liveData.totalT2Amount ?? 0)}`,
-        `Team Total Money Made: ${formatINR(liveData.totalMoneyMade ?? 0)}`,
-      )
-    } else {
-      const eligible = liveData.slabInfo?.eligible
-      lines.push(
-        `My Target: ${formatINR(liveData.totalTarget ?? 0)}`,
-        `Achieved (Paid): ${formatINR(liveData.totalAchieved ?? 0)}`,
-        `Total Sale Value (Pipeline): ${formatINR(liveData.totalSaleValue ?? 0)}`,
-        `Achievement %: ${(liveData.achievementPct ?? 0).toFixed(1)}%`,
-        `Deals this month: ${liveData.totalDeals ?? 0}`,
-        `Commission Earned: ${formatINR(liveData.totalCommission ?? 0)}`,
-        `T+2 Incentives: ${formatINR(liveData.totalT2Amount ?? 0)}`,
-        `Kickers: ${formatINR(liveData.totalKickers ?? 0)}`,
-        `Total Money Made: ${formatINR(liveData.totalMoneyMade ?? 0)}`,
-        `Incentive Eligibility: ${eligible ? 'Eligible ✓' : `Not yet — ₹${Math.ceil((liveData.slabInfo?.gapToSlab1 ?? 0) / 1000)}k gap to Slab 1`}`,
-        `Commission Preset: ${liveData.slabInfo?.presetLabel ?? 'Not set'}`,
-      )
-    }
-  }
-  lines.push(
-    '\nUse this data when the user asks personal questions like "what is my target?", "how much have I earned?", "am I eligible?", etc.',
-    'Give precise ₹ amounts from the data above. Be conversational, concise, and encouraging.'
-  )
+    `You are a helpful sales assistant for ${userCtx?.name || 'this agent'} at Airtribe.`,
+    userCtx?.target
+      ? `Their stats for ${userCtx?.month || 'this month'}: Target ₹${userCtx.target?.toLocaleString('en-IN')}, Achieved ₹${(userCtx.achieved ?? 0)?.toLocaleString('en-IN')} (${Math.round((userCtx.achieved || 0) / (userCtx.target || 1) * 100)}%), Commission ₹${(userCtx.commission ?? 0)?.toLocaleString('en-IN')}, Tier: ${userCtx.tier || 'N/A'}, Incentive eligible: ${userCtx.eligible ? 'YES' : 'NO (needs 100% target)'}.`
+      : '',
+    '',
+    'Relevant knowledge:',
+    ...relevantEntries.map(e => `Q: ${e.q}\nA: ${e.a}`),
+    '',
+    'Be concise. Answer based on their actual data when relevant.',
+  ].filter(Boolean)
   return lines.join('\n')
 }
 
-async function getClaudeReply(messages, userMessage, systemPrompt) {
+async function getClaudeReply(messages, userMessage, userSummaryCtx) {
   try {
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
     if (!apiKey) {
       console.warn('[FAQ] VITE_ANTHROPIC_API_KEY not set — using keyword fallback')
       return { text: getBotReply(userMessage).text, isClaudeFallback: true }
     }
+
+    const relevantEntries = getRelevantEntries(userMessage, KNOWLEDGE_BASE)
+    const systemPrompt    = buildSystemPrompt(userSummaryCtx, relevantEntries)
 
     const history = messages
       .filter((_, i) => i > 0)
@@ -308,7 +288,7 @@ async function getClaudeReply(messages, userMessage, systemPrompt) {
     const text = data.content?.[0]?.text ?? getBotReply(userMessage).text
     return { text, isClaudeFallback: false }
   } catch (err) {
-    console.error('[FAQ] Claude API exception:', err)
+    console.warn('[FAQ Claude API]', err?.message || err)
     return { text: getBotReply(userMessage).text, isClaudeFallback: true }
   }
 }
@@ -403,8 +383,34 @@ export default function FAQ() {
     fetch.then(data => { setLiveData(data); setDataLoading(false) }).catch(() => { setDataLoading(false) })
   }, [effectiveUser?.email, month])
 
-  // System prompt rebuilt whenever live data changes
-  const systemPrompt = KB_PROMPT + buildUserContext(effectiveUser, month, liveData)
+  // Build compact user context summary for Claude
+  const userSummaryCtx = (() => {
+    if (!effectiveUser) return null
+    const base = {
+      name:  effectiveUser.name,
+      role:  effectiveUser.role,
+      month,
+    }
+    if (!liveData) return base
+    if (MANAGER_ROLES.includes(effectiveUser.role)) {
+      return {
+        ...base,
+        target:     liveData.totalTarget   ?? 0,
+        achieved:   liveData.totalAchieved ?? 0,
+        commission: liveData.totalCommission ?? 0,
+        eligible:   false,
+        tier:       null,
+      }
+    }
+    return {
+      ...base,
+      target:     liveData.totalTarget    ?? 0,
+      achieved:   liveData.totalAchieved  ?? 0,
+      commission: liveData.totalCommission ?? 0,
+      eligible:   liveData.slabInfo?.eligible ?? false,
+      tier:       liveData.slabInfo?.presetLabel ?? null,
+    }
+  })()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -416,7 +422,7 @@ export default function FAQ() {
     setMessages(prev => {
       const withUser = [...prev, { from: 'user', text, source: null }]
       setIsTyping(true)
-      getClaudeReply(prev, text, systemPrompt).then(({ text: replyText, isClaudeFallback }) => {
+      getClaudeReply(prev, text, userSummaryCtx).then(({ text: replyText, isClaudeFallback }) => {
         setMessages(current => {
           const greeting = current[0]
           const convo    = current.slice(1)

@@ -7,7 +7,6 @@ import Navbar from './components/Navbar'
 import Login from './pages/Login'
 import InviteActivate from './pages/InviteActivate'
 import Dashboard from './pages/Dashboard'
-import MyTargets from './pages/MyTargets'
 import Deals from './pages/Deals'
 import AssignTargets from './pages/AssignTargets'
 import Team from './pages/Team'
@@ -74,8 +73,15 @@ export default function App() {
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/my-targets" element={<MyTargets />} />
-            <Route path="/deals" element={<Deals />} />
+            <Route path="/my-targets" element={<Navigate to="/deals" replace />} />
+            <Route
+              path="/deals"
+              element={
+                <RequireRole roles={['Agent', 'PreSales', 'Admin', 'SalesHead', 'VH', 'Manager']}>
+                  <Deals />
+                </RequireRole>
+              }
+            />
 
             <Route
               path="/assign-targets"

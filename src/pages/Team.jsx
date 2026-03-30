@@ -14,10 +14,10 @@ const ROLE_COLORS = {
 
 // What roles each rank can invite
 const INVITE_ROLES = {
-  Admin:     ['SalesHead', 'VH', 'Manager', 'Agent'],
-  SalesHead: ['VH', 'Manager', 'Agent'],
-  VH:        ['Manager', 'Agent'],
-  Manager:   ['Agent'],
+  Admin:     ['SalesHead', 'VH', 'Manager', 'Agent', 'PreSales'],
+  SalesHead: ['VH', 'Manager', 'Agent', 'PreSales'],
+  VH:        ['Manager', 'Agent', 'PreSales'],
+  Manager:   ['Agent', 'PreSales'],
 }
 
 function flattenTree(node, result = []) {
