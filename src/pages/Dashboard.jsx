@@ -201,12 +201,31 @@ export default function Dashboard() {
           <>
             {/* No-data hint */}
             {(summary?.totalTarget ?? 0) > 0 && (summary?.totalSaleValue ?? 0) === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3 mb-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 flex items-start gap-3 mb-4">
                 <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
-                <div className="text-sm text-amber-800">
-                  <strong>No deal data found for this period.</strong> Verify the email in your sales
-                  submission matches your profile email:{' '}
-                  <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-xs">{effectiveUser?.email}</span>
+                <div className="text-sm text-amber-800 space-y-2 min-w-0">
+                  <p>
+                    <strong>No deal data found for this period.</strong> The email in the sales sheet
+                    doesn't match the profile email:{' '}
+                    <span className="font-mono bg-amber-100 px-1.5 py-0.5 rounded text-xs">{effectiveUser?.email}</span>
+                  </p>
+                  {(summary?.suggestedEmails?.length ?? 0) > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
+                      <p className="text-xs font-bold text-red-700 uppercase tracking-wide">
+                        ⚠ Email mismatch detected — fix in Google Sheet:
+                      </p>
+                      {summary.suggestedEmails.map(e => (
+                        <div key={e} className="flex items-center gap-2 flex-wrap text-xs">
+                          <span className="font-mono bg-red-100 text-red-800 px-2 py-0.5 rounded">{e}</span>
+                          <span className="text-red-500">→ should be →</span>
+                          <span className="font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded">{effectiveUser?.email}</span>
+                        </div>
+                      ))}
+                      <p className="text-xs text-red-600 mt-1">
+                        In "Sales done raw dump", fix the Agent Email address column for this agent's rows.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

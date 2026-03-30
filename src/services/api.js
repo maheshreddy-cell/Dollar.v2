@@ -150,6 +150,11 @@ export const getSummary = async (userEmail, month) => {
     d.Email === lowerUser && d.Month === month
   )
 
+  // If no deals found, scan for near-match emails (catches sheet typos)
+  const suggestedEmails = agentDeals.length === 0
+    ? findSimilarEmails(deals, lowerUser, month)
+    : []
+
   // Commission-eligible paid deals only
   const cleared = agentDeals.filter(d =>
     d.PaidActual > 0 &&
@@ -188,6 +193,7 @@ export const getSummary = async (userEmail, month) => {
     slabInfo,
     commissionPct:   presetLabel ?? Number(tf(target, 'CommissionPct') ?? 0),
     commissionStart: tf(target, 'CommissionStartDate'),
+    suggestedEmails,
   }
 }
 
@@ -523,4 +529,34 @@ function calcTieredCommission(achieved, target) {
 
   // 3. Legacy flat rate
   return achieved * Number(tf(target, 'CommissionPct') ?? 0) / 100
+}
+
+// Returns emails from the sheet that are suspiciously close to the profile
+// email (edit distance ≤ 3) — used to surface typos to admins.
+function findSimilarEmails(allDeals, profileEmail, month) {
+  const lp = profileEmail.trim().toLowerCase()
+  const candidates = [
+    ...new Set(
+      allDeals
+        .filter(d => !month || d.Month === month)
+        .map(d => d.Email)
+        .filter(e => e && e !== lp)
+    ),
+  ]
+  return candidates.filter(e => editDistance(lp, e) <= 3)
+}
+
+function editDistance(a, b) {
+  const m = a.length, n = b.length
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  )
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+    }
+  }
+  return dp[m][n]
 }
