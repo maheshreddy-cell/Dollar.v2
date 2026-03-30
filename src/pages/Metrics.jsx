@@ -536,8 +536,8 @@ export default function Metrics() {
         </FadeIn>
       )}
 
-      {/* ── Recovery Snapshot (managers only — moved to Dashboard for agents) ── */}
-      {!isAgent && recTarget > 0 && (
+      {/* ── Recovery Snapshot — big for managers, compact for agents ── */}
+      {recTarget > 0 && (
         <FadeIn delay={140}>
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-5">
             <SectionHeader icon={Activity} title="Recovery Snapshot" />

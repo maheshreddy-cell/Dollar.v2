@@ -10,7 +10,6 @@ const STAGE_GROUPS = [
   {
     key: 'PAID',
     label: 'Paid',
-    emoji: '✅',
     color: 'green',
     bg: 'bg-green-50',
     border: 'border-green-200',
@@ -21,7 +20,6 @@ const STAGE_GROUPS = [
   {
     key: 'PARTIALLY_PAID',
     label: 'Partially Paid',
-    emoji: '🟠',
     color: 'orange',
     bg: 'bg-orange-50',
     border: 'border-orange-200',
@@ -31,8 +29,7 @@ const STAGE_GROUPS = [
   },
   {
     key: 'ALMOST_THERE',
-    label: 'Almost There',
-    emoji: '🚀',
+    label: 'Waiting for Disbursement',
     color: 'blue',
     bg: 'bg-blue-50',
     border: 'border-blue-200',
@@ -43,7 +40,6 @@ const STAGE_GROUPS = [
   {
     key: 'WIP',
     label: 'Work in Progress',
-    emoji: '🔧',
     color: 'amber',
     bg: 'bg-amber-50',
     border: 'border-amber-200',
@@ -54,7 +50,6 @@ const STAGE_GROUPS = [
   {
     key: 'LOST',
     label: 'Lost',
-    emoji: '🔴',
     color: 'red',
     bg: 'bg-red-50',
     border: 'border-red-200',
@@ -205,7 +200,6 @@ export default function Deals() {
                 onClick={() => setOpenGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-base">{group.emoji}</span>
                   <span className={`font-semibold text-sm ${group.text}`}>{group.label}</span>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${group.bg} ${group.text} border ${group.border}`}>
                     {total.count} deal{total.count !== 1 ? 's' : ''}

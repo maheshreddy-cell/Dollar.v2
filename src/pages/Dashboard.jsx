@@ -290,9 +290,73 @@ export default function Dashboard() {
             </FadeIn>
           )}
 
-          {/* Recovery Snapshot — compact card */}
+          {/* ── Incentives Breakdown — BIG (first) ── */}
+          <FadeIn delay={300}>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">💰 Incentives Breakdown</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <MetricsCard
+                  title="Incentives Earned"
+                  value={formatINR(summary?.totalCommission ?? 0)}
+                  icon={DollarSign} color="purple" sub={slabSub}
+                />
+                <MetricsCard
+                  title="T+2 Day Incentives"
+                  value={formatINR(summary?.totalT2Amount ?? 0)}
+                  icon={Zap} color="blue"
+                  sub="On-time payment bonus (per deal)"
+                />
+                <MetricsCard
+                  title="Kickers Earned"
+                  value={formatINR(summary?.totalKickers ?? 0)}
+                  icon={Award} color="green"
+                  sub="Confirmed by manager"
+                />
+              </div>
+              {/* Total Incentives — hero row */}
+              <div className="rounded-xl px-5 py-4 bg-purple-50 border-2 border-purple-200 ring-1 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Incentives</p>
+                  <p className="text-2xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
+                  <p className="text-xs text-purple-400 mt-0.5">Commission + T+2 + Kickers</p>
+                </div>
+                <DollarSign size={36} className="text-purple-300 shrink-0" />
+              </div>
+            </div>
+          </FadeIn>
+
+          {/* WIP Pipeline Opportunity card */}
+          {summary?.wipSlabHint && (
+            <FadeIn delay={340}>
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">💡</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-purple-800 mb-1">Pipeline Opportunity</p>
+                    <p className="text-sm text-purple-700">
+                      {formatINR(summary.wipSlabHint.wipAmount)} in Work in Progress
+                    </p>
+                    {summary.wipSlabHint.neededForSlab > 0 ? (
+                      <p className="text-sm text-purple-600 mt-1">
+                        Convert {formatINR(summary.wipSlabHint.neededForSlab)} more → unlock {summary.wipSlabHint.slabName}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-green-600 font-semibold mt-1">
+                        Your pipeline covers {summary.wipSlabHint.slabName}! 🎯
+                      </p>
+                    )}
+                    <p className="text-xs text-purple-500 mt-1.5">
+                      💰 Earn {formatINR(summary.wipSlabHint.slabPayout)} commission · 🎯 You're halfway there — one push this week!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* ── Recovery Snapshot — BIG (below Incentives) ── */}
           {(summary?.totalTarget ?? 0) > 0 && (
-            <FadeIn delay={300}>
+            <FadeIn delay={380}>
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4">📊 Performance Snapshot</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -343,71 +407,6 @@ export default function Dashboard() {
                       while (cur <= endDate) { if (cur.getDay() !== 0) worked++; cur.setDate(cur.getDate() + 1) }
                       return <p className="text-sm font-bold text-gray-700">{worked > 0 ? formatINR(Math.round(summary.totalAchieved / worked)) : '—'}</p>
                     })()}
-                  </div>
-                </div>
-              </div>
-            </FadeIn>
-          )}
-
-          {/* ── Incentives breakdown ── */}
-          <FadeIn delay={320}>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">💰 Incentives Breakdown</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <MetricsCard
-                  title="Incentives Earned"
-                  value={formatINR(summary?.totalCommission ?? 0)}
-                  icon={DollarSign} color="purple" sub={slabSub}
-                />
-                <MetricsCard
-                  title="T+2 Day Incentives"
-                  value={formatINR(summary?.totalT2Amount ?? 0)}
-                  icon={Zap} color="blue"
-                  sub="On-time payment bonus (per deal)"
-                />
-                <MetricsCard
-                  title="Kickers Earned"
-                  value={formatINR(summary?.totalKickers ?? 0)}
-                  icon={Award} color="green"
-                  sub="Confirmed by manager"
-                />
-              </div>
-
-              {/* Total Incentives — hero row */}
-              <div className="rounded-xl px-5 py-4 bg-purple-50 border-2 border-purple-200 ring-1 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Incentives</p>
-                  <p className="text-2xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
-                  <p className="text-xs text-purple-400 mt-0.5">Commission + T+2 + Kickers</p>
-                </div>
-                <DollarSign size={36} className="text-purple-300 shrink-0" />
-              </div>
-            </div>
-          </FadeIn>
-
-          {/* WIP Pipeline Opportunity card */}
-          {summary?.wipSlabHint && (
-            <FadeIn delay={380}>
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-5">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">💡</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-purple-800 mb-1">Pipeline Opportunity</p>
-                    <p className="text-sm text-purple-700">
-                      {formatINR(summary.wipSlabHint.wipAmount)} in Work in Progress
-                    </p>
-                    {summary.wipSlabHint.neededForSlab > 0 ? (
-                      <p className="text-sm text-purple-600 mt-1">
-                        Convert {formatINR(summary.wipSlabHint.neededForSlab)} more → unlock {summary.wipSlabHint.slabName}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-green-600 font-semibold mt-1">
-                        Your pipeline covers {summary.wipSlabHint.slabName}! 🎯
-                      </p>
-                    )}
-                    <p className="text-xs text-purple-500 mt-1.5">
-                      💰 Earn {formatINR(summary.wipSlabHint.slabPayout)} commission · 🎯 You're halfway there — one push this week!
-                    </p>
                   </div>
                 </div>
               </div>
