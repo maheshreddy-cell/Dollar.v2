@@ -1,5 +1,5 @@
-// Fixed commission rate presets for Agents only.
-// Managers, VH, and SalesHead have separate manually-configured slabs.
+// Commission rate presets for Agents and Pre-Sales.
+// Managers / VH / SalesHead use manually-configured slabs stored in the Targets sheet.
 
 export const AGENT_TARGET_PRESETS = [
   {
@@ -44,3 +44,43 @@ export const AGENT_TARGET_PRESETS = [
     ],
   },
 ]
+
+// Pre-Sales specific presets — lower revenue thresholds suited to the ramp-up journey.
+export const PRESALES_TARGET_PRESETS = [
+  {
+    id: 'ps-starter',
+    label: 'PS Starter',
+    description: 'Month 1 ramp — scheduling focused',
+    slabs: [
+      { targetAmount: 100000, commissionPct: 0.5 },
+      { targetAmount: 200000, commissionPct: 1   },
+      { targetAmount: 300000, commissionPct: 1.5 },
+      { targetAmount: 400000, commissionPct: 2   },
+    ],
+  },
+  {
+    id: 'ps-mid',
+    label: 'PS Mid-Ramp',
+    description: 'Month 2-3 ramp — independent calls',
+    slabs: [
+      { targetAmount: 200000, commissionPct: 1   },
+      { targetAmount: 350000, commissionPct: 1.5 },
+      { targetAmount: 500000, commissionPct: 2   },
+      { targetAmount: 650000, commissionPct: 2.5 },
+    ],
+  },
+  {
+    id: 'ps-full',
+    label: 'PS Full Slab',
+    description: 'Full pre-sales commission',
+    slabs: [
+      { targetAmount: 300000, commissionPct: 1   },
+      { targetAmount: 500000, commissionPct: 2   },
+      { targetAmount: 700000, commissionPct: 2.5 },
+      { targetAmount: 900000, commissionPct: 3   },
+    ],
+  },
+]
+
+// Combined — used wherever preset lookup is needed regardless of role.
+export const ALL_TARGET_PRESETS = [...AGENT_TARGET_PRESETS, ...PRESALES_TARGET_PRESETS]

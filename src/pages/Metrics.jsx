@@ -7,18 +7,20 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts'
-import { useMonth }  from '../contexts/MonthContext'
-import { useAuth }   from '../contexts/AuthContext'
+import { useMonth }    from '../contexts/MonthContext'
+import { useAuth }     from '../contexts/AuthContext'
 import { getSummary, getLeaderboard, getTeamSalesAnalytics } from '../services/api'
-import { clearCache } from '../services/appsScript'
-import MetricsCard   from '../components/MetricsCard'
+import MetricsCard     from '../components/MetricsCard'
+import FadeIn          from '../components/FadeIn'
+import LiveBadge       from '../components/LiveBadge'
+import { useRefresh }  from '../hooks/useRefresh'
+import { AGENT_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
 
 const COLORS = [
   '#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444',
   '#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6',
 ]
-const REFRESH_MS = 30_000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,29 +65,6 @@ function workedDaysInMonth(month) {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-/** Pulsing "Live" badge with seconds-ago counter */
-function LiveBadge({ lastUpdated }) {
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
-  const sec = lastUpdated ? Math.floor((now - lastUpdated) / 1000) : null
-  return (
-    <div className="flex items-center gap-2 text-xs select-none">
-      <span className="flex items-center gap-1.5 font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Live · 30s
-      </span>
-      {sec !== null && (
-        <span className="text-gray-400 hidden sm:inline">
-          {sec < 5 ? 'Just refreshed' : `${sec}s ago`}
-        </span>
-      )}
-    </div>
-  )
-}
 
 function SectionHeader({ icon: Icon, title }) {
   return (
@@ -189,18 +168,6 @@ function ArcGauge({ pct = 0, color = '#3b82f6', size = 72 }) {
   )
 }
 
-/** Animated fade-in-up wrapper with configurable delay */
-function FadeIn({ children, delay = 0 }) {
-  return (
-    <div
-      className="animate-fade-in-up"
-      style={{ animationDelay: `${delay}ms`, animationFillMode: 'both' }}
-    >
-      {children}
-    </div>
-  )
-}
-
 /** Small stat box for Recovery Snapshot rows */
 function StatBox({ label, value, sub, valueClass = 'text-gray-800' }) {
   return (
@@ -217,7 +184,8 @@ function StatBox({ label, value, sub, valueClass = 'text-gray-800' }) {
 export default function Metrics() {
   const { month }               = useMonth()
   const { effectiveUser: user } = useAuth()
-  const isAgent                 = user?.role === 'Agent'
+  const isAgent                 = AGENT_ROLES.includes(user?.role)
+  const tick                    = useRefresh()
 
   const [summary,     setSummary]     = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
@@ -225,16 +193,6 @@ export default function Metrics() {
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [tick,        setTick]        = useState(0)
-
-  // ── 30-second live refresh ──────────────────────────────────────────────────
-  useEffect(() => {
-    const id = setInterval(() => {
-      clearCache()
-      setTick(t => t + 1)
-    }, REFRESH_MS)
-    return () => clearInterval(id)
-  }, [])
 
   // ── Data fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {

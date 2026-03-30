@@ -1,49 +1,34 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Target,
-  Briefcase,
-  Users,
-  BarChart2,
-  GitBranch,
-  Settings,
-  DollarSign,
-  MessageCircle,
+  LayoutDashboard, Target, Briefcase, Users,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { ROLE_COLORS } from '../utils/roles'
 
-// ── Nav definition ────────────────────────────────────────────────────────────
-// Agents see ONLY: Dashboard, My Targets, FAQ
-// All others see their role-scoped items + FAQ
+// Nav items grouped by section.
+// PreSales sees the same pages as Agent.
 const NAV_GROUPS = [
   {
-    label: null,   // no section header
+    label: null,
     items: [
-      { to: '/dashboard',      label: 'Dashboard',        icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
-      { to: '/my-targets',     label: 'My Targets',       icon: Target,          roles: ['Agent'] },
-      { to: '/metrics',        label: 'Metrics',          icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
-      { to: '/assign-targets', label: 'Assign Targets',   icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/team',           label: 'My Team',          icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/deals',          label: 'Deals',            icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/org',            label: 'Org Chart',        icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
-      { to: '/commission-config', label: 'Commission Config', icon: Settings,    roles: ['Admin'] },
+      { to: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/my-targets',       label: 'My Targets',        icon: Target,          roles: ['Agent','PreSales'] },
+      { to: '/metrics',          label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/assign-targets',   label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/team',             label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/deals',            label: 'Deals',             icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/org',              label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
+      { to: '/commission-config',label: 'Commission Config',  icon: Settings,        roles: ['Admin'] },
     ],
   },
   {
     label: 'Support',
     items: [
-      { to: '/faq', label: 'FAQ / AI Help', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent'] },
+      { to: '/faq', label: 'FAQ / AI Help', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
     ],
   },
 ]
-
-const ROLE_COLORS = {
-  Admin:     'bg-red-100 text-red-700',
-  SalesHead: 'bg-purple-100 text-purple-700',
-  VH:        'bg-blue-100 text-blue-700',
-  Manager:   'bg-green-100 text-green-700',
-  Agent:     'bg-gray-100 text-gray-700',
-}
 
 export default function Sidebar() {
   const { user, isRole } = useAuth()
@@ -95,11 +80,7 @@ export default function Sidebar() {
         <div className="px-4 py-4 border-t border-gray-100 bg-white/60">
           <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
           <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
-          <span
-            className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${
-              ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'
-            }`}
-          >
+          <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
             {user.role}
           </span>
         </div>

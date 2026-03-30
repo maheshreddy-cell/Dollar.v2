@@ -6,13 +6,12 @@ import {
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
 import { getSummary, getLeaderboard, getDeals, getTeamSalesAnalytics } from '../services/api'
-import { clearCache } from '../services/appsScript'
 import MetricsCard   from '../components/MetricsCard'
+import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
+import { useRefresh } from '../hooks/useRefresh'
+import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
-
-const MANAGER_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
-const REFRESH_MS    = 30_000
 
 // Status pill helper for recent deals
 const STATUS_COLORS = {
@@ -21,18 +20,6 @@ const STATUS_COLORS = {
   OnHold:  'bg-orange-100 text-orange-700',
 }
 const statusColor = (s) => STATUS_COLORS[s] ?? 'bg-yellow-100 text-yellow-700'
-
-// Staggered fade-in wrapper
-function FadeIn({ children, delay = 0 }) {
-  return (
-    <div
-      className="animate-fade-in-up"
-      style={{ animationDelay: `${delay}ms`, animationFillMode: 'both' }}
-    >
-      {children}
-    </div>
-  )
-}
 
 // Preset slab badge color
 const PRESET_COLOR = {
@@ -50,15 +37,9 @@ export default function Dashboard() {
   const [recentDeals, setRecentDeals] = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
-  const [tick,        setTick]        = useState(0)
 
   const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
-
-  // 30-second live refresh
-  useEffect(() => {
-    const id = setInterval(() => { clearCache(); setTick(t => t + 1) }, REFRESH_MS)
-    return () => clearInterval(id)
-  }, [])
+  const tick      = useRefresh()
 
   useEffect(() => {
     if (tick === 0) setLoading(true)
@@ -212,7 +193,7 @@ export default function Dashboard() {
                   {(summary?.suggestedEmails?.length ?? 0) > 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
                       <p className="text-xs font-bold text-red-700 uppercase tracking-wide">
-                        ⚠ Email mismatch detected — fix in Google Sheet:
+                        ⚠ Email mismatch detected in sales sheet:
                       </p>
                       {summary.suggestedEmails.map(e => (
                         <div key={e} className="flex items-center gap-2 flex-wrap text-xs">
@@ -222,7 +203,8 @@ export default function Dashboard() {
                         </div>
                       ))}
                       <p className="text-xs text-red-600 mt-1">
-                        In "Sales done raw dump", fix the Agent Email address column for this agent's rows.
+                        Fix the Agent Email in "Sales done raw dump". If the Users sheet email was recently updated,
+                        exit "View As" and re-select this agent to reload with the new email.
                       </p>
                     </div>
                   )}

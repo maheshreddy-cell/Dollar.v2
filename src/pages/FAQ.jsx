@@ -175,7 +175,7 @@ function SourceTag({ source }) {
   )
 }
 
-// ── Bot: search knowledge base ────────────────────────────────────────────────
+// ── Bot: search knowledge base (fallback) ────────────────────────────────────
 function getBotReply(message) {
   const lower = message.toLowerCase()
 
@@ -199,6 +199,53 @@ function getBotReply(message) {
   return {
     text: best.a,
     source: best.source,
+  }
+}
+
+// ── Claude API integration ────────────────────────────────────────────────────
+const CLAUDE_SYSTEM_PROMPT =
+  "You are an AI assistant for Airtribe's sales team. You have deep knowledge of the company's internal policies, sales processes, and programs. Here is the knowledge base:\n\n" +
+  KNOWLEDGE_BASE.map(entry => `Q: ${entry.q}\nA: ${entry.a}`).join('\n\n')
+
+async function getClaudeReply(messages, userMessage) {
+  try {
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('No API key')
+
+    // Take last 5 user+bot pairs (10 messages), excluding the initial greeting
+    const history = messages
+      .filter((_, i) => i > 0) // skip initial greeting at index 0
+      .slice(-10)
+      .map(msg => ({
+        role: msg.from === 'user' ? 'user' : 'assistant',
+        content: msg.text,
+      }))
+
+    // Append the new user message
+    history.push({ role: 'user', content: userMessage })
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-allow-browser': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 1024,
+        system: CLAUDE_SYSTEM_PROMPT,
+        messages: history,
+      }),
+    })
+
+    if (!response.ok) throw new Error(`API error: ${response.status}`)
+
+    const data = await response.json()
+    return data.content?.[0]?.text ?? getBotReply(userMessage).text
+  } catch {
+    return getBotReply(userMessage).text
   }
 }
 
@@ -262,22 +309,44 @@ export default function FAQ() {
     },
   ])
   const [input, setInput] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, isTyping])
 
-  const send = () => {
+  const sendMessage = async (text) => {
+    if (!text) return
+
+    // Capture current messages before state update for context
+    setMessages(prev => {
+      const withUser = [...prev, { from: 'user', text, source: null }]
+      // Kick off async Claude call with snapshot of prev messages
+      setIsTyping(true)
+      getClaudeReply(prev, text).then(replyText => {
+        setMessages(current => {
+          // Keep only last 5 user+bot pairs (10 messages) after the initial greeting
+          const greeting = current[0]
+          const convo = current.slice(1)
+          const trimmed = convo.slice(-9) // 9 existing + 1 bot reply we're about to add = 10
+          return [
+            greeting,
+            ...trimmed,
+            { from: 'bot', text: replyText, source: null },
+          ]
+        })
+        setIsTyping(false)
+      })
+      return withUser
+    })
+    setInput('')
+  }
+
+  const send = async () => {
     const text = input.trim()
     if (!text) return
-    const reply = getBotReply(text)
-    setMessages(prev => [
-      ...prev,
-      { from: 'user', text, source: null },
-      { from: 'bot', text: reply.text, source: reply.source },
-    ])
-    setInput('')
+    await sendMessage(text)
   }
 
   const visibleFAQs =
@@ -328,6 +397,9 @@ export default function FAQ() {
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100">
             <MessageCircle size={15} className="text-brand-600" />
             <h3 className="text-sm font-semibold text-gray-700">AI Assistant</h3>
+            <span className="text-[10px] text-purple-500 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5">
+              Powered by Claude
+            </span>
             <span className="ml-auto text-xs text-gray-400 hidden sm:block">Searches internal docs</span>
           </div>
 
@@ -343,15 +415,9 @@ export default function FAQ() {
             ].map(prompt => (
               <button
                 key={prompt}
-                onClick={() => {
-                  const reply = getBotReply(prompt)
-                  setMessages(prev => [
-                    ...prev,
-                    { from: 'user', text: prompt, source: null },
-                    { from: 'bot', text: reply.text, source: reply.source },
-                  ])
-                }}
-                className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+                onClick={() => sendMessage(prompt)}
+                disabled={isTyping}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors disabled:opacity-50"
               >
                 {prompt}
               </button>
@@ -362,6 +428,18 @@ export default function FAQ() {
             {messages.map((msg, i) => (
               <ChatBubble key={i} from={msg.from} text={msg.text} source={msg.source} />
             ))}
+            {isTyping && (
+              <div className="flex items-end gap-2 justify-start">
+                <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0 mb-0.5">
+                  <MessageCircle size={13} className="text-brand-600" />
+                </div>
+                <div className="px-4 py-3 bg-gray-100 rounded-2xl rounded-bl-sm flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 
@@ -373,11 +451,12 @@ export default function FAQ() {
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                 placeholder="e.g. How does the part-payment rule work?"
-                className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                disabled={isTyping}
+                className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-60"
               />
               <button
                 onClick={send}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isTyping}
                 className="bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white p-2.5 rounded-xl transition-colors"
               >
                 <Send size={15} />

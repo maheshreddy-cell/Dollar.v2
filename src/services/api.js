@@ -1,7 +1,7 @@
 // All API calls go directly to Apps Script — no Node.js backend needed
 import { appsScript, clearCache } from './appsScript'
 import { v4 as uuidv4 } from 'uuid'
-import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
+import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -204,7 +204,7 @@ export const getLeaderboard = async (rootEmail, month) => {
     appsScript.getSalesSheet(),
   ])
   const emails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
-  const agents = users.filter(u => emails.includes(u.Email) && u.Role === 'Agent')
+  const agents = users.filter(u => emails.includes(u.Email) && ['Agent', 'PreSales'].includes(u.Role))
 
   return agents.map(agent => {
     const target     = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
@@ -435,7 +435,7 @@ function isInCommissionPeriod(closedDate, startDate, _endDate) {
 // Returns the preset label ("Basic","Average","Pro") if CommissionPct is a preset ID, else null
 function resolvePresetLabel(commissionPct) {
   const id = String(commissionPct || '').trim().toLowerCase()
-  const preset = AGENT_TARGET_PRESETS.find(p => p.id === id)
+  const preset = ALL_TARGET_PRESETS.find(p => p.id === id)
   return preset ? preset.label : null
 }
 
@@ -443,7 +443,7 @@ function resolvePresetLabel(commissionPct) {
 function getSlabInfo(achieved, target) {
   if (!target) return null
   const presetId = String(tf(target, 'CommissionPct') || '').trim().toLowerCase()
-  const preset   = AGENT_TARGET_PRESETS.find(p => p.id === presetId)
+  const preset   = ALL_TARGET_PRESETS.find(p => p.id === presetId)
 
   let slabs = []
   if (preset) {
@@ -504,7 +504,7 @@ function calcTieredCommission(achieved, target) {
 
   // 1. Check if CommissionPct is a preset ID ("basic","average","pro")
   const presetId = String(tf(target, 'CommissionPct') || '').trim().toLowerCase()
-  const preset   = AGENT_TARGET_PRESETS.find(p => p.id === presetId)
+  const preset   = ALL_TARGET_PRESETS.find(p => p.id === presetId)
   if (preset) {
     const sorted = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
     let rate = sorted[0]?.commissionPct ?? 0

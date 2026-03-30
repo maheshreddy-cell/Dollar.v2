@@ -4,21 +4,17 @@ import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets } from '../services/api'
 import { formatINR } from '../utils/commission'
-import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
+import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
 import { clearCache } from '../services/appsScript'
-
-const ROLE_COLORS = {
-  Admin:     'bg-red-100 text-red-700',
-  SalesHead: 'bg-purple-100 text-purple-700',
-  VH:        'bg-blue-100 text-blue-700',
-  Manager:   'bg-green-100 text-green-700',
-  Agent:     'bg-gray-100 text-gray-700',
-}
+import { ROLE_COLORS } from '../utils/roles'
 
 const PRESET_STYLES = {
-  basic:   { card: 'border-blue-300 bg-blue-50 text-blue-800',   table: 'text-blue-700' },
-  average: { card: 'border-green-300 bg-green-50 text-green-800', table: 'text-green-700' },
-  pro:     { card: 'border-purple-300 bg-purple-50 text-purple-800', table: 'text-purple-700' },
+  basic:      { card: 'border-blue-300 bg-blue-50 text-blue-800',     table: 'text-blue-700' },
+  average:    { card: 'border-green-300 bg-green-50 text-green-800',   table: 'text-green-700' },
+  pro:        { card: 'border-purple-300 bg-purple-50 text-purple-800', table: 'text-purple-700' },
+  'ps-starter': { card: 'border-teal-300 bg-teal-50 text-teal-800',   table: 'text-teal-700' },
+  'ps-mid':     { card: 'border-cyan-300 bg-cyan-50 text-cyan-800',    table: 'text-cyan-700' },
+  'ps-full':    { card: 'border-indigo-300 bg-indigo-50 text-indigo-800', table: 'text-indigo-700' },
 }
 
 const EMPTY_SLAB = { targetAmount: '', commissionPct: '' }
@@ -63,7 +59,8 @@ export default function AssignTargets() {
   const [confirmDeleteMonth, setConfirmDeleteMonth] = useState(null) // month string being confirmed
   const [deletingMonth,    setDeletingMonth]  = useState(null)
 
-  const isAgent = selected?.Role === 'Agent'
+  const isAgent   = ['Agent', 'PreSales'].includes(selected?.Role)
+  const presets   = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
 
   // ── Load team ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -104,9 +101,9 @@ export default function AssignTargets() {
       setExisting(true)
       setCommissionStartDate(t.CommissionStartDate?.split('T')[0] ?? '')
 
-      if (selected.Role === 'Agent') {
+      if (['Agent', 'PreSales'].includes(selected.Role)) {
         const savedId = String(t.CommissionPct || '').trim().toLowerCase()
-        const matched = AGENT_TARGET_PRESETS.find(p => p.id === savedId)
+        const matched = presets.find(p => p.id === savedId)
         setSelectedPreset(matched?.id ?? null)
         setAgentTarget(t.TargetAmount ? String(t.TargetAmount) : '')
       } else {
@@ -128,7 +125,7 @@ export default function AssignTargets() {
   // Auto-fill target amount when preset changes
   useEffect(() => {
     if (!selectedPreset) return
-    const preset = AGENT_TARGET_PRESETS.find(p => p.id === selectedPreset)
+    const preset = presets.find(p => p.id === selectedPreset)
     if (preset && !agentTarget) setAgentTarget(String(preset.slabs[0].targetAmount))
   }, [selectedPreset])
 
@@ -180,7 +177,7 @@ export default function AssignTargets() {
 
     setSubmitting(true)
     try {
-      const preset = isAgent ? AGENT_TARGET_PRESETS.find(p => p.id === selectedPreset) : null
+      const preset = isAgent ? presets.find(p => p.id === selectedPreset) : null
       await assignTarget({
         email:               selected.Email,
         month:               formMonth,
@@ -234,7 +231,7 @@ export default function AssignTargets() {
     )
   }
 
-  const previewPreset = selectedPreset ? AGENT_TARGET_PRESETS.find(p => p.id === selectedPreset) : null
+  const previewPreset = selectedPreset ? presets.find(p => p.id === selectedPreset) : null
 
   return (
     <div className="space-y-4">
@@ -327,7 +324,7 @@ export default function AssignTargets() {
                         {targetHistory.map((t) => {
                           const mon      = normalizeMonth(t.Month ?? t.month)
                           const rate     = String(t.CommissionPct ?? t.commissionPct ?? '')
-                          const preset   = AGENT_TARGET_PRESETS.find(p => p.id === rate.trim().toLowerCase())
+                          const preset   = ALL_TARGET_PRESETS.find(p => p.id === rate.trim().toLowerCase())
                           const rateLabel = preset ? `${preset.label} Tier` : (rate ? `${rate}%` : '—')
                           const start    = t.CommissionStartDate ?? t.commissionStartDate ?? ''
                           const isCurrent = mon === formMonth
@@ -444,7 +441,7 @@ export default function AssignTargets() {
                         Commission Rate Type
                       </label>
                       <div className="grid grid-cols-3 gap-3">
-                        {AGENT_TARGET_PRESETS.map(preset => (
+                        {presets.map(preset => (
                           <button
                             key={preset.id}
                             type="button"
