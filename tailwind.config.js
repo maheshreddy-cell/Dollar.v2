@@ -13,6 +13,20 @@ export default {
           900: '#1e3a8a',
         },
       },
+      animation: {
+        'fade-in-up': 'fadeInUp 0.45s ease-out both',
+        'fade-in':    'fadeIn 0.3s ease-out both',
+      },
+      keyframes: {
+        fadeInUp: {
+          from: { opacity: '0', transform: 'translateY(10px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to:   { opacity: '1' },
+        },
+      },
     },
   },
   plugins: [],

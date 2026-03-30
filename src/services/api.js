@@ -287,22 +287,26 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
   for (const d of rows) {
     const team     = d.Team     || 'Unassigned'
     const vertical = d.Vertical || 'Unassigned'
-    const val      = d.PaidActual || 0
+    const paid     = d.PaidActual  || 0
+    const tsv      = d.TotalValue  || 0
 
-    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0 }
-    byTeam[team].achieved    += val
-    byTeam[team].deals       += 1
+    if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0, totalSaleValue: 0 }
+    byTeam[team].achieved       += paid
+    byTeam[team].deals          += 1
+    byTeam[team].totalSaleValue += tsv
 
-    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0 }
-    byVertical[vertical].achieved += val
-    byVertical[vertical].deals    += 1
+    if (!byVertical[vertical]) byVertical[vertical] = { name: vertical, achieved: 0, deals: 0, totalSaleValue: 0 }
+    byVertical[vertical].achieved       += paid
+    byVertical[vertical].deals          += 1
+    byVertical[vertical].totalSaleValue += tsv
   }
 
   return {
-    byTeam:        Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
-    byVertical:    Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
-    totalAchieved: rows.reduce((s, d) => s + (d.PaidActual || 0), 0),
-    totalDeals:    rows.length,
+    byTeam:         Object.values(byTeam).sort((a, b) => b.achieved - a.achieved),
+    byVertical:     Object.values(byVertical).sort((a, b) => b.achieved - a.achieved),
+    totalAchieved:  rows.reduce((s, d) => s + (d.PaidActual || 0), 0),
+    totalSaleValue: rows.reduce((s, d) => s + (d.TotalValue  || 0), 0),
+    totalDeals:     rows.length,
   }
 }
 

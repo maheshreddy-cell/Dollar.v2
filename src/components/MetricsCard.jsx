@@ -1,17 +1,28 @@
 export default function MetricsCard({ title, value, sub, icon: Icon, color = 'blue', trend }) {
   const palette = {
-    blue:   { bg: 'bg-blue-50',   icon: 'bg-blue-100 text-blue-600',   text: 'text-blue-700' },
-    green:  { bg: 'bg-green-50',  icon: 'bg-green-100 text-green-600', text: 'text-green-700' },
-    orange: { bg: 'bg-orange-50', icon: 'bg-orange-100 text-orange-600', text: 'text-orange-700' },
-    red:    { bg: 'bg-red-50',    icon: 'bg-red-100 text-red-600',     text: 'text-red-700' },
-    purple: { bg: 'bg-purple-50', icon: 'bg-purple-100 text-purple-600', text: 'text-purple-700' },
+    blue:   { bg: 'bg-blue-50',   icon: 'bg-blue-100 text-blue-600',     text: 'text-blue-700',   border: 'hover:border-blue-200' },
+    green:  { bg: 'bg-green-50',  icon: 'bg-green-100 text-green-600',   text: 'text-green-700',  border: 'hover:border-green-200' },
+    orange: { bg: 'bg-orange-50', icon: 'bg-orange-100 text-orange-600', text: 'text-orange-700', border: 'hover:border-orange-200' },
+    red:    { bg: 'bg-red-50',    icon: 'bg-red-100 text-red-600',       text: 'text-red-700',    border: 'hover:border-red-200' },
+    purple: { bg: 'bg-purple-50', icon: 'bg-purple-100 text-purple-600', text: 'text-purple-700', border: 'hover:border-purple-200' },
   }
   const p = palette[color] ?? palette.blue
 
   return (
-    <div className={`rounded-xl border border-gray-100 p-5 ${p.bg} flex items-start gap-4`}>
+    <div
+      className={`
+        rounded-xl border border-gray-100 p-5 ${p.bg} flex items-start gap-4 group
+        transition-all duration-200 cursor-default
+        hover:shadow-md hover:scale-[1.015] ${p.border}
+      `}
+    >
       {Icon && (
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${p.icon}`}>
+        <div
+          className={`
+            w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${p.icon}
+            transition-transform duration-200 group-hover:scale-110
+          `}
+        >
           <Icon size={20} />
         </div>
       )}
