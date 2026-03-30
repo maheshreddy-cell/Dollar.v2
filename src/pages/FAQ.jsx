@@ -248,12 +248,6 @@ function buildSystemPrompt(userCtx, relevantEntries) {
 
 async function getClaudeReply(messages, userMessage, userSummaryCtx) {
   try {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-    if (!apiKey) {
-      console.warn('[FAQ] VITE_ANTHROPIC_API_KEY not set — using keyword fallback')
-      return { text: getBotReply(userMessage).text, isClaudeFallback: true }
-    }
-
     const relevantEntries = getRelevantEntries(userMessage, KNOWLEDGE_BASE)
     const systemPrompt    = buildSystemPrompt(userSummaryCtx, relevantEntries)
 
@@ -263,14 +257,10 @@ async function getClaudeReply(messages, userMessage, userSummaryCtx) {
       .map(msg => ({ role: msg.from === 'user' ? 'user' : 'assistant', content: msg.text }))
     history.push({ role: 'user', content: userMessage })
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call our Vercel serverless proxy — avoids CORS + keeps API key server-side
+    const response = await fetch('/api/claude', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-allow-browser': 'true',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-3-5-haiku-20241022',
         max_tokens: 1024,
@@ -281,7 +271,7 @@ async function getClaudeReply(messages, userMessage, userSummaryCtx) {
 
     if (!response.ok) {
       const err = await response.text()
-      console.error('[FAQ] Claude API error:', response.status, err)
+      console.error('[FAQ] Claude proxy error:', response.status, err)
       return { text: getBotReply(userMessage).text, isClaudeFallback: true }
     }
     const data = await response.json()
