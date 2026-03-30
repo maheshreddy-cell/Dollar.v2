@@ -298,10 +298,9 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
   for (const d of rows) {
     const team     = d.Team     || 'Unassigned'
     const vertical = d.Vertical || 'Unassigned'
-    const paid     = d.PaidActual  || 0
-    const tsv      = d.TotalValue  || 0
-
-    const t2 = d.T2Amount || 0
+    const paid = d.PaidActual || 0
+    const tsv  = d.TotalValue || 0
+    const t2   = d.T2Amount   || 0
 
     if (!byTeam[team])         byTeam[team]     = { name: team,     achieved: 0, deals: 0, totalSaleValue: 0, totalT2Amount: 0 }
     byTeam[team].achieved       += paid

@@ -710,7 +710,7 @@ export default function Metrics() {
               <span className="text-xs text-gray-400">{leaderboard.length} agents</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-[900px] w-full text-sm">
                 <thead className="bg-gray-50/80">
                   <tr>
                     <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase w-10">#</th>
@@ -720,7 +720,9 @@ export default function Metrics() {
                     <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Achieved</th>
                     <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Proj %</th>
                     <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Deals</th>
-                    <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Incentive</th>
+                    <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Commission</th>
+                    <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">T+2</th>
+                    <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Money Made</th>
                     <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
@@ -752,7 +754,9 @@ export default function Metrics() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-right text-gray-600">{row.dealsCount ?? 0}</td>
-                        <td className="px-5 py-3 text-right text-green-700 font-medium">{formatINR(row.commission ?? 0)}</td>
+                        <td className="px-5 py-3 text-right text-purple-600 font-medium">{formatINR(row.commission ?? 0)}</td>
+                        <td className="px-5 py-3 text-right text-blue-600 text-sm">{formatINR(row.totalT2Amount ?? 0)}</td>
+                        <td className="px-5 py-3 text-right font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</td>
                         <td className="px-5 py-3 text-center"><EligibilityBadge slabInfo={row.slabInfo} /></td>
                       </tr>
                     )
