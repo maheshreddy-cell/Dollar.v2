@@ -51,7 +51,6 @@ export default function Dashboard() {
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
   const [tick,        setTick]        = useState(0)
-  const [activeTab,   setActiveTab]   = useState('overview')
 
   const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
 
@@ -197,11 +196,12 @@ export default function Dashboard() {
           AGENT VIEW
       ══════════════════════════════════ */}
       {!isManager && (
-        <FadeIn delay={280}>
-          <>
-            {/* No-data hint */}
-            {(summary?.totalTarget ?? 0) > 0 && (summary?.totalSaleValue ?? 0) === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 flex items-start gap-3 mb-4">
+        <div className="space-y-4">
+
+          {/* No-data / email-mismatch hint */}
+          {(summary?.totalTarget ?? 0) > 0 && (summary?.totalSaleValue ?? 0) === 0 && (
+            <FadeIn delay={260}>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 flex items-start gap-3">
                 <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
                 <div className="text-sm text-amber-800 space-y-2 min-w-0">
                   <p>
@@ -228,125 +228,102 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-            )}
+            </FadeIn>
+          )}
 
-            {/* Tab switcher */}
-            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-4">
-              {[
-                { id: 'overview',   label: 'Overview' },
-                { id: 'incentives', label: '💰 Incentives' },
-              ].map(({ id, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    activeTab === id
-                      ? 'bg-white shadow text-gray-800'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          {/* Eligibility banner */}
+          {(summary?.totalTarget ?? 0) > 0 && (
+            <FadeIn delay={280}>
+              {achievedPct >= 100 ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center gap-3">
+                  <CheckCircle size={18} className="text-green-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">Eligible to Claim Incentives</p>
+                    <p className="text-xs text-green-600 mt-0.5">You've hit 100% of your target. Raise your claim with your manager.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-orange-500 shrink-0" />
+                    <p className="text-sm text-orange-800">
+                      <strong>{formatINR(gap)}</strong> more needed to reach 100% and unlock your incentive claim.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold bg-orange-100 border border-orange-300 text-orange-700 px-3 py-1 rounded-lg">
+                    {achievedPct.toFixed(1)}% achieved
+                  </span>
+                </div>
+              )}
+            </FadeIn>
+          )}
+
+          {/* ── Incentives breakdown ── */}
+          <FadeIn delay={320}>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">💰 Incentives Breakdown</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <MetricsCard
+                  title="Commission Earned"
+                  value={formatINR(summary?.totalCommission ?? 0)}
+                  icon={DollarSign} color="purple" sub={slabSub}
+                />
+                <MetricsCard
+                  title="T+2 Day Incentives"
+                  value={formatINR(summary?.totalT2Amount ?? 0)}
+                  icon={Zap} color="blue"
+                  sub="On-time payment bonus (per deal)"
+                />
+                <MetricsCard
+                  title="Kickers Earned"
+                  value={formatINR(summary?.totalKickers ?? 0)}
+                  icon={Award} color="green"
+                  sub="Confirmed by manager"
+                />
+              </div>
+
+              {/* Total Money Made — hero row */}
+              <div className="rounded-xl px-5 py-4 bg-purple-50 border-2 border-purple-200 ring-1 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Money Made</p>
+                  <p className="text-2xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
+                  <p className="text-xs text-purple-400 mt-0.5">Commission + T+2 + Kickers</p>
+                </div>
+                <DollarSign size={36} className="text-purple-300 shrink-0" />
+              </div>
             </div>
+          </FadeIn>
 
-            {/* Tab content — re-animates on tab switch via key */}
-            <div
-              key={activeTab}
-              className="animate-fade-in-up space-y-4"
-              style={{ animationDuration: '0.18s', animationFillMode: 'both' }}
-            >
-              {activeTab === 'overview' ? (
-                <>
-                  {/* Eligibility banner */}
-                  {(summary?.totalTarget ?? 0) > 0 && (
-                    achievedPct >= 100 ? (
-                      <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 flex items-center gap-3">
-                        <CheckCircle size={18} className="text-green-600 shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-green-800">Eligible to Claim Incentives</p>
-                          <p className="text-xs text-green-600 mt-0.5">You've hit 100% of your target. Raise your claim with your manager.</p>
-                        </div>
+          {/* Recent Deals */}
+          <FadeIn delay={360}>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Deals</h3>
+              {recentDeals.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">No deals this month.</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {recentDeals.map((deal) => (
+                    <div key={deal.ID || deal.LeadName} className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{deal.LeadName || deal.CustomerName}</p>
+                        <p className="text-xs text-gray-400">
+                          {deal.PaymentDate ? new Date(deal.PaymentDate).toLocaleDateString('en-IN') : '—'}
+                        </p>
                       </div>
-                    ) : (
-                      <div className="bg-orange-50 border border-orange-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle size={16} className="text-orange-500 shrink-0" />
-                          <p className="text-sm text-orange-800">
-                            <strong>{formatINR(gap)}</strong> more needed to reach 100% and unlock your incentive claim.
-                          </p>
-                        </div>
-                        <span className="text-xs font-semibold bg-orange-100 border border-orange-300 text-orange-700 px-3 py-1 rounded-lg">
-                          {achievedPct.toFixed(1)}% achieved
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-gray-800">{formatINR(deal.TotalValue || deal.PaidActual)}</p>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(deal.Status)}`}>
+                          {deal.Status}
                         </span>
                       </div>
-                    )
-                  )}
-
-                  {/* Recent Deals */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Deals</h3>
-                    {recentDeals.length === 0 ? (
-                      <p className="text-sm text-gray-400 py-4 text-center">No deals this month.</p>
-                    ) : (
-                      <div className="divide-y divide-gray-50">
-                        {recentDeals.map((deal) => (
-                          <div key={deal.ID || deal.LeadName} className="flex items-center justify-between py-2.5">
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{deal.LeadName || deal.CustomerName}</p>
-                              <p className="text-xs text-gray-400">
-                                {deal.PaymentDate ? new Date(deal.PaymentDate).toLocaleDateString('en-IN') : '—'}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-gray-800">{formatINR(deal.TotalValue || deal.PaidActual)}</p>
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(deal.Status)}`}>
-                                {deal.Status}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                /* ── Incentives tab ── */
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <MetricsCard
-                      title="Commission Earned"
-                      value={formatINR(summary?.totalCommission ?? 0)}
-                      icon={DollarSign} color="purple" sub={slabSub}
-                    />
-                    <MetricsCard
-                      title="T+2 Day Incentives"
-                      value={formatINR(summary?.totalT2Amount ?? 0)}
-                      icon={Zap} color="blue"
-                      sub="On-time payment bonus (per deal)"
-                    />
-                    <MetricsCard
-                      title="Kickers Earned"
-                      value={formatINR(summary?.totalKickers ?? 0)}
-                      icon={Award} color="green"
-                      sub="Confirmed by manager"
-                    />
-                  </div>
-
-                  {/* Total Money Made — hero card */}
-                  <div className="rounded-xl p-6 bg-purple-50 border-2 border-purple-300 shadow-md ring-2 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-purple-600 mb-1">Total Money Made</p>
-                      <p className="text-3xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
-                      <p className="text-xs text-purple-400 mt-1">Commission + T+2 + Kickers</p>
                     </div>
-                    <DollarSign size={40} className="text-purple-300 shrink-0" />
-                  </div>
-                </>
+                  ))}
+                </div>
               )}
             </div>
-          </>
-        </FadeIn>
+          </FadeIn>
+
+        </div>
       )}
 
       {/* ══════════════════════════════════
