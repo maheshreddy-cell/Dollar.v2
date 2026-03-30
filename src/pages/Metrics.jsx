@@ -351,7 +351,7 @@ export default function Metrics() {
           ? 'Slab eligible'
           : `₹${Math.ceil((summary.slabInfo.gapToSlab1 ?? 0) / 1000)}k to Slab 1`
         : undefined,
-      icon: DollarSign, color: 'purple',
+      icon: DollarSign, color: 'purple', highlight: true,
     },
     {
       title: 'Achievement %',
@@ -373,7 +373,7 @@ export default function Metrics() {
     { title: `${orgLabel} Target`,     value: formatINR(recTarget),                       icon: Target,    color: 'blue'   },
     { title: `${orgLabel} Sale Value`, value: formatINR(recSaleValue), sub: 'Full pipeline', icon: TrendingUp,color: 'blue'   },
     { title: `${orgLabel} Achieved`,   value: formatINR(recAchieved),                     icon: TrendingUp,color: 'green'  },
-    { title: `${orgLabel} Incentives`, value: formatINR(summary?.totalCommission ?? 0),    icon: DollarSign,color: 'purple' },
+    { title: `${orgLabel} Incentives`, value: formatINR(summary?.totalCommission ?? 0),    icon: DollarSign,color: 'purple', highlight: true },
     {
       title: 'Achievement %',
       value: `${achievedPct.toFixed(1)}%`,

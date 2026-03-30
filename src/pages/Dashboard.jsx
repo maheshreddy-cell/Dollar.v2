@@ -105,7 +105,7 @@ export default function Dashboard() {
     {
       title: isManager ? 'Total Incentives': 'Commission Earned',
       value: formatINR(summary?.totalCommission ?? 0),
-      icon: DollarSign, color: 'purple',
+      icon: DollarSign, color: 'purple', highlight: true,
     },
     {
       title: 'Achievement %',
