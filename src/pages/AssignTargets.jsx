@@ -73,7 +73,7 @@ export default function AssignTargets() {
   const [mgrConfirmDel,  setMgrConfirmDel]  = useState(null)
   const [mgrDeleting,    setMgrDeleting]    = useState(null)
 
-  const isManagerMember = selected?.Role === 'Manager'
+  const isManagerMember = ['Manager', 'VH'].includes(selected?.Role)
   const isAgent   = ['Agent', 'PreSales'].includes(selected?.Role)
   const presets   = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
 
@@ -87,7 +87,7 @@ export default function AssignTargets() {
     setSelected(null)
 
     const viewEmail = effectiveUser.email
-    const canSeeAll = ['Admin', 'SalesHead'].includes(effectiveUser.role)
+    const canSeeAll = ['Admin', 'SalesHead', 'VH'].includes(effectiveUser.role)
     const fetch = canSeeAll
       ? getSubtree(viewEmail).then(tree => {
           const flat = []
@@ -353,10 +353,10 @@ export default function AssignTargets() {
               <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-gray-800">{selected.Name}</p>
-                  <p className="text-xs text-gray-400">{selected.Email} · Manager</p>
+                  <p className="text-xs text-gray-400">{selected.Email} · {selected.Role}</p>
                 </div>
                 <span className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full">
-                  Manager Targets
+                  {selected.Role} Targets
                 </span>
               </div>
 
