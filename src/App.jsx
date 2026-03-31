@@ -13,6 +13,7 @@ import Team from './pages/Team'
 import Metrics from './pages/Metrics'
 import OrgPage from './pages/OrgPage'
 import CommissionConfig from './pages/CommissionConfig'
+import ManagerTargets from './pages/ManagerTargets'
 import FAQ from './pages/FAQ'
 
 function AppLayout() {
@@ -120,6 +121,14 @@ export default function App() {
               element={
                 <RequireRole roles={['Admin', 'SalesHead', 'VH']}>
                   <CommissionConfig />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/manager-targets"
+              element={
+                <RequireRole roles={['Manager', 'Admin']}>
+                  <ManagerTargets />
                 </RequireRole>
               }
             />

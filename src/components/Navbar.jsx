@@ -14,6 +14,7 @@ const PAGE_TITLES = {
   '/metrics':          'Metrics',
   '/org':              'Org Chart',
   '/commission-config':'Commission Config',
+  '/manager-targets':  'My Targets',
   '/faq':              'FAQ',
 }
 

@@ -785,3 +785,80 @@ function editDistance(a, b) {
   }
   return dp[m][n]
 }
+
+// ─── Manager Targets ─────────────────────────────────────────────────────────
+// Reads from the "ManagerTargets" sheet.
+// Expected columns: Key | ManagerEmail | Month | ProjectedTarget | RealisedTarget | AssignedBy | AssignedAt
+
+export const getManagerTargets = async (managerEmail, month) => {
+  const rows = await appsScript.getSheet('ManagerTargets')
+  const lower = (managerEmail ?? '').trim().toLowerCase()
+  return rows
+    .filter(r => {
+      const em  = String(r.ManagerEmail || '').trim().toLowerCase()
+      const mon = normalizeMonth(r.Month)
+      return em === lower && (!month || mon === month)
+    })
+    .sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))
+}
+
+export const getManagerTargetHistory = async (managerEmail) => {
+  const rows = await appsScript.getSheet('ManagerTargets')
+  const lower = (managerEmail ?? '').trim().toLowerCase()
+  const filtered = rows.filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
+  // Deduplicate by month — keep latest per month
+  const byMonth = new Map()
+  for (const r of filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))) {
+    const mon = normalizeMonth(r.Month)
+    if (mon && !byMonth.has(mon)) byMonth.set(mon, r)
+  }
+  return [...byMonth.values()].sort((a, b) => normalizeMonth(b.Month).localeCompare(normalizeMonth(a.Month)))
+}
+
+export const assignManagerTarget = async (data, assignerEmail) => {
+  // data: { email, month, projectedTarget, realisedTarget }
+  const key = `mgr_${data.email.trim().toLowerCase()}_${data.month}`
+  const row = [
+    key,
+    data.email.trim().toLowerCase(),
+    data.month,
+    Number(data.projectedTarget) || 0,
+    Number(data.realisedTarget)  || 0,
+    assignerEmail,
+    new Date().toISOString(),
+  ]
+  const result = await appsScript.appendRow('ManagerTargets', row)
+  clearCache()
+  return result
+}
+
+export const deleteManagerTarget = async (email, month) => {
+  const key = `mgr_${email.trim().toLowerCase()}_${month}`
+  let deleted = true
+  while (deleted) {
+    try { await appsScript.deleteRow('ManagerTargets', 'Key', key) }
+    catch { deleted = false }
+  }
+  clearCache()
+}
+
+// Reads from the "ManagerSlabs" sheet.
+// Expected columns: Type | SlabName | MaxTarget | CommissionPct | CreatedBy
+// Type = "Projected" | "Realised"
+export const getManagerSlabs = async (type) => {
+  const rows = await appsScript.getSheet('ManagerSlabs')
+  const filtered = type
+    ? rows.filter(r => String(r.Type || '').trim() === type)
+    : rows
+  return filtered.sort((a, b) => Number(a.MaxTarget) - Number(b.MaxTarget))
+}
+
+// Calculates manager commission given team metric and slabs array
+export function calcManagerCommission(teamMetric, slabs) {
+  if (!slabs?.length || !teamMetric) return 0
+  const qualifying = slabs
+    .filter(s => teamMetric >= Number(s.MaxTarget))
+    .sort((a, b) => Number(b.MaxTarget) - Number(a.MaxTarget))
+  if (!qualifying.length) return 0
+  return teamMetric * Number(qualifying[0].CommissionPct) / 100
+}

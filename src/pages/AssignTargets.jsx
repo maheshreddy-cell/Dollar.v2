@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets } from '../services/api'
+import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
 import { clearCache } from '../services/appsScript'
@@ -59,6 +59,20 @@ export default function AssignTargets() {
   const [confirmDeleteMonth, setConfirmDeleteMonth] = useState(null) // month string being confirmed
   const [deletingMonth,    setDeletingMonth]  = useState(null)
 
+  // ── Manager-specific state ───────────────────────────────────────────────────
+  const [mgrProjected,     setMgrProjected]   = useState('')
+  const [mgrRealised,      setMgrRealised]    = useState('')
+  const [mgrHistory,       setMgrHistory]     = useState([])
+  const [mgrHistoryLoad,   setMgrHistoryLoad] = useState(false)
+  const [mgrProjectedSlabs, setMgrProjSlabs]  = useState([])
+  const [mgrRealisedSlabs,  setMgrRealSlabs]  = useState([])
+  const [mgrSubmitting,    setMgrSubmitting]  = useState(false)
+  const [mgrSuccess,       setMgrSuccess]     = useState(false)
+  const [mgrError,         setMgrError]       = useState('')
+  const [mgrConfirmDel,    setMgrConfirmDel]  = useState(null)
+  const [mgrDeleting,      setMgrDeleting]    = useState(null)
+
+  const isManagerMember = selected?.Role === 'Manager'
   const isAgent   = ['Agent', 'PreSales'].includes(selected?.Role)
   const presets   = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
 
@@ -90,9 +104,22 @@ export default function AssignTargets() {
 
   // ── When member selected: reset form + reload history ────────────────────────
   useEffect(() => {
-    if (!selected) { setTargetHistory([]); return }
+    if (!selected) { setTargetHistory([]); setMgrHistory([]); return }
     setConfirmDeleteMonth(null)
-    reloadHistory()
+    setMgrConfirmDel(null)
+    setMgrSuccess(false)
+    setMgrError('')
+    setMgrProjected('')
+    setMgrRealised('')
+    if (selected.Role === 'Manager') {
+      reloadManagerHistory()
+      // Load slabs for reference
+      Promise.all([getManagerSlabs('Projected'), getManagerSlabs('Realised')])
+        .then(([ps, rs]) => { setMgrProjSlabs(ps); setMgrRealSlabs(rs) })
+        .catch(() => {})
+    } else {
+      reloadHistory()
+    }
   }, [selected])
 
   // ── When formMonth changes: reload existing target into form ──────────────────
@@ -143,6 +170,14 @@ export default function AssignTargets() {
     setAgentTarget('')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
     setCommissionStartDate('')
+  }
+
+  function reloadManagerHistory() {
+    setMgrHistoryLoad(true)
+    getManagerTargetHistory(selected?.Email)
+      .then(res => setMgrHistory(res ?? []))
+      .catch(() => {})
+      .finally(() => setMgrHistoryLoad(false))
   }
 
   function reloadHistory() {
@@ -288,6 +323,178 @@ export default function AssignTargets() {
           {!selected ? (
             <div className="bg-white rounded-xl border border-gray-200 p-10 h-full flex items-center justify-center">
               <p className="text-gray-400 text-sm">Select a team member to assign or manage their targets.</p>
+            </div>
+          ) : isManagerMember ? (
+            /* ══ MANAGER: Projected + Realised targets form ══ */
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{selected.Name}</p>
+                  <p className="text-xs text-gray-400">{selected.Email} · Manager</p>
+                </div>
+                <span className="text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-full">
+                  Manager Targets
+                </span>
+              </div>
+
+              {/* History table */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assignment History</p>
+                </div>
+                {mgrHistoryLoad ? (
+                  <div className="flex justify-center py-6">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600" />
+                  </div>
+                ) : mgrHistory.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-6 text-center">No targets assigned yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                          <th className="px-4 py-2.5 text-left font-medium">Month</th>
+                          <th className="px-4 py-2.5 text-right font-medium">Projected Target</th>
+                          <th className="px-4 py-2.5 text-right font-medium">Realised Target</th>
+                          <th className="px-4 py-2.5 text-center font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {mgrHistory.map(t => {
+                          const mon = String(t.Month || '').trim()
+                          const isDeleting = mgrDeleting === mon
+                          const isConfirm  = mgrConfirmDel === mon
+                          return (
+                            <tr key={mon} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-medium text-gray-700">{mon}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-blue-700">{formatINR(Number(t.ProjectedTarget || 0))}</td>
+                              <td className="px-4 py-3 text-right font-semibold text-green-700">{formatINR(Number(t.RealisedTarget || 0))}</td>
+                              <td className="px-4 py-3 text-center">
+                                {isConfirm ? (
+                                  <span className="flex items-center justify-center gap-2">
+                                    <button
+                                      onClick={async () => {
+                                        setMgrDeleting(mon)
+                                        try { await deleteManagerTarget(selected.Email, mon); reloadManagerHistory() }
+                                        catch { setMgrError('Delete failed.') }
+                                        finally { setMgrDeleting(null); setMgrConfirmDel(null) }
+                                      }}
+                                      disabled={isDeleting}
+                                      className="text-xs text-red-600 hover:underline"
+                                    >{isDeleting ? '…' : 'Confirm'}</button>
+                                    <button onClick={() => setMgrConfirmDel(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
+                                  </span>
+                                ) : (
+                                  <button onClick={() => setMgrConfirmDel(mon)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Assignment form */}
+              <div className="bg-white rounded-xl border border-gray-200 px-5 py-5">
+                <p className="text-sm font-semibold text-gray-800 mb-4">Assign Targets for {formMonth}</p>
+                {mgrSuccess && (
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 mb-4">
+                    <CheckCircle size={15} className="text-green-600" />
+                    <p className="text-sm text-green-700 font-medium">Targets saved successfully.</p>
+                  </div>
+                )}
+                {mgrError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 mb-4 text-sm text-red-700">{mgrError}</div>
+                )}
+
+                <div className="mb-4">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Month</label>
+                  <input
+                    type="month"
+                    value={formMonth}
+                    onChange={e => setFormMonth(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1.5 block flex items-center gap-1">
+                      📊 Projected Target (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={mgrProjected}
+                      onChange={e => setMgrProjected(e.target.value)}
+                      placeholder="e.g. 7200000"
+                      className="w-full border border-blue-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    {mgrProjected && <p className="text-xs text-blue-600 mt-1">{formatINR(Number(mgrProjected))}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1.5 block flex items-center gap-1">
+                      ✅ Realised Target (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={mgrRealised}
+                      onChange={e => setMgrRealised(e.target.value)}
+                      placeholder="e.g. 5700000"
+                      className="w-full border border-green-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                    />
+                    {mgrRealised && <p className="text-xs text-green-600 mt-1">{formatINR(Number(mgrRealised))}</p>}
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    setMgrError('')
+                    setMgrSuccess(false)
+                    if (!mgrProjected && !mgrRealised) { setMgrError('Enter at least one target.'); return }
+                    setMgrSubmitting(true)
+                    try {
+                      await assignManagerTarget({ email: selected.Email, month: formMonth, projectedTarget: mgrProjected, realisedTarget: mgrRealised }, user.email)
+                      setMgrSuccess(true)
+                      reloadManagerHistory()
+                    } catch (err) {
+                      setMgrError(err?.message ?? 'Failed to save.')
+                    } finally {
+                      setMgrSubmitting(false)
+                    }
+                  }}
+                  disabled={mgrSubmitting}
+                  className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors"
+                >
+                  {mgrSubmitting ? 'Saving…' : 'Save Manager Targets'}
+                </button>
+
+                {/* Reference slab display */}
+                {(mgrProjectedSlabs.length > 0 || mgrRealisedSlabs.length > 0) && (
+                  <div className="mt-5 grid grid-cols-2 gap-4">
+                    {[['Projected', mgrProjectedSlabs, 'blue'], ['Realised', mgrRealisedSlabs, 'green']].map(([label, slabs, color]) => (
+                      slabs.length > 0 && (
+                        <div key={label}>
+                          <p className={`text-xs font-semibold text-${color}-700 uppercase tracking-wide mb-2`}>{label} Slabs</p>
+                          <div className="space-y-1">
+                            {slabs.map((s, i) => (
+                              <div key={s.SlabName} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-${color}-50`}>
+                                <span className={`font-medium text-${color}-800`}>{s.SlabName}</span>
+                                <span className={`text-${color}-600`}>{formatINR(Number(s.MaxTarget))} → {s.CommissionPct}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <>

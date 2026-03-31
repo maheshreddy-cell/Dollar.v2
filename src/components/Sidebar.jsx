@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_COLORS } from '../utils/roles'
@@ -16,6 +16,7 @@ const NAV_GROUPS = [
       { to: '/deals',             label: 'Deals',             icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
       { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
       { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/manager-targets',   label: 'My Targets',        icon: Star,            roles: ['Manager'] },
       { to: '/team',              label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin','SalesHead','VH'] },
