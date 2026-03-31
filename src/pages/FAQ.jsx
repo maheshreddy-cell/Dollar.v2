@@ -230,19 +230,43 @@ function getRelevantEntries(question, allEntries, maxCount = 5) {
   return scored.sort((a, b) => b.score - a.score).slice(0, maxCount)
 }
 
-// Build a compact, personalised system prompt
+// Build a rich, personalised system prompt
 function buildSystemPrompt(userCtx, relevantEntries) {
+  const pct = userCtx?.target > 0
+    ? Math.round((userCtx.achieved / userCtx.target) * 100)
+    : 0
+  const gap = userCtx?.target > 0
+    ? Math.max(0, userCtx.target - (userCtx.achieved ?? 0))
+    : 0
+
   const lines = [
-    `You are a helpful sales assistant for ${userCtx?.name || 'this agent'} at Airtribe.`,
-    userCtx?.target
-      ? `Their stats for ${userCtx?.month || 'this month'}: Target ₹${userCtx.target?.toLocaleString('en-IN')}, Achieved ₹${(userCtx.achieved ?? 0)?.toLocaleString('en-IN')} (${Math.round((userCtx.achieved || 0) / (userCtx.target || 1) * 100)}%), Commission ₹${(userCtx.commission ?? 0)?.toLocaleString('en-IN')}, Tier: ${userCtx.tier || 'N/A'}, Incentive eligible: ${userCtx.eligible ? 'YES' : 'NO (needs 100% target)'}.`
-      : '',
+    `You are Dollar, an intelligent sales performance assistant for Airtribe's sales team.`,
+    `You are currently helping ${userCtx?.name || 'a sales agent'} (${userCtx?.role || 'Agent'}).`,
     '',
-    'Relevant knowledge:',
-    ...relevantEntries.map(e => `Q: ${e.q}\nA: ${e.a}`),
+    userCtx?.target > 0 ? [
+      `=== LIVE DATA for ${userCtx.month} ===`,
+      `Target: ₹${userCtx.target.toLocaleString('en-IN')}`,
+      `Achieved (Paid): ₹${(userCtx.achieved ?? 0).toLocaleString('en-IN')} (${pct}%)`,
+      `Gap to 100%: ₹${gap.toLocaleString('en-IN')}`,
+      `Commission Earned: ₹${(userCtx.commission ?? 0).toLocaleString('en-IN')}`,
+      `Incentive Tier: ${userCtx.tier || 'Not assigned'}`,
+      `Eligible for incentives: ${userCtx.eligible ? 'YES ✓' : 'NO — needs 100% target'}`,
+      '=== END LIVE DATA ===',
+    ].join('\n') : 'Live data not available for this session.',
     '',
-    'Be concise. Answer based on their actual data when relevant.',
+    'RELEVANT KNOWLEDGE BASE:',
+    ...relevantEntries.map((e, i) => `[${i+1}] Q: ${e.q}\nA: ${e.a}`),
+    '',
+    'INSTRUCTIONS:',
+    '- Answer questions about their performance using the live data above',
+    '- For policy/process questions, use the knowledge base entries',
+    '- Be concise, warm, and motivating',
+    '- Use ₹ for amounts and Indian number format',
+    '- If asked about commission/target/eligibility, always reference their actual numbers',
+    '- If data shows they are close to a slab, mention it proactively',
+    '- Never make up numbers not in the live data',
   ].filter(Boolean)
+
   return lines.join('\n')
 }
 
@@ -257,28 +281,54 @@ async function getClaudeReply(messages, userMessage, userSummaryCtx) {
       .map(msg => ({ role: msg.from === 'user' ? 'user' : 'assistant', content: msg.text }))
     history.push({ role: 'user', content: userMessage })
 
-    // Call our Vercel serverless proxy — avoids CORS + keeps API key server-side
-    const response = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: history,
-      }),
-    })
+    const payload = {
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: history,
+    }
+
+    // Try server proxy first (avoids CORS + keeps key private)
+    let response
+    try {
+      response = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      // If proxy returned HTML (SPA fallback), treat as failure
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        throw new Error('Proxy returned non-JSON (SPA fallback)')
+      }
+    } catch (proxyErr) {
+      // Fallback: call Anthropic directly from browser
+      console.warn('[FAQ] proxy failed, trying direct:', proxyErr.message)
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+      if (!apiKey) throw new Error('No API key')
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-allow-browser': 'true',
+        },
+        body: JSON.stringify(payload),
+      })
+    }
 
     if (!response.ok) {
-      const err = await response.text()
-      console.error('[FAQ] Claude proxy error:', response.status, err)
+      const errText = await response.text()
+      console.error('[FAQ] Claude error:', response.status, errText.slice(0, 200))
       return { text: getBotReply(userMessage).text, isClaudeFallback: true }
     }
+
     const data = await response.json()
     const text = data.content?.[0]?.text ?? getBotReply(userMessage).text
     return { text, isClaudeFallback: false }
   } catch (err) {
-    console.warn('[FAQ Claude API]', err?.message || err)
+    console.warn('[FAQ] Claude unavailable:', err?.message || err)
     return { text: getBotReply(userMessage).text, isClaudeFallback: true }
   }
 }

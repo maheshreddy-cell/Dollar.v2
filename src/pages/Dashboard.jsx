@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   DollarSign, AlertTriangle, CheckCircle, Zap, Award,
-  Target, TrendingUp, BarChart2, Percent, Flame,
+  Target, TrendingUp, BarChart2, Percent,
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'

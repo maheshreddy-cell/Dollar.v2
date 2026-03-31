@@ -6,9 +6,9 @@ if (!BASE_URL) {
   console.error('[appsScript] VITE_APPS_SCRIPT_URL is not set in .env')
 }
 
-// ─── In-memory GET cache (5 min TTL) ─────────────────────────────────────────
+// ─── In-memory GET cache (55 s TTL — just under the 60 s refresh interval) ───
 const _cache = new Map()
-const CACHE_TTL = 5 * 60_000
+const CACHE_TTL = 55_000
 
 // Generation counter — incremented on every clearCache().
 // In-flight fetches capture their generation and only write to cache
