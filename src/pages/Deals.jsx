@@ -117,22 +117,32 @@ export default function Deals() {
   }, [effectiveUser?.email, isSHLevel])
 
   // ── Load Team (manager) list when VH scope changes ───────────────────────
-  // VH: always load managers under themselves
-  // SalesHead: load managers under selectedVH (only when a VH is selected)
+  // VH: always load managers directly under themselves
+  // SalesHead with VH selected: load managers under that VH
+  // SalesHead with no VH selected: load ALL managers across every VH
   useEffect(() => {
     if (!isVHLevel || !effectiveUser?.email) return
     setSelectedTeam(null)
 
-    const teamRootEmail = isSHLevel
-      ? selectedVH?.email   // SalesHead: only load teams when VH is selected
-      : effectiveUser.email  // VH: always load their own teams
+    if (isSHLevel && !selectedVH) {
+      // No VH selected — fetch managers from every VH in parallel
+      if (vhList.length === 0) { setTeamList([]); return }
+      Promise.all(vhList.map(vh => getTeam(vh.email)))
+        .then(results => {
+          const all = results.flat()
+            .filter(u => u.Role === 'Manager')
+            .map(u => ({ email: u.Email, name: u.Name }))
+          setTeamList(all)
+        })
+        .catch(() => setTeamList([]))
+      return
+    }
 
-    if (!teamRootEmail) { setTeamList([]); return }
-
+    const teamRootEmail = isSHLevel ? selectedVH.email : effectiveUser.email
     getTeam(teamRootEmail)
       .then(users => setTeamList(users.filter(u => u.Role === 'Manager').map(u => ({ email: u.Email, name: u.Name }))))
       .catch(() => setTeamList([]))
-  }, [effectiveUser?.email, selectedVH, isVHLevel, isSHLevel])
+  }, [effectiveUser?.email, selectedVH, isVHLevel, isSHLevel, vhList])
 
   // ── Agent scope root: deepest selected level ─────────────────────────────
   // Manager: their own email
