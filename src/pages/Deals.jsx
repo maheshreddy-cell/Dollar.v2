@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle, Bell, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Bell, Users, Layers, Building2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getDealsGrouped, getDealsGroupedForTeam, getLeaderboard } from '../services/api'
-
-const ALL_TEAM = '__all__' // sentinel for "All Team" picker option
+import { getDealsGrouped, getDealsGroupedForTeam, getLeaderboard, getTeam } from '../services/api'
 import { useRefresh } from '../hooks/useRefresh'
 import { formatINR } from '../utils/commission'
 
-const MANAGER_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
+const ALL_SENTINEL = '__all__' // sentinel for "All …" picker option
 
 // The 5 pipeline groups — each shows actual LoanDocsCollected sub-stages inside
 const STAGE_GROUPS = [
@@ -21,7 +19,7 @@ const STAGE_GROUPS = [
     barColor: 'bg-green-500',
     subBg: 'bg-green-50/40',
     defaultOpen: true,
-    atRiskStages: [],          // no at-risk stages in this group
+    atRiskStages: [],
   },
   {
     key: 'PARTIALLY_PAID',
@@ -54,7 +52,6 @@ const STAGE_GROUPS = [
     barColor: 'bg-amber-400',
     subBg: 'bg-amber-50/40',
     defaultOpen: false,
-    // These two stages are flagged "at risk" if > 3 working days old
     atRiskStages: ['awaiting for docs', 'post_approval pending'],
   },
   {
@@ -70,58 +67,122 @@ const STAGE_GROUPS = [
   },
 ]
 
+// Which roles see which hierarchy levels
+const SH_ROLES    = ['SalesHead', 'Admin']         // VH → Team → Agent pickers
+const VH_ROLES    = ['SalesHead', 'Admin', 'VH']   // Team → Agent pickers
+const MGR_ROLES   = ['Admin', 'SalesHead', 'VH', 'Manager']  // at least Agent picker
+
 export default function Deals() {
   const { effectiveUser, user } = useAuth()
   const { month } = useMonth()
   const tick = useRefresh()
 
-  const isManagerRole = MANAGER_ROLES.includes(effectiveUser?.role)
+  const role = effectiveUser?.role
+  const isManagerRole = MGR_ROLES.includes(role)
+  const isVHLevel     = VH_ROLES.includes(role)    // shows Team (manager) dropdown
+  const isSHLevel     = SH_ROLES.includes(role)    // shows VH dropdown
 
+  // ── VH picker (SalesHead/Admin only) ────────────────────────────────────
+  const [vhList, setVhList]         = useState([])  // { email, name }[]
+  const [selectedVH, setSelectedVH] = useState(null) // null = All VHs
+
+  // ── Team/manager picker (VH + SalesHead) ────────────────────────────────
+  const [teamList, setTeamList]         = useState([])
+  const [selectedTeam, setSelectedTeam] = useState(null) // null = All Teams
+
+  // ── Agent picker (all manager roles) ────────────────────────────────────
   const [teamAgents, setTeamAgents]     = useState([])
-  const [selectedAgent, setSelectedAgent] = useState(null) // { email, name }
-  const [data, setData]                 = useState(null)
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState('')
-  const [openGroups, setOpenGroups]     = useState(
+  const [selectedAgent, setSelectedAgent] = useState(null) // null | { email, name } | { email: ALL_SENTINEL }
+
+  // ── Deals state ─────────────────────────────────────────────────────────
+  const [data, setData]     = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]   = useState('')
+  const [openGroups, setOpenGroups] = useState(
     Object.fromEntries(STAGE_GROUPS.map(g => [g.key, g.defaultOpen]))
   )
   const [expandedDeals, setExpandedDeals] = useState({})
 
-  // Is a manager (real user) viewing as another manager via ViewAs?
   const isViewAs = effectiveUser && user && effectiveUser.email !== user.email
 
-  // For manager roles: load their team agents for the picker
+  // ── Load VH list for SalesHead/Admin ────────────────────────────────────
   useEffect(() => {
-    if (!isManagerRole || !effectiveUser?.email) return
+    if (!isSHLevel || !effectiveUser?.email) return
+    setSelectedVH(null)
+    setTeamList([])
+    setSelectedTeam(null)
+    getTeam(effectiveUser.email)
+      .then(users => setVhList(users.filter(u => u.Role === 'VH').map(u => ({ email: u.Email, name: u.Name }))))
+      .catch(() => setVhList([]))
+  }, [effectiveUser?.email, isSHLevel])
+
+  // ── Load Team (manager) list when VH scope changes ───────────────────────
+  // VH: always load managers under themselves
+  // SalesHead: load managers under selectedVH (only when a VH is selected)
+  useEffect(() => {
+    if (!isVHLevel || !effectiveUser?.email) return
+    setSelectedTeam(null)
+
+    const teamRootEmail = isSHLevel
+      ? selectedVH?.email   // SalesHead: only load teams when VH is selected
+      : effectiveUser.email  // VH: always load their own teams
+
+    if (!teamRootEmail) { setTeamList([]); return }
+
+    getTeam(teamRootEmail)
+      .then(users => setTeamList(users.filter(u => u.Role === 'Manager').map(u => ({ email: u.Email, name: u.Name }))))
+      .catch(() => setTeamList([]))
+  }, [effectiveUser?.email, selectedVH, isVHLevel, isSHLevel])
+
+  // ── Agent scope root: deepest selected level ─────────────────────────────
+  // Manager: their own email
+  // VH: selectedTeam?.email || vhEmail
+  // SalesHead: selectedTeam?.email || selectedVH?.email || shEmail
+  const agentScopeRoot = selectedTeam?.email
+    || (isSHLevel ? selectedVH?.email : null)
+    || effectiveUser?.email
+
+  // ── Load agents in scope ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isManagerRole || !agentScopeRoot) return
     setSelectedAgent(null)
-    getLeaderboard(effectiveUser.email, month)
+    getLeaderboard(agentScopeRoot, month)
       .then(rows => {
         setTeamAgents(rows)
-        // Default to "All Team" view
-        if (rows.length > 0) setSelectedAgent({ email: ALL_TEAM, name: 'All Team' })
+        setSelectedAgent({ email: ALL_SENTINEL, name: 'All' })
       })
       .catch(() => setTeamAgents([]))
-  }, [effectiveUser?.email, month, isManagerRole])
+  }, [agentScopeRoot, month, isManagerRole])
 
-  const isAllTeam = isManagerRole && selectedAgent?.email === ALL_TEAM
-
-  // Email or sentinel to load deals for
-  const dealEmail = isManagerRole ? selectedAgent?.email : effectiveUser?.email
+  // ── Determine what email/mode to fetch deals for ─────────────────────────
+  const isAllAgents = isManagerRole && selectedAgent?.email === ALL_SENTINEL
+  const dealEmail   = isManagerRole ? selectedAgent?.email : effectiveUser?.email
 
   useEffect(() => {
     if (!dealEmail) { setLoading(false); return }
     if (tick === 0) setLoading(true)
     setError('')
 
-    const fetchPromise = isAllTeam
+    const fetchPromise = isAllAgents
       ? getDealsGroupedForTeam(teamAgents.map(a => a.email), month)
       : getDealsGrouped(dealEmail, month)
 
     fetchPromise
       .then(res => { setData(res); setLoading(false) })
       .catch(() => { setError('Failed to load deals.'); setLoading(false) })
-  }, [dealEmail, month, tick, teamAgents.length])
+  }, [dealEmail, month, tick, teamAgents.length, isAllAgents])
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  // Build page title based on what is selected
+  const pageTitle = (() => {
+    if (!isManagerRole) return isViewAs ? `${effectiveUser.name}'s Deals` : 'My Deals'
+    if (!isAllAgents && selectedAgent) return `${selectedAgent.name}'s Deals`
+    if (selectedTeam) return `${selectedTeam.name}'s Team — All Agents (${teamAgents.length})`
+    if (isSHLevel && selectedVH) return `${selectedVH.name}'s VH — All Agents (${teamAgents.length})`
+    return `All Team Deals (${teamAgents.length} agents)`
+  })()
+
+  // ── Render loading / error states ────────────────────────────────────────
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
@@ -132,19 +193,19 @@ export default function Deals() {
     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
   )
 
-  // Manager with no team agents loaded yet
   if (isManagerRole && teamAgents.length === 0 && !loading) return (
     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-      No agents found for your team in {month}. Make sure agents are assigned under your hierarchy.
+      No agents found in this scope for {month}. Make sure agents are assigned under the selected hierarchy.
     </div>
   )
 
   if (!data) return null
 
-  const achievedPct = data.tAmount > 0 ? Math.min(100, (data.achieved / data.tAmount) * 100) : 0
+  const achievedPct  = data.tAmount > 0 ? Math.min(100, (data.achieved / data.tAmount) * 100) : 0
+  const totalAtRisk  = STAGE_GROUPS.flatMap(g => data.groups[g.key] || []).filter(d => d.isAtRisk).length
 
-  // Count total at-risk deals across all groups
-  const totalAtRisk = STAGE_GROUPS.flatMap(g => data.groups[g.key] || []).filter(d => d.isAtRisk).length
+  // Picker style shared
+  const pickerCls = "text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 bg-white"
 
   return (
     <>
@@ -160,36 +221,86 @@ export default function Deals() {
         {/* Page header */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">
-              {isManagerRole
-                ? isAllTeam
-                  ? `All Team Deals (${teamAgents.length} agents)`
-                  : selectedAgent ? `${selectedAgent.name}'s Deals` : 'Select an Agent'
-                : isViewAs ? `${effectiveUser.name}'s Deals` : 'My Deals'}
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-800">{pageTitle}</h2>
             <p className="text-sm text-gray-500">{month} · Pipeline overview</p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Agent picker — manager roles only */}
-            {isManagerRole && teamAgents.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Users size={14} className="text-gray-400" />
+          <div className="flex items-center gap-2 flex-wrap">
+
+            {/* ── VH picker (SalesHead / Admin) ── */}
+            {isSHLevel && vhList.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Building2 size={13} className="text-gray-400" />
                 <select
-                  value={selectedAgent?.email ?? ''}
+                  value={selectedVH?.email ?? ALL_SENTINEL}
                   onChange={e => {
                     const val = e.target.value
-                    if (val === ALL_TEAM) {
-                      setSelectedAgent({ email: ALL_TEAM, name: 'All Team' })
+                    if (val === ALL_SENTINEL) {
+                      setSelectedVH(null)
+                    } else {
+                      const vh = vhList.find(v => v.email === val)
+                      if (vh) setSelectedVH(vh)
+                    }
+                    setSelectedTeam(null)
+                    setSelectedAgent(null)
+                  }}
+                  className={pickerCls}
+                >
+                  <option value={ALL_SENTINEL}>🏢 All VHs ({vhList.length})</option>
+                  <option disabled>──────────</option>
+                  {vhList.map(v => (
+                    <option key={v.email} value={v.email}>{v.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* ── Team picker (VH, or SalesHead with VH selected) ── */}
+            {isVHLevel && teamList.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Layers size={13} className="text-gray-400" />
+                <select
+                  value={selectedTeam?.email ?? ALL_SENTINEL}
+                  onChange={e => {
+                    const val = e.target.value
+                    if (val === ALL_SENTINEL) {
+                      setSelectedTeam(null)
+                    } else {
+                      const tm = teamList.find(t => t.email === val)
+                      if (tm) setSelectedTeam(tm)
+                    }
+                    setSelectedAgent(null)
+                  }}
+                  className={pickerCls}
+                >
+                  <option value={ALL_SENTINEL}>👥 All Teams ({teamList.length})</option>
+                  <option disabled>──────────</option>
+                  {teamList.map(t => (
+                    <option key={t.email} value={t.email}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* ── Agent picker (all manager roles) ── */}
+            {isManagerRole && teamAgents.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Users size={13} className="text-gray-400" />
+                <select
+                  value={selectedAgent?.email ?? ALL_SENTINEL}
+                  onChange={e => {
+                    const val = e.target.value
+                    if (val === ALL_SENTINEL) {
+                      setSelectedAgent({ email: ALL_SENTINEL, name: 'All' })
                     } else {
                       const agent = teamAgents.find(a => a.email === val)
                       if (agent) setSelectedAgent({ email: agent.email, name: agent.name })
                     }
                   }}
-                  className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 bg-white"
+                  className={pickerCls}
                 >
-                  <option value={ALL_TEAM}>👥 All Team ({teamAgents.length})</option>
-                  <option disabled>──────────────</option>
+                  <option value={ALL_SENTINEL}>👤 All Agents ({teamAgents.length})</option>
+                  <option disabled>──────────</option>
                   {teamAgents.map(a => (
                     <option key={a.email} value={a.email}>{a.name}</option>
                   ))}
@@ -209,7 +320,7 @@ export default function Deals() {
           </div>
         </div>
 
-        {/* At-risk notice for agents themselves (not shown to managers) */}
+        {/* At-risk notice for agents (not shown to managers) */}
         {!isManagerRole && !isViewAs && totalAtRisk > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3 mb-4">
             <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
@@ -224,7 +335,7 @@ export default function Deals() {
           </div>
         )}
 
-        {/* Slim top summary bar */}
+        {/* Slim summary bar */}
         <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-6 flex-wrap text-sm mb-4">
           <span className="text-gray-500">
             Target <span className="font-semibold text-gray-800">{formatINR(data.tAmount)}</span>
@@ -236,7 +347,7 @@ export default function Deals() {
               {achievedPct.toFixed(0)}%
             </span>
           </span>
-          {!isAllTeam && data.commissionPreset && (
+          {!isAllAgents && data.commissionPreset && (
             <>
               <span className="text-gray-300">|</span>
               <span className="text-gray-500">
@@ -244,7 +355,7 @@ export default function Deals() {
               </span>
             </>
           )}
-          {isAllTeam && (
+          {isAllAgents && (
             <>
               <span className="text-gray-300">|</span>
               <span className="text-gray-500">
@@ -308,11 +419,11 @@ export default function Deals() {
         {/* Stage groups */}
         {STAGE_GROUPS.map((group, idx) => {
           const groupData = data.groups[group.key] || []
-          const total = data.totals[group.key] || { value: 0, count: 0 }
-          const pct = data.totalPipeline > 0
+          const total     = data.totals[group.key] || { value: 0, count: 0 }
+          const pct       = data.totalPipeline > 0
             ? ((total.value / data.totalPipeline) * 100).toFixed(0)
             : 0
-          const isOpen = openGroups[group.key]
+          const isOpen      = openGroups[group.key]
           const groupAtRisk = groupData.filter(d => d.isAtRisk).length
 
           // Sub-group by actual LoanDocsCollected value
@@ -322,8 +433,8 @@ export default function Deals() {
             if (!subGroupMap[stage]) subGroupMap[stage] = []
             subGroupMap[stage].push(deal)
           }
-          const subGroupEntries = Object.entries(subGroupMap)
-          const showSubHeaders = subGroupEntries.length > 1
+          const subGroupEntries  = Object.entries(subGroupMap)
+          const showSubHeaders   = subGroupEntries.length > 1
 
           return (
             <div
@@ -368,13 +479,12 @@ export default function Deals() {
                     <p className="text-sm text-gray-400 text-center py-4">No deals in this stage</p>
                   ) : (
                     subGroupEntries.map(([stageName, stageDeals]) => {
-                      const isAtRiskStage = group.atRiskStages.includes(stageName.toLowerCase())
-                      const stageTotal = stageDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
-                      const stageAtRiskCount = stageDeals.filter(d => d.isAtRisk).length
+                      const isAtRiskStage  = group.atRiskStages.includes(stageName.toLowerCase())
+                      const stageTotal     = stageDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+                      const stageAtRiskCnt = stageDeals.filter(d => d.isAtRisk).length
 
                       return (
                         <div key={stageName}>
-                          {/* Sub-stage header — shown when multiple stages exist in group */}
                           {showSubHeaders && (
                             <div className={`px-4 py-2 ${group.subBg} border-b border-gray-100 flex items-center justify-between`}>
                               <div className="flex items-center gap-2 flex-wrap">
@@ -384,9 +494,9 @@ export default function Deals() {
                                     <AlertTriangle size={9} /> At Risk Stage
                                   </span>
                                 )}
-                                {stageAtRiskCount > 0 && (
+                                {stageAtRiskCnt > 0 && (
                                   <span className="text-[10px] font-medium text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
-                                    {stageAtRiskCount} flagged
+                                    {stageAtRiskCnt} flagged
                                   </span>
                                 )}
                               </div>
@@ -396,10 +506,9 @@ export default function Deals() {
                             </div>
                           )}
 
-                          {/* Individual deal rows */}
                           <div className="divide-y divide-gray-100">
                             {stageDeals.map((deal, di) => {
-                              const dealKey = `${deal.LeadName}-${group.key}-${stageName}-${di}`
+                              const dealKey    = `${deal.LeadName}-${group.key}-${stageName}-${di}`
                               const isExpanded = expandedDeals[dealKey]
                               return (
                                 <div key={dealKey}>
@@ -419,7 +528,7 @@ export default function Deals() {
                                             : deal.PaymentDate
                                               ? new Date(deal.PaymentDate).toLocaleDateString('en-IN')
                                               : '—'}
-                                          {isAllTeam && deal.Email && (
+                                          {isAllAgents && deal.Email && (
                                             <span className="ml-2 text-gray-400">
                                               · {teamAgents.find(a => a.email === deal.Email)?.name ?? deal.Email}
                                             </span>
@@ -435,7 +544,6 @@ export default function Deals() {
                                     <p className="text-sm font-bold text-gray-700 shrink-0 ml-2">{formatINR(deal.TotalValue || 0)}</p>
                                   </button>
 
-                                  {/* Expanded deal details */}
                                   {isExpanded && (
                                     <div className="px-10 pb-3 bg-gray-50/50 border-t border-gray-100">
                                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">

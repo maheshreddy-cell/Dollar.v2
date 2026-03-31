@@ -36,7 +36,7 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+      <header className="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6 shrink-0">
         <h1 className="text-base font-semibold text-gray-800">{title}</h1>
 
         <div className="flex items-center gap-3">
