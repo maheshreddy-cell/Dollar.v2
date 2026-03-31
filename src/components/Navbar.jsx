@@ -14,7 +14,7 @@ const PAGE_TITLES = {
   '/metrics':          'Metrics',
   '/org':              'Org Chart',
   '/commission-config':'Commission Config',
-  '/faq':              'FAQ & AI Help',
+  '/faq':              'FAQ',
 }
 
 export default function Navbar() {

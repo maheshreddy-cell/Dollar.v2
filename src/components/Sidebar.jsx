@@ -24,7 +24,7 @@ const NAV_GROUPS = [
   {
     label: 'Support',
     items: [
-      { to: '/faq', label: 'FAQ / AI Help', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/faq', label: 'FAQ', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
     ],
   },
 ]
