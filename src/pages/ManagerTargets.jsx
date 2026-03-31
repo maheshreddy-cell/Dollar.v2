@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, getManagerSlabs, calcManagerCommission, getLeaderboard } from '../services/api'
+import { getManagerTargets, calcManagerCommission, getLeaderboard } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { TrendingUp, CheckCircle2, AlertCircle, Target, Users } from 'lucide-react'
 
@@ -18,11 +18,12 @@ function SlabTable({ slabs, teamMetric, label }) {
     )
   }
 
+  // slabs: [{targetAmount, commissionPct}] sorted ascending
   const qualifying = slabs
-    .filter(s => teamMetric >= Number(s.MaxTarget))
-    .sort((a, b) => Number(b.MaxTarget) - Number(a.MaxTarget))
+    .filter(s => teamMetric >= Number(s.targetAmount))
+    .sort((a, b) => Number(b.targetAmount) - Number(a.targetAmount))
   const activeSlab = qualifying[0] ?? null
-  const commission = activeSlab ? teamMetric * Number(activeSlab.CommissionPct) / 100 : 0
+  const commission = activeSlab ? teamMetric * Number(activeSlab.commissionPct) / 100 : 0
 
   return (
     <div className="overflow-x-auto">
@@ -37,29 +38,20 @@ function SlabTable({ slabs, teamMetric, label }) {
         </thead>
         <tbody className="divide-y divide-gray-50">
           {slabs.map((s, i) => {
-            const isActive   = activeSlab?.SlabName === s.SlabName
-            const isReached  = teamMetric >= Number(s.MaxTarget)
-            const pct        = Number(s.CommissionPct)
-            const payoutAtTarget = Number(s.MaxTarget) * pct / 100
+            const isActive  = activeSlab === s
+            const isReached = teamMetric >= Number(s.targetAmount)
+            const pct       = Number(s.commissionPct)
+            const payoutAtTarget = Number(s.targetAmount) * pct / 100
 
             return (
-              <tr
-                key={s.SlabName}
-                className={`transition-colors ${
-                  isActive
-                    ? 'bg-green-50'
-                    : isReached
-                    ? 'bg-gray-50/50'
-                    : ''
-                }`}
-              >
+              <tr key={i} className={`transition-colors ${isActive ? 'bg-green-50' : isReached ? 'bg-gray-50/50' : ''}`}>
                 <td className="py-2.5 pr-3">
                   <div className="flex items-center gap-2">
                     <span className={`text-base leading-none ${isActive ? 'text-green-600' : isReached ? 'text-gray-400' : 'text-gray-300'}`}>
                       {SLAB_INDICATORS[i] ?? `S${i + 1}`}
                     </span>
                     <span className={`text-xs font-semibold ${isActive ? 'text-green-700' : 'text-gray-600'}`}>
-                      {s.SlabName}
+                      Slab {i + 1}
                     </span>
                     {isActive && (
                       <span className="text-[9px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full tracking-wide">
@@ -69,7 +61,7 @@ function SlabTable({ slabs, teamMetric, label }) {
                   </div>
                 </td>
                 <td className={`py-2.5 pr-3 text-right text-xs font-semibold ${isActive ? 'text-green-700' : isReached ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {formatINR(Number(s.MaxTarget))}
+                  {formatINR(Number(s.targetAmount))}
                 </td>
                 <td className={`py-2.5 pr-3 text-right text-xs font-bold ${isActive ? 'text-green-600' : isReached ? 'text-blue-500' : 'text-gray-400'}`}>
                   {pct}%
@@ -90,12 +82,12 @@ function SlabTable({ slabs, teamMetric, label }) {
         <div>
           <p className={`text-xs font-semibold ${activeSlab ? 'text-green-700' : 'text-gray-500'}`}>
             {activeSlab
-              ? `${activeSlab.SlabName} active · ${Number(activeSlab.CommissionPct)}% on ${formatINR(teamMetric)}`
+              ? `Slab ${slabs.indexOf(activeSlab) + 1} active · ${Number(activeSlab.commissionPct)}% on ${formatINR(teamMetric)}`
               : 'No slab reached yet'}
           </p>
           {!activeSlab && slabs[0] && (
             <p className="text-xs text-gray-400 mt-0.5">
-              {formatINR(Number(slabs[0].MaxTarget) - teamMetric)} more to unlock {slabs[0].SlabName} ({SLAB_INDICATORS[0]})
+              {formatINR(Number(slabs[0].targetAmount) - teamMetric)} more to unlock Slab 1 ({SLAB_INDICATORS[0]})
             </p>
           )}
         </div>
@@ -134,10 +126,10 @@ export default function ManagerTargets() {
   const { month } = useMonth()
   const tick = useRefresh()
 
-  const [managerTarget, setManagerTarget] = useState(null) // { ProjectedTarget, RealisedTarget }
+  const [managerTarget, setManagerTarget] = useState(null)
   const [projSlabs, setProjSlabs]         = useState([])
   const [realSlabs, setRealSlabs]         = useState([])
-  const [teamData, setTeamData]           = useState(null)  // { teamSaleValue, teamAchieved, agentCount }
+  const [teamData, setTeamData]           = useState(null)
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState('')
 
@@ -148,17 +140,18 @@ export default function ManagerTargets() {
 
     Promise.all([
       getManagerTargets(effectiveUser.email, month),
-      getManagerSlabs('Projected'),
-      getManagerSlabs('Realised'),
       getLeaderboard(effectiveUser.email, month),
     ])
-      .then(([targets, pSlabs, rSlabs, agents]) => {
-        setManagerTarget(targets[0] ?? null)
-        setProjSlabs(pSlabs)
-        setRealSlabs(rSlabs)
+      .then(([targets, agents]) => {
+        const latest = targets[0] ?? null
+        setManagerTarget(latest)
+        // Slabs come from the assignment, sorted ascending by targetAmount
+        const sortAsc = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+        setProjSlabs(sortAsc(latest?.projectedSlabs))
+        setRealSlabs(sortAsc(latest?.realisedSlabs))
 
-        const teamSaleValue  = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
-        const teamAchieved   = agents.reduce((s, a) => s + (a.achieved       || 0), 0)
+        const teamSaleValue = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
+        const teamAchieved  = agents.reduce((s, a) => s + (a.achieved       || 0), 0)
         setTeamData({ teamSaleValue, teamAchieved, agentCount: agents.length })
         setLoading(false)
       })
@@ -175,8 +168,9 @@ export default function ManagerTargets() {
     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
   )
 
-  const projTarget    = Number(managerTarget?.ProjectedTarget || 0)
-  const realTarget    = Number(managerTarget?.RealisedTarget  || 0)
+  // Highest slab level = the "assigned target" for display
+  const projTarget = projSlabs.length ? Math.max(...projSlabs.map(s => Number(s.targetAmount))) : 0
+  const realTarget = realSlabs.length ? Math.max(...realSlabs.map(s => Number(s.targetAmount))) : 0
   const teamSaleValue = teamData?.teamSaleValue ?? 0
   const teamAchieved  = teamData?.teamAchieved  ?? 0
   const agentCount    = teamData?.agentCount    ?? 0

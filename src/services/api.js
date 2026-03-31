@@ -788,7 +788,15 @@ function editDistance(a, b) {
 
 // ─── Manager Targets ─────────────────────────────────────────────────────────
 // Reads from the "ManagerTargets" sheet.
-// Expected columns: Key | ManagerEmail | Month | ProjectedTarget | RealisedTarget | AssignedBy | AssignedAt
+// Expected columns: Key | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
+// ProjectedSlabs / RealisedSlabs = JSON array of { targetAmount, commissionPct }
+
+function parseMgrSlabsJson(json) {
+  try {
+    const arr = JSON.parse(json || '[]')
+    return Array.isArray(arr) ? arr : []
+  } catch { return [] }
+}
 
 export const getManagerTargets = async (managerEmail, month) => {
   const rows = await appsScript.getSheet('ManagerTargets')
@@ -800,30 +808,34 @@ export const getManagerTargets = async (managerEmail, month) => {
       return em === lower && (!month || mon === month)
     })
     .sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))
+    .map(r => ({
+      ...r,
+      projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs),
+      realisedSlabs:  parseMgrSlabsJson(r.RealisedSlabs),
+    }))
 }
 
 export const getManagerTargetHistory = async (managerEmail) => {
   const rows = await appsScript.getSheet('ManagerTargets')
   const lower = (managerEmail ?? '').trim().toLowerCase()
   const filtered = rows.filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
-  // Deduplicate by month — keep latest per month
   const byMonth = new Map()
   for (const r of filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))) {
     const mon = normalizeMonth(r.Month)
-    if (mon && !byMonth.has(mon)) byMonth.set(mon, r)
+    if (mon && !byMonth.has(mon)) byMonth.set(mon, { ...r, Month: mon, projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs), realisedSlabs: parseMgrSlabsJson(r.RealisedSlabs) })
   }
-  return [...byMonth.values()].sort((a, b) => normalizeMonth(b.Month).localeCompare(normalizeMonth(a.Month)))
+  return [...byMonth.values()].sort((a, b) => (b.Month || '').localeCompare(a.Month || ''))
 }
 
 export const assignManagerTarget = async (data, assignerEmail) => {
-  // data: { email, month, projectedTarget, realisedTarget }
+  // data: { email, month, projectedSlabs: [{targetAmount, commissionPct}], realisedSlabs: [...] }
   const key = `mgr_${data.email.trim().toLowerCase()}_${data.month}`
   const row = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
-    Number(data.projectedTarget) || 0,
-    Number(data.realisedTarget)  || 0,
+    JSON.stringify(data.projectedSlabs ?? []),
+    JSON.stringify(data.realisedSlabs  ?? []),
     assignerEmail,
     new Date().toISOString(),
   ]
@@ -857,8 +869,8 @@ export const getManagerSlabs = async (type) => {
 export function calcManagerCommission(teamMetric, slabs) {
   if (!slabs?.length || !teamMetric) return 0
   const qualifying = slabs
-    .filter(s => teamMetric >= Number(s.MaxTarget))
-    .sort((a, b) => Number(b.MaxTarget) - Number(a.MaxTarget))
+    .filter(s => teamMetric >= Number(s.targetAmount))
+    .sort((a, b) => Number(b.targetAmount) - Number(a.targetAmount))
   if (!qualifying.length) return 0
-  return teamMetric * Number(qualifying[0].CommissionPct) / 100
+  return teamMetric * Number(qualifying[0].commissionPct) / 100
 }

@@ -60,17 +60,18 @@ export default function AssignTargets() {
   const [deletingMonth,    setDeletingMonth]  = useState(null)
 
   // ── Manager-specific state ───────────────────────────────────────────────────
-  const [mgrProjected,     setMgrProjected]   = useState('')
-  const [mgrRealised,      setMgrRealised]    = useState('')
-  const [mgrHistory,       setMgrHistory]     = useState([])
-  const [mgrHistoryLoad,   setMgrHistoryLoad] = useState(false)
-  const [mgrProjectedSlabs, setMgrProjSlabs]  = useState([])
-  const [mgrRealisedSlabs,  setMgrRealSlabs]  = useState([])
-  const [mgrSubmitting,    setMgrSubmitting]  = useState(false)
-  const [mgrSuccess,       setMgrSuccess]     = useState(false)
-  const [mgrError,         setMgrError]       = useState('')
-  const [mgrConfirmDel,    setMgrConfirmDel]  = useState(null)
-  const [mgrDeleting,      setMgrDeleting]    = useState(null)
+  const EMPTY_MGR_SLAB = { targetAmount: '', commissionPct: '' }
+  const INIT_MGR_SLABS = () => [EMPTY_MGR_SLAB, EMPTY_MGR_SLAB, EMPTY_MGR_SLAB, EMPTY_MGR_SLAB]
+
+  const [mgrProjSlabs,   setMgrProjSlabs]   = useState(INIT_MGR_SLABS)
+  const [mgrRealSlabs,   setMgrRealSlabs]   = useState(INIT_MGR_SLABS)
+  const [mgrHistory,     setMgrHistory]     = useState([])
+  const [mgrHistoryLoad, setMgrHistoryLoad] = useState(false)
+  const [mgrSubmitting,  setMgrSubmitting]  = useState(false)
+  const [mgrSuccess,     setMgrSuccess]     = useState(false)
+  const [mgrError,       setMgrError]       = useState('')
+  const [mgrConfirmDel,  setMgrConfirmDel]  = useState(null)
+  const [mgrDeleting,    setMgrDeleting]    = useState(null)
 
   const isManagerMember = selected?.Role === 'Manager'
   const isAgent   = ['Agent', 'PreSales'].includes(selected?.Role)
@@ -109,8 +110,8 @@ export default function AssignTargets() {
     setMgrConfirmDel(null)
     setMgrSuccess(false)
     setMgrError('')
-    setMgrProjected('')
-    setMgrRealised('')
+    setMgrProjSlabs(INIT_MGR_SLABS())
+    setMgrRealSlabs(INIT_MGR_SLABS())
     if (selected.Role === 'Manager') {
       reloadManagerHistory()
       // Load slabs for reference
@@ -172,10 +173,31 @@ export default function AssignTargets() {
     setCommissionStartDate('')
   }
 
+  function parseMgrSlabs(json) {
+    try {
+      const arr = JSON.parse(json || '[]')
+      if (Array.isArray(arr) && arr.length) {
+        const padded = [...arr.map(s => ({ targetAmount: String(s.targetAmount ?? ''), commissionPct: String(s.commissionPct ?? '') }))]
+        while (padded.length < 4) padded.push(EMPTY_MGR_SLAB)
+        return padded
+      }
+    } catch { /* ignore */ }
+    return INIT_MGR_SLABS()
+  }
+
   function reloadManagerHistory() {
     setMgrHistoryLoad(true)
     getManagerTargetHistory(selected?.Email)
-      .then(res => setMgrHistory(res ?? []))
+      .then(res => {
+        const history = res ?? []
+        setMgrHistory(history)
+        // Pre-fill form with current month's data if exists
+        const current = history.find(t => String(t.Month || '').trim() === formMonth)
+        if (current) {
+          setMgrProjSlabs(parseMgrSlabs(current.ProjectedSlabs))
+          setMgrRealSlabs(parseMgrSlabs(current.RealisedSlabs))
+        }
+      })
       .catch(() => {})
       .finally(() => setMgrHistoryLoad(false))
   }
@@ -423,32 +445,101 @@ export default function AssignTargets() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1.5 block flex items-center gap-1">
-                      📊 Projected Target (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={mgrProjected}
-                      onChange={e => setMgrProjected(e.target.value)}
-                      placeholder="e.g. 7200000"
-                      className="w-full border border-blue-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    />
-                    {mgrProjected && <p className="text-xs text-blue-600 mt-1">{formatINR(Number(mgrProjected))}</p>}
+                {/* ── Projected slabs ── */}
+                <div className="mb-5">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">📊 Projected Slabs</p>
+                  <div className="border border-blue-100 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-blue-50 text-[10px] font-semibold uppercase text-blue-600">
+                          <th className="px-3 py-2 text-left w-12">Slab</th>
+                          <th className="px-3 py-2 text-left">Target Amount (₹)</th>
+                          <th className="px-3 py-2 text-left">Commission Rate (%)</th>
+                          <th className="px-3 py-2 text-right text-blue-400">Payout preview</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-blue-50">
+                        {mgrProjSlabs.map((s, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2 text-xs font-bold text-blue-400">S{i + 1}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                value={s.targetAmount}
+                                onChange={e => setMgrProjSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, targetAmount: e.target.value } : r))}
+                                placeholder="e.g. 7200000"
+                                className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              />
+                              {s.targetAmount && <p className="text-[10px] text-blue-500 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={s.commissionPct}
+                                onChange={e => setMgrProjSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, commissionPct: e.target.value } : r))}
+                                placeholder="e.g. 0.1"
+                                className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right text-xs text-blue-500 font-semibold">
+                              {s.targetAmount && s.commissionPct
+                                ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1.5 block flex items-center gap-1">
-                      ✅ Realised Target (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={mgrRealised}
-                      onChange={e => setMgrRealised(e.target.value)}
-                      placeholder="e.g. 5700000"
-                      className="w-full border border-green-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                    />
-                    {mgrRealised && <p className="text-xs text-green-600 mt-1">{formatINR(Number(mgrRealised))}</p>}
+                </div>
+
+                {/* ── Realised slabs ── */}
+                <div className="mb-5">
+                  <p className="text-xs font-bold text-green-700 uppercase tracking-wide mb-2">✅ Realised Slabs</p>
+                  <div className="border border-green-100 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-green-50 text-[10px] font-semibold uppercase text-green-600">
+                          <th className="px-3 py-2 text-left w-12">Slab</th>
+                          <th className="px-3 py-2 text-left">Target Amount (₹)</th>
+                          <th className="px-3 py-2 text-left">Commission Rate (%)</th>
+                          <th className="px-3 py-2 text-right text-green-400">Payout preview</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-green-50">
+                        {mgrRealSlabs.map((s, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2 text-xs font-bold text-green-400">S{i + 1}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                value={s.targetAmount}
+                                onChange={e => setMgrRealSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, targetAmount: e.target.value } : r))}
+                                placeholder="e.g. 5700000"
+                                className="w-full border border-green-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                              {s.targetAmount && <p className="text-[10px] text-green-500 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={s.commissionPct}
+                                onChange={e => setMgrRealSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, commissionPct: e.target.value } : r))}
+                                placeholder="e.g. 0.2"
+                                className="w-full border border-green-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right text-xs text-green-500 font-semibold">
+                              {s.targetAmount && s.commissionPct
+                                ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
@@ -456,10 +547,20 @@ export default function AssignTargets() {
                   onClick={async () => {
                     setMgrError('')
                     setMgrSuccess(false)
-                    if (!mgrProjected && !mgrRealised) { setMgrError('Enter at least one target.'); return }
+                    const projFilled = mgrProjSlabs.filter(s => s.targetAmount || s.commissionPct)
+                    const realFilled = mgrRealSlabs.filter(s => s.targetAmount || s.commissionPct)
+                    if (!projFilled.length && !realFilled.length) { setMgrError('Enter at least one slab.'); return }
+                    const toSave = arr => arr
+                      .filter(s => s.targetAmount && s.commissionPct)
+                      .map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) }))
                     setMgrSubmitting(true)
                     try {
-                      await assignManagerTarget({ email: selected.Email, month: formMonth, projectedTarget: mgrProjected, realisedTarget: mgrRealised }, user.email)
+                      await assignManagerTarget({
+                        email: selected.Email,
+                        month: formMonth,
+                        projectedSlabs: toSave(mgrProjSlabs),
+                        realisedSlabs:  toSave(mgrRealSlabs),
+                      }, user.email)
                       setMgrSuccess(true)
                       reloadManagerHistory()
                     } catch (err) {
@@ -473,27 +574,6 @@ export default function AssignTargets() {
                 >
                   {mgrSubmitting ? 'Saving…' : 'Save Manager Targets'}
                 </button>
-
-                {/* Reference slab display */}
-                {(mgrProjectedSlabs.length > 0 || mgrRealisedSlabs.length > 0) && (
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    {[['Projected', mgrProjectedSlabs, 'blue'], ['Realised', mgrRealisedSlabs, 'green']].map(([label, slabs, color]) => (
-                      slabs.length > 0 && (
-                        <div key={label}>
-                          <p className={`text-xs font-semibold text-${color}-700 uppercase tracking-wide mb-2`}>{label} Slabs</p>
-                          <div className="space-y-1">
-                            {slabs.map((s, i) => (
-                              <div key={s.SlabName} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-${color}-50`}>
-                                <span className={`font-medium text-${color}-800`}>{s.SlabName}</span>
-                                <span className={`text-${color}-600`}>{formatINR(Number(s.MaxTarget))} → {s.CommissionPct}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           ) : (
