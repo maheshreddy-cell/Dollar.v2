@@ -561,11 +561,24 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
 }
 
 // ─── Commission Config ────────────────────────────────────────────────────────
+// Single "CommissionConfig" sheet handles both agent slabs and manager targets.
+// Column layout:
+//   SlabName | MaxTarget | CommissionPct | CreatedBy | Type | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
+// Rows where Type is blank or "AgentSlab" → agent commission slabs
+// Rows where Type = "ManagerTarget"        → manager projected/realised targets
 
-export const getCommissionConfig = () => appsScript.getSheet('CommissionConfig')
+// Agent slab rows only (Type blank or AgentSlab)
+export const getCommissionConfig = async () => {
+  const rows = await appsScript.getSheet('CommissionConfig')
+  return rows.filter(r => {
+    const t = String(r.Type || '').trim()
+    return t === '' || t === 'AgentSlab'
+  })
+}
 
 export const addSlab = (data, createdBy) => {
-  const row = [data.slabName, Number(data.maxTarget), Number(data.commissionPct), createdBy]
+  // [SlabName, MaxTarget, CommissionPct, CreatedBy, Type, ManagerEmail, Month, ProjectedSlabs, RealisedSlabs, AssignedBy, AssignedAt]
+  const row = [data.slabName, Number(data.maxTarget), Number(data.commissionPct), createdBy, 'AgentSlab', '', '', '', '', '', '']
   return appsScript.appendRow('CommissionConfig', row)
 }
 
@@ -786,10 +799,10 @@ function editDistance(a, b) {
   return dp[m][n]
 }
 
-// ─── Manager Targets ─────────────────────────────────────────────────────────
-// Reads from the "ManagerTargets" sheet.
-// Expected columns: Key | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
-// ProjectedSlabs / RealisedSlabs = JSON array of { targetAmount, commissionPct }
+// ─── Manager Targets (stored in CommissionConfig sheet, Type = "ManagerTarget") ──
+// Row layout in CommissionConfig:
+//   SlabName(=Key) | MaxTarget(unused) | CommissionPct(unused) | CreatedBy(unused)
+//   | Type | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
 
 function parseMgrSlabsJson(json) {
   try {
@@ -798,10 +811,14 @@ function parseMgrSlabsJson(json) {
   } catch { return [] }
 }
 
+function mgrRows(rows) {
+  return rows.filter(r => String(r.Type || '').trim() === 'ManagerTarget')
+}
+
 export const getManagerTargets = async (managerEmail, month) => {
-  const rows = await appsScript.getSheet('ManagerTargets')
+  const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
-  return rows
+  return mgrRows(rows)
     .filter(r => {
       const em  = String(r.ManagerEmail || '').trim().toLowerCase()
       const mon = normalizeMonth(r.Month)
@@ -816,9 +833,9 @@ export const getManagerTargets = async (managerEmail, month) => {
 }
 
 export const getManagerTargetHistory = async (managerEmail) => {
-  const rows = await appsScript.getSheet('ManagerTargets')
+  const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
-  const filtered = rows.filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
+  const filtered = mgrRows(rows).filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
   const byMonth = new Map()
   for (const r of filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))) {
     const mon = normalizeMonth(r.Month)
@@ -829,9 +846,12 @@ export const getManagerTargetHistory = async (managerEmail) => {
 
 export const assignManagerTarget = async (data, assignerEmail) => {
   // data: { email, month, projectedSlabs: [{targetAmount, commissionPct}], realisedSlabs: [...] }
+  // Stored in CommissionConfig sheet with Type = "ManagerTarget"
   const key = `mgr_${data.email.trim().toLowerCase()}_${data.month}`
+  // [SlabName, MaxTarget, CommissionPct, CreatedBy, Type, ManagerEmail, Month, ProjectedSlabs, RealisedSlabs, AssignedBy, AssignedAt]
   const row = [
-    key,
+    key, '', '', '',
+    'ManagerTarget',
     data.email.trim().toLowerCase(),
     data.month,
     JSON.stringify(data.projectedSlabs ?? []),
@@ -839,7 +859,7 @@ export const assignManagerTarget = async (data, assignerEmail) => {
     assignerEmail,
     new Date().toISOString(),
   ]
-  const result = await appsScript.appendRow('ManagerTargets', row)
+  const result = await appsScript.appendRow('CommissionConfig', row)
   clearCache()
   return result
 }
@@ -848,7 +868,7 @@ export const deleteManagerTarget = async (email, month) => {
   const key = `mgr_${email.trim().toLowerCase()}_${month}`
   let deleted = true
   while (deleted) {
-    try { await appsScript.deleteRow('ManagerTargets', 'Key', key) }
+    try { await appsScript.deleteRow('CommissionConfig', 'SlabName', key) }
     catch { deleted = false }
   }
   clearCache()
