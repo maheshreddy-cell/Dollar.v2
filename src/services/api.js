@@ -567,23 +567,11 @@ export const getTeamSalesAnalytics = async (rootEmail, month, fullOrg = false) =
 // Rows where Type is blank or "AgentSlab" → agent commission slabs
 // Rows where Type = "ManagerTarget"        → manager projected/realised targets
 
-// Agent slab rows only (Type blank or AgentSlab)
-export const getCommissionConfig = async () => {
-  const rows = await appsScript.getSheet('CommissionConfig')
-  return rows.filter(r => {
-    const t = String(r.Type || '').trim()
-    return t === '' || t === 'AgentSlab'
-  })
-}
-
-export const addSlab = (data, createdBy) => {
-  // [SlabName, MaxTarget, CommissionPct, CreatedBy, Type, ManagerEmail, Month, ProjectedSlabs, RealisedSlabs, AssignedBy, AssignedAt]
-  const row = [data.slabName, Number(data.maxTarget), Number(data.commissionPct), createdBy, 'AgentSlab', '', '', '', '', '', '']
-  return appsScript.appendRow('CommissionConfig', row)
-}
-
-export const deleteSlab = (slabName) =>
-  appsScript.deleteRow('CommissionConfig', 'SlabName', slabName)
+// CommissionConfig sheet is now used exclusively for manager targets.
+// Agent commission presets (Basic/Average/Pro) are hardcoded in targetPresets.js.
+export const getCommissionConfig = async () => []
+export const addSlab    = async () => ({ success: true })
+export const deleteSlab = async () => ({ success: true })
 
 // ─── Helpers (internal) ───────────────────────────────────────────────────────
 
@@ -799,10 +787,11 @@ function editDistance(a, b) {
   return dp[m][n]
 }
 
-// ─── Manager Targets (stored in CommissionConfig sheet, Type = "ManagerTarget") ──
-// Row layout in CommissionConfig:
-//   SlabName(=Key) | MaxTarget(unused) | CommissionPct(unused) | CreatedBy(unused)
-//   | Type | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
+// ─── Manager Targets (stored in CommissionConfig sheet) ──────────────────────
+// Sheet: CommissionConfig
+// Columns: Key | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
+// Key = "mgr_email_month"  (unique per manager per month, used for deletion)
+// ProjectedSlabs / RealisedSlabs = JSON  [{targetAmount, commissionPct}]
 
 function parseMgrSlabsJson(json) {
   try {
@@ -811,47 +800,46 @@ function parseMgrSlabsJson(json) {
   } catch { return [] }
 }
 
-function mgrRows(rows) {
-  return rows.filter(r => String(r.Type || '').trim() === 'ManagerTarget')
+function toMgrRecord(r) {
+  return {
+    ...r,
+    Month:          normalizeMonth(r.Month),
+    projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs),
+    realisedSlabs:  parseMgrSlabsJson(r.RealisedSlabs),
+  }
 }
 
 export const getManagerTargets = async (managerEmail, month) => {
   const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
-  return mgrRows(rows)
+  return rows
     .filter(r => {
       const em  = String(r.ManagerEmail || '').trim().toLowerCase()
       const mon = normalizeMonth(r.Month)
       return em === lower && (!month || mon === month)
     })
     .sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))
-    .map(r => ({
-      ...r,
-      projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs),
-      realisedSlabs:  parseMgrSlabsJson(r.RealisedSlabs),
-    }))
+    .map(toMgrRecord)
 }
 
 export const getManagerTargetHistory = async (managerEmail) => {
   const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
-  const filtered = mgrRows(rows).filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
+  const filtered = rows.filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
   const byMonth = new Map()
   for (const r of filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))) {
     const mon = normalizeMonth(r.Month)
-    if (mon && !byMonth.has(mon)) byMonth.set(mon, { ...r, Month: mon, projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs), realisedSlabs: parseMgrSlabsJson(r.RealisedSlabs) })
+    if (mon && !byMonth.has(mon)) byMonth.set(mon, toMgrRecord(r))
   }
   return [...byMonth.values()].sort((a, b) => (b.Month || '').localeCompare(a.Month || ''))
 }
 
 export const assignManagerTarget = async (data, assignerEmail) => {
   // data: { email, month, projectedSlabs: [{targetAmount, commissionPct}], realisedSlabs: [...] }
-  // Stored in CommissionConfig sheet with Type = "ManagerTarget"
   const key = `mgr_${data.email.trim().toLowerCase()}_${data.month}`
-  // [SlabName, MaxTarget, CommissionPct, CreatedBy, Type, ManagerEmail, Month, ProjectedSlabs, RealisedSlabs, AssignedBy, AssignedAt]
+  // Row order matches sheet columns: Key | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
   const row = [
-    key, '', '', '',
-    'ManagerTarget',
+    key,
     data.email.trim().toLowerCase(),
     data.month,
     JSON.stringify(data.projectedSlabs ?? []),
@@ -868,7 +856,7 @@ export const deleteManagerTarget = async (email, month) => {
   const key = `mgr_${email.trim().toLowerCase()}_${month}`
   let deleted = true
   while (deleted) {
-    try { await appsScript.deleteRow('CommissionConfig', 'SlabName', key) }
+    try { await appsScript.deleteRow('CommissionConfig', 'Key', key) }
     catch { deleted = false }
   }
   clearCache()
