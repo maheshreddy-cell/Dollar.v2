@@ -271,64 +271,79 @@ function buildSystemPrompt(userCtx, relevantEntries) {
 }
 
 async function getClaudeReply(messages, userMessage, userSummaryCtx) {
+  const relevantEntries = getRelevantEntries(userMessage, KNOWLEDGE_BASE)
+  const systemPrompt    = buildSystemPrompt(userSummaryCtx, relevantEntries)
+
+  const history = messages
+    .filter((_, i) => i > 0)
+    .slice(-10)
+    .map(msg => ({ role: msg.from === 'user' ? 'user' : 'assistant', content: msg.text }))
+  history.push({ role: 'user', content: userMessage })
+
+  const payload = {
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: history,
+  }
+
+  // ── Path 1: server-side proxy (keeps key private, no CORS) ──────────────────
   try {
-    const relevantEntries = getRelevantEntries(userMessage, KNOWLEDGE_BASE)
-    const systemPrompt    = buildSystemPrompt(userSummaryCtx, relevantEntries)
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const ct = res.headers.get('content-type') || ''
+    if (ct.includes('application/json') && res.ok) {
+      const data = await res.json()
+      const text = data.content?.[0]?.text
+      if (text) return { text, isClaudeFallback: false }
+    }
+    if (!ct.includes('application/json')) {
+      console.warn('[FAQ] proxy returned HTML — SPA rewrite still catching /api/claude')
+    } else if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error('[FAQ] proxy error', res.status, err)
+    }
+  } catch (e) {
+    console.warn('[FAQ] proxy fetch failed:', e.message)
+  }
 
-    const history = messages
-      .filter((_, i) => i > 0)
-      .slice(-10)
-      .map(msg => ({ role: msg.from === 'user' ? 'user' : 'assistant', content: msg.text }))
-    history.push({ role: 'user', content: userMessage })
-
-    const payload = {
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: history,
+  // ── Path 2: direct browser call (Anthropic allows this with the header) ──────
+  try {
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey) {
+      console.error('[FAQ] VITE_ANTHROPIC_API_KEY not set in build env')
+      return { text: '⚠️ AI not configured — VITE_ANTHROPIC_API_KEY missing. Ask your admin to add it in Vercel env vars.', isClaudeFallback: true }
     }
 
-    // Try server proxy first (avoids CORS + keeps key private)
-    let response
-    try {
-      response = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      // If proxy returned HTML (SPA fallback), treat as failure
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
-        throw new Error('Proxy returned non-JSON (SPA fallback)')
-      }
-    } catch (proxyErr) {
-      // Fallback: call Anthropic directly from browser
-      console.warn('[FAQ] proxy failed, trying direct:', proxyErr.message)
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-      if (!apiKey) throw new Error('No API key')
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
-        body: JSON.stringify(payload),
-      })
-    }
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-allow-browser': 'true',
+      },
+      body: JSON.stringify(payload),
+    })
 
-    if (!response.ok) {
-      const errText = await response.text()
-      console.error('[FAQ] Claude error:', response.status, errText.slice(0, 200))
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err?.error?.message || `HTTP ${res.status}`
+      console.error('[FAQ] Anthropic API error:', res.status, msg)
+      // Surface key errors to the user so they know what to fix
+      if (res.status === 401) return { text: `⚠️ Invalid API key (401). Go to console.anthropic.com → create a new key → update VITE_ANTHROPIC_API_KEY in Vercel → redeploy.`, isClaudeFallback: true }
+      if (res.status === 429) return { text: `⚠️ Rate limit hit. Please wait a moment and try again.`, isClaudeFallback: true }
       return { text: getBotReply(userMessage).text, isClaudeFallback: true }
     }
 
-    const data = await response.json()
+    const data = await res.json()
     const text = data.content?.[0]?.text ?? getBotReply(userMessage).text
     return { text, isClaudeFallback: false }
   } catch (err) {
-    console.warn('[FAQ] Claude unavailable:', err?.message || err)
+    console.error('[FAQ] direct call failed:', err?.message)
     return { text: getBotReply(userMessage).text, isClaudeFallback: true }
   }
 }
