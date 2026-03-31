@@ -364,6 +364,7 @@ export default function AssignTargets() {
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Assignment History</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Click Edit to load a month's slabs into the form below</p>
                 </div>
                 {mgrHistoryLoad ? (
                   <div className="flex justify-center py-6">
@@ -377,21 +378,42 @@ export default function AssignTargets() {
                       <thead>
                         <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
                           <th className="px-4 py-2.5 text-left font-medium">Month</th>
-                          <th className="px-4 py-2.5 text-right font-medium">Projected Target</th>
-                          <th className="px-4 py-2.5 text-right font-medium">Realised Target</th>
+                          <th className="px-4 py-2.5 text-left font-medium">Projected Slabs</th>
+                          <th className="px-4 py-2.5 text-left font-medium">Realised Slabs</th>
                           <th className="px-4 py-2.5 text-center font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {mgrHistory.map(t => {
                           const mon = String(t.Month || '').trim()
-                          const isDeleting = mgrDeleting === mon
-                          const isConfirm  = mgrConfirmDel === mon
+                          const isDeleting  = mgrDeleting === mon
+                          const isConfirm   = mgrConfirmDel === mon
+                          const isEditing   = formMonth === mon
+                          // Parse slabs for summary display
+                          const pSlabs = (() => { try { const a = JSON.parse(t.ProjectedSlabs || '[]'); return Array.isArray(a) ? a.filter(s => s.targetAmount) : [] } catch { return [] } })()
+                          const rSlabs = (() => { try { const a = JSON.parse(t.RealisedSlabs  || '[]'); return Array.isArray(a) ? a.filter(s => s.targetAmount) : [] } catch { return [] } })()
+                          const pMax = pSlabs.length ? Math.max(...pSlabs.map(s => Number(s.targetAmount))) : 0
+                          const rMax = rSlabs.length ? Math.max(...rSlabs.map(s => Number(s.targetAmount))) : 0
                           return (
-                            <tr key={mon} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 font-medium text-gray-700">{mon}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-blue-700">{formatINR(Number(t.ProjectedTarget || 0))}</td>
-                              <td className="px-4 py-3 text-right font-semibold text-green-700">{formatINR(Number(t.RealisedTarget || 0))}</td>
+                            <tr key={mon} className={`transition-colors ${isEditing ? 'bg-brand-50' : 'hover:bg-gray-50'}`}>
+                              <td className="px-4 py-3">
+                                <span className={`font-medium ${isEditing ? 'text-brand-700' : 'text-gray-700'}`}>{mon}</span>
+                                {isEditing && <span className="ml-2 text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold">editing</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {pSlabs.length > 0 ? (
+                                  <span className="text-xs text-blue-700 font-semibold">
+                                    {pSlabs.length} slab{pSlabs.length > 1 ? 's' : ''} · up to {formatINR(pMax)}
+                                  </span>
+                                ) : <span className="text-xs text-gray-400">—</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                {rSlabs.length > 0 ? (
+                                  <span className="text-xs text-green-700 font-semibold">
+                                    {rSlabs.length} slab{rSlabs.length > 1 ? 's' : ''} · up to {formatINR(rMax)}
+                                  </span>
+                                ) : <span className="text-xs text-gray-400">—</span>}
+                              </td>
                               <td className="px-4 py-3 text-center">
                                 {isConfirm ? (
                                   <span className="flex items-center justify-center gap-2">
@@ -408,9 +430,23 @@ export default function AssignTargets() {
                                     <button onClick={() => setMgrConfirmDel(null)} className="text-xs text-gray-400 hover:underline">Cancel</button>
                                   </span>
                                 ) : (
-                                  <button onClick={() => setMgrConfirmDel(mon)} className="text-gray-400 hover:text-red-500 transition-colors">
-                                    <Trash2 size={14} />
-                                  </button>
+                                  <span className="flex items-center justify-center gap-3">
+                                    <button
+                                      onClick={() => {
+                                        setFormMonth(mon)
+                                        setMgrProjSlabs(parseMgrSlabs(t.ProjectedSlabs))
+                                        setMgrRealSlabs(parseMgrSlabs(t.RealisedSlabs))
+                                        setMgrSuccess(false)
+                                        setMgrError('')
+                                      }}
+                                      className="text-xs text-brand-600 hover:text-brand-800 font-medium flex items-center gap-1 transition-colors"
+                                    >
+                                      <PencilLine size={12} /> Edit
+                                    </button>
+                                    <button onClick={() => setMgrConfirmDel(mon)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </span>
                                 )}
                               </td>
                             </tr>
