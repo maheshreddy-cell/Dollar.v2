@@ -6,18 +6,18 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import { ROLE_COLORS } from '../utils/roles'
 
-// Nav items grouped by section.
-// PreSales only sees Dashboard + FAQ.
+// Role-based nav — each role sees exactly the pages they have access to.
+// When in ViewAs mode the viewed person's role is used, not the real user's.
 const NAV_GROUPS = [
   {
     label: null,
     items: [
       { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/deals',             label: 'My Deals',          icon: Briefcase,       roles: ['Agent'] },
+      { to: '/deals',             label: 'Deals',             icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
       { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
       { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/team',              label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
+      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin','SalesHead','VH'] },
     ],
   },
@@ -28,8 +28,6 @@ const NAV_GROUPS = [
     ],
   },
 ]
-
-const VIEWAS_ALLOWED = ['/dashboard', '/deals', '/metrics', '/faq']
 
 export default function Sidebar() {
   const { user, effectiveUser, isRole } = useAuth()
@@ -46,13 +44,10 @@ export default function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
           const visible = group.items.filter(item => {
-            // In ViewAs mode use the viewed agent's role, not the real user's role
-            const roleMatch = isViewAs
-              ? item.roles.includes(effectiveUser.role)
-              : isRole(...item.roles)
-            if (!roleMatch) return false
-            if (isViewAs) return VIEWAS_ALLOWED.includes(item.to)
-            return true
+            // In ViewAs mode: show pages the viewed person's role can access
+            // Not in ViewAs: show pages the real logged-in user can access
+            if (isViewAs) return item.roles.includes(effectiveUser.role)
+            return isRole(...item.roles)
           })
           if (!visible.length) return null
           return (
@@ -85,7 +80,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* User profile footer */}
+      {/* User profile footer — shows who is actually logged in */}
       {user && (
         <div className="px-4 py-4 border-t border-gray-100 bg-white/60">
           <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>

@@ -77,7 +77,7 @@ export default function App() {
             <Route
               path="/deals"
               element={
-                <RequireRole roles={['Agent', 'PreSales', 'Admin', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
                   <Deals />
                 </RequireRole>
               }
@@ -110,7 +110,7 @@ export default function App() {
             <Route
               path="/org"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
                   <OrgPage />
                 </RequireRole>
               }
