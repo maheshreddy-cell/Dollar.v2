@@ -33,7 +33,7 @@ function normalizeMonth(raw) {
 
 export default function AssignTargets() {
   const { month: contextMonth } = useMonth()
-  const { user } = useAuth()
+  const { user, effectiveUser } = useAuth()
 
   const [team,         setTeam]         = useState([])
   const [selected,     setSelected]     = useState(null)
@@ -63,22 +63,30 @@ export default function AssignTargets() {
   const presets   = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
 
   // ── Load team ────────────────────────────────────────────────────────────────
+  // Use effectiveUser so ViewAs mode scopes the team to the viewed person,
+  // not the real admin's entire org.
   useEffect(() => {
-    const canSeeAll = ['Admin', 'SalesHead'].includes(user.role)
+    if (!effectiveUser?.email) return
+    setLoading(true)
+    setTeam([])
+    setSelected(null)
+
+    const viewEmail = effectiveUser.email
+    const canSeeAll = ['Admin', 'SalesHead'].includes(effectiveUser.role)
     const fetch = canSeeAll
-      ? getSubtree(user.email).then(tree => {
+      ? getSubtree(viewEmail).then(tree => {
           const flat = []
           const walk = n => { if (!n) return; flat.push(n); (n.children || []).forEach(walk) }
           walk(tree)
-          return flat.filter(m => m.Email !== user.email)
+          return flat.filter(m => m.Email !== viewEmail)
         })
-      : getTeam(user.email).then(d => d ?? [])
+      : getTeam(viewEmail).then(d => d ?? [])
 
     fetch
       .then(setTeam)
       .catch(() => setError('Failed to load team.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [effectiveUser?.email, effectiveUser?.role])
 
   // ── When member selected: reset form + reload history ────────────────────────
   useEffect(() => {

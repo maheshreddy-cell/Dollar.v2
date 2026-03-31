@@ -28,7 +28,7 @@ function flattenTree(node, result = []) {
 }
 
 export default function Team() {
-  const { user } = useAuth()
+  const { user, effectiveUser } = useAuth()
   const [tab, setTab] = useState('direct')
   const [directTeam, setDirectTeam] = useState([])
   const [allMembers, setAllMembers] = useState([])
@@ -50,21 +50,24 @@ export default function Team() {
   ]
 
   const loadTeam = () => {
+    if (!effectiveUser?.email) return
     setLoading(true)
+    const viewEmail = effectiveUser.email
     Promise.all([
-      getTeam(user.email),
-      getSubtree(user.email),
+      getTeam(viewEmail),
+      getSubtree(viewEmail),
     ])
       .then(([direct, tree]) => {
         setDirectTeam(direct ?? [])
-        const all = flattenTree(tree).filter(m => m.Email !== user.email)
+        const all = flattenTree(tree).filter(m => m.Email !== viewEmail)
         setAllMembers(all)
       })
       .catch(() => setError('Failed to load team.'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { loadTeam() }, [])
+  // Reload whenever the viewed user changes (ViewAs switch)
+  useEffect(() => { loadTeam() }, [effectiveUser?.email])
 
   const handleInvite = async (e) => {
     e.preventDefault()
