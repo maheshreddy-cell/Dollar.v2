@@ -294,6 +294,15 @@ export const getSummary = async (userEmail, month) => {
   const slabInfo    = getSlabInfo(achieved, target)
   const presetLabel = resolvePresetLabel(tf(target, 'CommissionPct'))
 
+  // At-risk deals (stuck in review stages for 3+ working days)
+  const atRiskDeals = agentDeals.filter(d => {
+    const stage = (d.LoanDocsCollected || '').trim().toLowerCase()
+    return ['awaiting for docs', 'post_approval pending'].includes(stage) &&
+      workingDaysSince(d.Timestamp || d.PaymentDate) >= 3
+  })
+  const atRiskCount  = atRiskDeals.length
+  const atRiskAmount = atRiskDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+
   // WIP pipeline opportunity
   const wipDeals = agentDeals.filter(d => {
     const cat = getStageCategory(d.LoanDocsCollected)
@@ -338,6 +347,8 @@ export const getSummary = async (userEmail, month) => {
     suggestedEmails,
     wipAmount,
     wipSlabHint,
+    atRiskCount,
+    atRiskAmount,
   }
 }
 

@@ -290,6 +290,136 @@ export default function Dashboard() {
             </FadeIn>
           )}
 
+          {/* ── Progress bar table (below eligibility banner) ── */}
+          {(summary?.totalTarget ?? 0) > 0 && (
+            <FadeIn delay={290}>
+              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-3">
+                {/* Bar */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        achievedPct >= 100 ? 'bg-green-500' : achievedPct >= 60 ? 'bg-orange-400' : 'bg-red-400'
+                      }`}
+                      style={{ width: `${Math.min(100, achievedPct)}%` }}
+                    />
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums min-w-[46px] text-right ${
+                    achievedPct >= 100 ? 'text-green-600' : achievedPct >= 60 ? 'text-orange-600' : 'text-red-600'
+                  }`}>
+                    {achievedPct.toFixed(1)}%
+                  </span>
+                </div>
+                {/* Stats row */}
+                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                  <div className="text-center pr-4">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Target</p>
+                    <p className="text-sm font-bold text-gray-800">{formatINR(summary.totalTarget)}</p>
+                  </div>
+                  <div className="text-center px-4">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Achieved</p>
+                    <p className={`text-sm font-bold ${achievedPct >= 100 ? 'text-green-600' : 'text-gray-800'}`}>
+                      {formatINR(summary.totalAchieved)}
+                    </p>
+                  </div>
+                  <div className="text-center pl-4">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Still Needed</p>
+                    <p className={`text-sm font-bold ${gap > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                      {gap > 0 ? formatINR(gap) : '✓ Done!'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* ── At-risk deals warning ── */}
+          {(summary?.atRiskCount ?? 0) > 0 && (
+            <FadeIn delay={295}>
+              {(() => {
+                const n = summary.atRiskCount
+                const urgency = n >= 4 ? 'critical' : n >= 2 ? 'high' : 'medium'
+                const cfg = {
+                  critical: {
+                    wrap:  'bg-red-50 border-red-300',
+                    icon:  'text-red-500',
+                    title: 'text-red-800',
+                    body:  'text-red-700',
+                    bar:   'bg-red-500',
+                    badge: 'bg-red-100 text-red-700 border-red-200',
+                    emoji: '🚨',
+                  },
+                  high: {
+                    wrap:  'bg-orange-50 border-orange-300',
+                    icon:  'text-orange-500',
+                    title: 'text-orange-800',
+                    body:  'text-orange-700',
+                    bar:   'bg-orange-400',
+                    badge: 'bg-orange-100 text-orange-700 border-orange-200',
+                    emoji: '⚠️',
+                  },
+                  medium: {
+                    wrap:  'bg-amber-50 border-amber-200',
+                    icon:  'text-amber-500',
+                    title: 'text-amber-800',
+                    body:  'text-amber-700',
+                    bar:   'bg-amber-400',
+                    badge: 'bg-amber-100 text-amber-700 border-amber-200',
+                    emoji: '⚠️',
+                  },
+                }[urgency]
+
+                const messages = {
+                  critical: `${n} deals are at risk — your manager will likely reassign these soon. Take action immediately.`,
+                  high:     `${n} deals have been stuck for 3+ working days. Follow up now before your manager reassigns them.`,
+                  medium:   `1 deal is stuck in review for 3+ days. A quick follow-up can save this sale.`,
+                }
+
+                return (
+                  <div className={`rounded-xl border px-5 py-4 ${cfg.wrap}`}>
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl leading-none mt-0.5">{cfg.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className={`text-sm font-bold ${cfg.title}`}>
+                            {n} deal{n !== 1 ? 's' : ''} at risk
+                          </p>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.badge}`}>
+                            {formatINR(summary.atRiskAmount)} at stake
+                          </span>
+                        </div>
+                        <p className={`text-xs leading-relaxed ${cfg.body}`}>
+                          {messages[urgency]}
+                        </p>
+                        {/* Mini deal pills */}
+                        <p className={`text-xs mt-2 font-medium ${cfg.body} opacity-80`}>
+                          👉 Go to <strong>Deals</strong> → Work in Progress to act on these now
+                        </p>
+                      </div>
+                      {/* Radial-ish fill indicator */}
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <div className="relative w-11 h-11">
+                          <svg viewBox="0 0 36 36" className="w-11 h-11 -rotate-90">
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                            <circle
+                              cx="18" cy="18" r="15" fill="none"
+                              stroke={urgency === 'critical' ? '#ef4444' : urgency === 'high' ? '#f97316' : '#f59e0b'}
+                              strokeWidth="3"
+                              strokeDasharray={`${Math.min(100, (n / Math.max(1, (summary?.totalDeals ?? n) + n)) * 94)} 94`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <span className={`absolute inset-0 flex items-center justify-center text-xs font-extrabold ${cfg.title}`}>{n}</span>
+                        </div>
+                        <span className={`text-[10px] font-medium ${cfg.body}`}>at risk</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </FadeIn>
+          )}
+
           {/* ── Incentives Breakdown — BIG (first) ── */}
           <FadeIn delay={300}>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
