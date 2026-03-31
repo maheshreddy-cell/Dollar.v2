@@ -17,7 +17,7 @@ import FAQ from './pages/FAQ'
 
 function AppLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F9F8F6] dark:bg-gray-900">
+    <div className="flex h-screen overflow-hidden bg-[#F9F8F6]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
