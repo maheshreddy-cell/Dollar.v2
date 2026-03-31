@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle, Bell } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Bell, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getDealsGrouped } from '../services/api'
+import { getDealsGrouped, getLeaderboard } from '../services/api'
 import { useRefresh } from '../hooks/useRefresh'
 import { formatINR } from '../utils/commission'
+
+const MANAGER_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
 
 // The 5 pipeline groups — each shows actual LoanDocsCollected sub-stages inside
 const STAGE_GROUPS = [
@@ -71,25 +73,46 @@ export default function Deals() {
   const { month } = useMonth()
   const tick = useRefresh()
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [openGroups, setOpenGroups] = useState(
+  const isManagerRole = MANAGER_ROLES.includes(effectiveUser?.role)
+
+  const [teamAgents, setTeamAgents]     = useState([])
+  const [selectedAgent, setSelectedAgent] = useState(null) // { email, name }
+  const [data, setData]                 = useState(null)
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState('')
+  const [openGroups, setOpenGroups]     = useState(
     Object.fromEntries(STAGE_GROUPS.map(g => [g.key, g.defaultOpen]))
   )
   const [expandedDeals, setExpandedDeals] = useState({})
 
-  // Is a manager viewing an agent?
+  // Is a manager (real user) viewing as another manager via ViewAs?
   const isViewAs = effectiveUser && user && effectiveUser.email !== user.email
 
+  // For manager roles: load their team agents for the picker
   useEffect(() => {
-    if (!effectiveUser?.email) return
+    if (!isManagerRole || !effectiveUser?.email) return
+    setSelectedAgent(null)
+    getLeaderboard(effectiveUser.email, month)
+      .then(rows => {
+        setTeamAgents(rows)
+        if (rows.length > 0) {
+          setSelectedAgent({ email: rows[0].email, name: rows[0].name })
+        }
+      })
+      .catch(() => setTeamAgents([]))
+  }, [effectiveUser?.email, month, isManagerRole])
+
+  // Email to load deals for: selected agent (manager view) OR self (agent view)
+  const dealEmail = isManagerRole ? selectedAgent?.email : effectiveUser?.email
+
+  useEffect(() => {
+    if (!dealEmail) { setLoading(false); return }
     if (tick === 0) setLoading(true)
     setError('')
-    getDealsGrouped(effectiveUser.email, month)
+    getDealsGrouped(dealEmail, month)
       .then(res => { setData(res); setLoading(false) })
       .catch(() => { setError('Failed to load deals.'); setLoading(false) })
-  }, [effectiveUser?.email, month, tick])
+  }, [dealEmail, month, tick])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -99,6 +122,13 @@ export default function Deals() {
 
   if (error) return (
     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
+  )
+
+  // Manager with no team agents loaded yet
+  if (isManagerRole && teamAgents.length === 0 && !loading) return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+      No agents found for your team in {month}. Make sure agents are assigned under your hierarchy.
+    </div>
   )
 
   if (!data) return null
@@ -120,26 +150,50 @@ export default function Deals() {
 
       <div className="space-y-0">
         {/* Page header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-800">
-              {isViewAs ? `${effectiveUser.name}'s Deals` : 'My Deals'}
+              {isManagerRole
+                ? selectedAgent ? `${selectedAgent.name}'s Deals` : 'Select an Agent'
+                : isViewAs ? `${effectiveUser.name}'s Deals` : 'My Deals'}
             </h2>
             <p className="text-sm text-gray-500">{month} · Pipeline overview</p>
           </div>
-          {/* At-risk alert banner for managers viewing agents */}
-          {isViewAs && totalAtRisk > 0 && (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
-              <Bell size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs font-semibold text-red-700">
-                {totalAtRisk} at-risk deal{totalAtRisk !== 1 ? 's' : ''} — may need reassignment
-              </p>
-            </div>
-          )}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Agent picker — manager roles only */}
+            {isManagerRole && teamAgents.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Users size={14} className="text-gray-400" />
+                <select
+                  value={selectedAgent?.email ?? ''}
+                  onChange={e => {
+                    const agent = teamAgents.find(a => a.email === e.target.value)
+                    if (agent) setSelectedAgent({ email: agent.email, name: agent.name })
+                  }}
+                  className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 bg-white"
+                >
+                  {teamAgents.map(a => (
+                    <option key={a.email} value={a.email}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* At-risk alert banner */}
+            {totalAtRisk > 0 && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+                <Bell size={14} className="text-red-500 shrink-0" />
+                <p className="text-xs font-semibold text-red-700">
+                  {totalAtRisk} at-risk deal{totalAtRisk !== 1 ? 's' : ''} — may need reassignment
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* At-risk notice for agents themselves */}
-        {!isViewAs && totalAtRisk > 0 && (
+        {/* At-risk notice for agents themselves (not shown to managers) */}
+        {!isManagerRole && !isViewAs && totalAtRisk > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-3 mb-4">
             <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
             <div>
