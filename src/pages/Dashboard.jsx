@@ -290,49 +290,6 @@ export default function Dashboard() {
             </FadeIn>
           )}
 
-          {/* ── Progress bar table (below eligibility banner) ── */}
-          {(summary?.totalTarget ?? 0) > 0 && (
-            <FadeIn delay={290}>
-              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-3">
-                {/* Bar */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        achievedPct >= 100 ? 'bg-green-500' : achievedPct >= 60 ? 'bg-orange-400' : 'bg-red-400'
-                      }`}
-                      style={{ width: `${Math.min(100, achievedPct)}%` }}
-                    />
-                  </div>
-                  <span className={`text-sm font-bold tabular-nums min-w-[46px] text-right ${
-                    achievedPct >= 100 ? 'text-green-600' : achievedPct >= 60 ? 'text-orange-600' : 'text-red-600'
-                  }`}>
-                    {achievedPct.toFixed(1)}%
-                  </span>
-                </div>
-                {/* Stats row */}
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <div className="text-center pr-4">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Target</p>
-                    <p className="text-sm font-bold text-gray-800">{formatINR(summary.totalTarget)}</p>
-                  </div>
-                  <div className="text-center px-4">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Achieved</p>
-                    <p className={`text-sm font-bold ${achievedPct >= 100 ? 'text-green-600' : 'text-gray-800'}`}>
-                      {formatINR(summary.totalAchieved)}
-                    </p>
-                  </div>
-                  <div className="text-center pl-4">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-0.5">Still Needed</p>
-                    <p className={`text-sm font-bold ${gap > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      {gap > 0 ? formatINR(gap) : '✓ Done!'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </FadeIn>
-          )}
-
           {/* ── At-risk deals warning ── */}
           {(summary?.atRiskCount ?? 0) > 0 && (
             <FadeIn delay={295}>
