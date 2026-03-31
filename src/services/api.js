@@ -77,7 +77,9 @@ export const getDealsGrouped = async (email, month) => {
     const cat = getStageCategory(d.LoanDocsCollected)
     const daysInStage = workingDaysSince(d.Timestamp || d.PaymentDate)
     const isAtRisk = (
-      ['Awaiting for Docs', 'Post_Approval pending'].includes(d.LoanDocsCollected?.trim()) &&
+      ['awaiting for docs', 'post_approval pending'].includes(
+        (d.LoanDocsCollected || '').trim().toLowerCase()
+      ) &&
       daysInStage >= 3
     )
     groups[cat].push({ ...d, daysInStage, isAtRisk })

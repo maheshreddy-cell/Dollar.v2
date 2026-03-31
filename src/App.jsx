@@ -118,7 +118,7 @@ export default function App() {
             <Route
               path="/commission-config"
               element={
-                <RequireRole roles={['Admin']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH']}>
                   <CommissionConfig />
                 </RequireRole>
               }

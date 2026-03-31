@@ -18,7 +18,7 @@ const NAV_GROUPS = [
       { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/team',              label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH'] },
-      { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin'] },
+      { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin','SalesHead','VH'] },
     ],
   },
   {
