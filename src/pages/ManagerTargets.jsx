@@ -26,68 +26,144 @@ function workingDaysInfo(month) {
   return { elapsed, remaining, total }
 }
 
-// ── Slab table ───────────────────────────────────────────────────────────────
-function SlabTable({ slabs, teamMetric }) {
+// ── Slab table with per-slab progress bars ───────────────────────────────────
+function SlabTable({ slabs, teamMetric, accentColor = 'blue' }) {
   if (!slabs.length) return (
     <p className="text-xs text-gray-400 italic py-2">No slabs configured yet.</p>
   )
   const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
   const info   = calcManagerCommissionInfo(teamMetric, sorted)
 
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 border-b border-gray-100">
-            <th className="text-left py-2 pr-3">Slab</th>
-            <th className="text-right py-2 pr-3">Target</th>
-            <th className="text-right py-2 pr-3">Rate</th>
-            <th className="text-right py-2">Payout at target</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {sorted.map((s, i) => {
-            const isActive  = info.activeSlab === s
-            const isReached = teamMetric >= Number(s.targetAmount)
-            const pct       = Number(s.commissionPct)
-            return (
-              <tr key={i} className={`transition-colors ${isActive ? 'bg-green-50' : isReached ? 'bg-gray-50/40' : ''}`}>
-                <td className="py-2.5 pr-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-base leading-none ${isActive ? 'text-green-600' : isReached ? 'text-gray-400' : 'text-gray-300'}`}>
-                      {SLAB_INDICATORS[i] ?? `S${i+1}`}
-                    </span>
-                    <span className={`text-xs font-semibold ${isActive ? 'text-green-700' : 'text-gray-600'}`}>Slab {i+1}</span>
-                    {isActive && <span className="text-[9px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">Active</span>}
-                  </div>
-                </td>
-                <td className={`py-2.5 pr-3 text-right text-xs font-semibold ${isActive ? 'text-green-700' : isReached ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {formatINR(Number(s.targetAmount))}
-                </td>
-                <td className={`py-2.5 pr-3 text-right text-xs font-bold ${isActive ? 'text-green-600' : isReached ? 'text-blue-500' : 'text-gray-400'}`}>
-                  {pct}%
-                </td>
-                <td className={`py-2.5 text-right text-xs font-semibold ${isActive ? 'text-green-700' : 'text-gray-400'}`}>
-                  {formatINR(Number(s.targetAmount) * pct / 100)}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+  // Previous slab's target (for incremental bar calculation)
+  const getBarPct = (slabTarget, i) => {
+    const prev    = i > 0 ? Number(sorted[i - 1].targetAmount) : 0
+    const range   = slabTarget - prev
+    const filled  = Math.min(Math.max(teamMetric - prev, 0), range)
+    return range > 0 ? (filled / range) * 100 : 0
+  }
 
-      {/* Commission summary row */}
-      <div className={`mt-3 rounded-xl px-4 py-3 flex items-center justify-between border ${
+  const colors = {
+    blue:  { bar: 'bg-blue-500',  barBg: 'bg-blue-100', text: 'text-blue-700',  badge: 'bg-blue-100 text-blue-700',  ring: 'ring-blue-200' },
+    green: { bar: 'bg-green-500', barBg: 'bg-green-100', text: 'text-green-700', badge: 'bg-green-100 text-green-700', ring: 'ring-green-200' },
+  }
+  const c = colors[accentColor] ?? colors.blue
+
+  return (
+    <div className="space-y-2.5">
+      {sorted.map((s, i) => {
+        const target    = Number(s.targetAmount)
+        const pct       = Number(s.commissionPct)
+        const payout    = target * pct / 100
+        const isReached = teamMetric >= target
+        const isActive  = info.activeSlab === s
+        const barPct    = getBarPct(target, i)
+        const gap       = Math.max(0, target - teamMetric)
+
+        // Bar color: green if reached, accent if making progress, gray if far away
+        const barClass = isReached
+          ? 'bg-green-500'
+          : barPct > 0
+            ? c.bar
+            : 'bg-gray-200'
+
+        return (
+          <div
+            key={i}
+            className={`rounded-xl border p-3 transition-all ${
+              isActive
+                ? 'border-green-300 bg-green-50 ring-2 ring-green-200'
+                : isReached
+                  ? 'border-green-200 bg-green-50/40'
+                  : 'border-gray-100 bg-gray-50/60'
+            }`}
+          >
+            {/* Top row: slab label + rate + payout */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-lg leading-none font-bold ${
+                  isReached ? 'text-green-500' : barPct > 0 ? c.text : 'text-gray-300'
+                }`}>
+                  {SLAB_INDICATORS[i] ?? `S${i+1}`}
+                </span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-bold ${isReached ? 'text-green-700' : 'text-gray-700'}`}>
+                      Slab {i + 1}
+                    </span>
+                    {isActive && (
+                      <span className="text-[9px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                        Active
+                      </span>
+                    )}
+                    {isReached && !isActive && (
+                      <span className="text-[9px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                        ✓ Passed
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Target {formatINR(target)} · {pct}%
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm font-bold ${isReached ? 'text-green-700' : 'text-gray-500'}`}>
+                  {formatINR(payout)}
+                </p>
+                <p className="text-[10px] text-gray-400">payout</p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="space-y-1">
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${barClass}`}
+                  style={{ width: `${Math.min(barPct, 100)}%` }}
+                />
+              </div>
+
+              {/* Bar labels */}
+              <div className="flex items-center justify-between">
+                {isReached ? (
+                  <p className="text-[10px] font-semibold text-green-600">✓ Reached!</p>
+                ) : (
+                  <p className="text-[10px] text-gray-400">
+                    {formatINR(teamMetric > (i > 0 ? Number(sorted[i-1].targetAmount) : 0)
+                      ? teamMetric - (i > 0 ? Number(sorted[i-1].targetAmount) : 0)
+                      : 0)} of {formatINR(target - (i > 0 ? Number(sorted[i-1].targetAmount) : 0))} progress
+                  </p>
+                )}
+                <p className={`text-[10px] font-bold ${isReached ? 'text-green-600' : barPct > 0 ? c.text : 'text-gray-400'}`}>
+                  {barPct.toFixed(0)}%
+                </p>
+              </div>
+
+              {/* Gap callout if not reached */}
+              {!isReached && (
+                <p className={`text-[10px] font-semibold ${barPct > 60 ? 'text-orange-500' : barPct > 0 ? c.text : 'text-gray-400'}`}>
+                  {barPct > 0
+                    ? `${formatINR(gap)} more → unlock ${formatINR(payout)} payout`
+                    : `${formatINR(gap)} to unlock this slab`}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Commission summary footer */}
+      <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${
         info.isPartial ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'
       }`}>
         <div>
           {info.isPartial ? (
             <>
               <p className="text-xs font-semibold text-amber-700">
-                Provisional · {Number(info.nextSlab?.commissionPct)}% rate (Slab 1 not yet reached)
+                Provisional · {Number(info.nextSlab?.commissionPct)}% rate applied
               </p>
               <p className="text-xs text-amber-600 mt-0.5">
-                {formatINR(info.gapToNext)} more to be fully eligible for Slab 1
+                {formatINR(info.gapToNext)} more to lock in Slab 1 commission
               </p>
             </>
           ) : (
@@ -97,17 +173,19 @@ function SlabTable({ slabs, teamMetric }) {
               </p>
               {info.nextSlab && (
                 <p className="text-xs text-green-600 mt-0.5">
-                  {formatINR(info.gapToNext)} more to unlock Slab {SLAB_INDICATORS[info.slabIdx + 1]}
+                  {formatINR(info.gapToNext)} more → unlock Slab {SLAB_INDICATORS[info.slabIdx + 1]}
                 </p>
               )}
             </>
           )}
         </div>
         <div className="text-right">
-          <p className={`text-lg font-bold ${info.isPartial ? 'text-amber-600' : 'text-green-700'}`}>
+          <p className={`text-xl font-bold ${info.isPartial ? 'text-amber-600' : 'text-green-700'}`}>
             {formatINR(info.commission)}
           </p>
-          {info.isPartial && <p className="text-[9px] text-amber-500 uppercase tracking-wide">provisional</p>}
+          {info.isPartial && (
+            <p className="text-[9px] text-amber-500 uppercase tracking-wide font-semibold">provisional</p>
+          )}
         </div>
       </div>
     </div>
@@ -365,7 +443,7 @@ export default function ManagerTargets() {
             )}
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Commission Slabs</p>
-              <SlabTable slabs={projSlabs} teamMetric={teamSaleValue} />
+              <SlabTable slabs={projSlabs} teamMetric={teamSaleValue} accentColor="blue" />
             </div>
             {projSlabs.length > 0 && (
               <IntelligencePanel slabs={projSlabs} teamMetric={teamSaleValue} label="Projected" color="blue" wdInfo={wdInfo} />
@@ -407,7 +485,7 @@ export default function ManagerTargets() {
             )}
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Commission Slabs</p>
-              <SlabTable slabs={realSlabs} teamMetric={teamAchieved} />
+              <SlabTable slabs={realSlabs} teamMetric={teamAchieved} accentColor="green" />
             </div>
             {realSlabs.length > 0 && (
               <IntelligencePanel slabs={realSlabs} teamMetric={teamAchieved} label="Realised" color="green" wdInfo={wdInfo} />

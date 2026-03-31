@@ -873,12 +873,28 @@ export const getManagerSlabs = async (type) => {
   return filtered.sort((a, b) => Number(a.MaxTarget) - Number(b.MaxTarget))
 }
 
-// Calculates manager commission given team metric and slabs array
+// Full commission info — proportional partial earn + eligibility metadata
+// Returns { commission, isPartial, activeSlab, nextSlab, gapToNext, slabIdx }
+export function calcManagerCommissionInfo(teamMetric, slabs) {
+  const empty = { commission: 0, isPartial: true, activeSlab: null, nextSlab: null, gapToNext: 0, slabIdx: -1 }
+  if (!slabs?.length) return empty
+  const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+  const qualifying = sorted.filter(s => teamMetric >= Number(s.targetAmount))
+  const activeSlab = qualifying.length > 0 ? qualifying[qualifying.length - 1] : null
+  const slabIdx    = activeSlab ? sorted.indexOf(activeSlab) : -1
+  const nextSlab   = activeSlab
+    ? sorted.find(s => Number(s.targetAmount) > Number(activeSlab.targetAmount)) ?? null
+    : sorted[0]
+  const gapToNext  = nextSlab ? Math.max(0, Number(nextSlab.targetAmount) - teamMetric) : 0
+
+  if (activeSlab) {
+    return { commission: teamMetric * Number(activeSlab.commissionPct) / 100, isPartial: false, activeSlab, nextSlab, gapToNext, slabIdx }
+  }
+  // Below slab 1 — show proportional preview at slab 1 rate (provisional)
+  const s0 = sorted[0]
+  return { commission: teamMetric * Number(s0.commissionPct) / 100, isPartial: true, activeSlab: null, nextSlab: s0, gapToNext, slabIdx: -1 }
+}
+
 export function calcManagerCommission(teamMetric, slabs) {
-  if (!slabs?.length || !teamMetric) return 0
-  const qualifying = slabs
-    .filter(s => teamMetric >= Number(s.targetAmount))
-    .sort((a, b) => Number(b.targetAmount) - Number(a.targetAmount))
-  if (!qualifying.length) return 0
-  return teamMetric * Number(qualifying[0].commissionPct) / 100
+  return calcManagerCommissionInfo(teamMetric, slabs).commission
 }
