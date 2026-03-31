@@ -1,17 +1,33 @@
-// Vercel serverless function — proxies Claude API calls server-side.
-// This avoids browser CORS restrictions and keeps the API key off the client.
+// Vercel serverless proxy — calls Claude API server-side (no CORS, key stays private)
 export default async function handler(req, res) {
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
+  // CORS headers — allow requests from the same Vercel deployment
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const apiKey = process.env.VITE_ANTHROPIC_API_KEY
   if (!apiKey) {
-    return res.status(500).json({ error: 'Anthropic API key not configured on server' })
+    console.error('[api/claude] VITE_ANTHROPIC_API_KEY not set')
+    return res.status(500).json({ error: 'API key not configured' })
   }
 
   try {
+    // Vercel does NOT auto-parse JSON body — read it manually
+    let body = req.body
+    if (!body || typeof body === 'string') {
+      body = await new Promise((resolve, reject) => {
+        let raw = ''
+        req.on('data', chunk => { raw += chunk.toString() })
+        req.on('end', () => {
+          try { resolve(raw ? JSON.parse(raw) : {}) } catch (e) { reject(e) }
+        })
+        req.on('error', reject)
+      })
+    }
+
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -19,13 +35,13 @@ export default async function handler(req, res) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(body),
     })
 
     const data = await upstream.json()
     return res.status(upstream.status).json(data)
   } catch (err) {
-    console.error('[api/claude] upstream error:', err)
-    return res.status(502).json({ error: err.message })
+    console.error('[api/claude] error:', err?.message || err)
+    return res.status(502).json({ error: err?.message || 'Upstream error' })
   }
 }
