@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronRight, AlertTriangle, Bell, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getDealsGrouped, getLeaderboard } from '../services/api'
+import { getDealsGrouped, getDealsGroupedForTeam, getLeaderboard } from '../services/api'
+
+const ALL_TEAM = '__all__' // sentinel for "All Team" picker option
 import { useRefresh } from '../hooks/useRefresh'
 import { formatINR } from '../utils/commission'
 
@@ -95,24 +97,30 @@ export default function Deals() {
     getLeaderboard(effectiveUser.email, month)
       .then(rows => {
         setTeamAgents(rows)
-        if (rows.length > 0) {
-          setSelectedAgent({ email: rows[0].email, name: rows[0].name })
-        }
+        // Default to "All Team" view
+        if (rows.length > 0) setSelectedAgent({ email: ALL_TEAM, name: 'All Team' })
       })
       .catch(() => setTeamAgents([]))
   }, [effectiveUser?.email, month, isManagerRole])
 
-  // Email to load deals for: selected agent (manager view) OR self (agent view)
+  const isAllTeam = isManagerRole && selectedAgent?.email === ALL_TEAM
+
+  // Email or sentinel to load deals for
   const dealEmail = isManagerRole ? selectedAgent?.email : effectiveUser?.email
 
   useEffect(() => {
     if (!dealEmail) { setLoading(false); return }
     if (tick === 0) setLoading(true)
     setError('')
-    getDealsGrouped(dealEmail, month)
+
+    const fetchPromise = isAllTeam
+      ? getDealsGroupedForTeam(teamAgents.map(a => a.email), month)
+      : getDealsGrouped(dealEmail, month)
+
+    fetchPromise
       .then(res => { setData(res); setLoading(false) })
       .catch(() => { setError('Failed to load deals.'); setLoading(false) })
-  }, [dealEmail, month, tick])
+  }, [dealEmail, month, tick, teamAgents.length])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -154,7 +162,9 @@ export default function Deals() {
           <div>
             <h2 className="text-lg font-semibold text-gray-800">
               {isManagerRole
-                ? selectedAgent ? `${selectedAgent.name}'s Deals` : 'Select an Agent'
+                ? isAllTeam
+                  ? `All Team Deals (${teamAgents.length} agents)`
+                  : selectedAgent ? `${selectedAgent.name}'s Deals` : 'Select an Agent'
                 : isViewAs ? `${effectiveUser.name}'s Deals` : 'My Deals'}
             </h2>
             <p className="text-sm text-gray-500">{month} · Pipeline overview</p>
@@ -168,11 +178,18 @@ export default function Deals() {
                 <select
                   value={selectedAgent?.email ?? ''}
                   onChange={e => {
-                    const agent = teamAgents.find(a => a.email === e.target.value)
-                    if (agent) setSelectedAgent({ email: agent.email, name: agent.name })
+                    const val = e.target.value
+                    if (val === ALL_TEAM) {
+                      setSelectedAgent({ email: ALL_TEAM, name: 'All Team' })
+                    } else {
+                      const agent = teamAgents.find(a => a.email === val)
+                      if (agent) setSelectedAgent({ email: agent.email, name: agent.name })
+                    }
                   }}
                   className="text-sm border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 bg-white"
                 >
+                  <option value={ALL_TEAM}>👥 All Team ({teamAgents.length})</option>
+                  <option disabled>──────────────</option>
                   {teamAgents.map(a => (
                     <option key={a.email} value={a.email}>{a.name}</option>
                   ))}
@@ -219,10 +236,22 @@ export default function Deals() {
               {achievedPct.toFixed(0)}%
             </span>
           </span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-500">
-            Tier <span className="font-semibold text-purple-600">{data.commissionPreset || 'Custom'}</span>
-          </span>
+          {!isAllTeam && data.commissionPreset && (
+            <>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-500">
+                Tier <span className="font-semibold text-purple-600">{data.commissionPreset}</span>
+              </span>
+            </>
+          )}
+          {isAllTeam && (
+            <>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-500">
+                Agents <span className="font-semibold text-gray-800">{teamAgents.length}</span>
+              </span>
+            </>
+          )}
         </div>
 
         {/* Pipeline summary row */}
@@ -390,6 +419,11 @@ export default function Deals() {
                                             : deal.PaymentDate
                                               ? new Date(deal.PaymentDate).toLocaleDateString('en-IN')
                                               : '—'}
+                                          {isAllTeam && deal.Email && (
+                                            <span className="ml-2 text-gray-400">
+                                              · {teamAgents.find(a => a.email === deal.Email)?.name ?? deal.Email}
+                                            </span>
+                                          )}
                                         </p>
                                       </div>
                                       {deal.isAtRisk && (

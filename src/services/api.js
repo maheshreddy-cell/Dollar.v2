@@ -139,6 +139,62 @@ export const getDealsGrouped = async (email, month) => {
   }
 }
 
+// Aggregate deals for a list of agent emails — used for manager "All Team" view
+export const getDealsGroupedForTeam = async (emails, month) => {
+  const [targets, deals] = await Promise.all([
+    appsScript.getSheet('Targets'),
+    appsScript.getSalesSheet(),
+  ])
+
+  const lowerEmails = emails.map(e => (e || '').trim().toLowerCase())
+
+  // Sum up targets across all team agents
+  let tAmount = 0
+  for (const email of lowerEmails) {
+    const target = latestTarget(targets, email, month)
+    if (target) tAmount += Number(tf(target, 'TargetAmount') ?? 0)
+  }
+
+  // All deals for the team in this month
+  const teamDeals = deals.filter(d =>
+    lowerEmails.includes((d.Email || '').trim().toLowerCase()) && d.Month === month
+  )
+
+  const groups = { PAID: [], PARTIALLY_PAID: [], ALMOST_THERE: [], WIP: [], LOST: [] }
+  for (const d of teamDeals) {
+    const cat = getStageCategory(d.LoanDocsCollected)
+    const daysInStage = workingDaysSince(d.Timestamp || d.PaymentDate)
+    const isAtRisk = (
+      ['awaiting for docs', 'post_approval pending'].includes(
+        (d.LoanDocsCollected || '').trim().toLowerCase()
+      ) && daysInStage >= 3
+    )
+    groups[cat].push({ ...d, daysInStage, isAtRisk })
+  }
+
+  const totals = {}
+  let totalPipeline = 0
+  let atRiskAmount = 0
+  for (const [cat, arr] of Object.entries(groups)) {
+    const val = arr.reduce((s, d) => s + (d.TotalValue || 0), 0)
+    totals[cat] = { value: val, count: arr.length }
+    totalPipeline += val
+    if (cat === 'WIP' || cat === 'ALMOST_THERE') {
+      atRiskAmount += arr.filter(d => d.isAtRisk).reduce((s, d) => s + (d.TotalValue || 0), 0)
+    }
+  }
+
+  const paidAmount = totals.PAID.value + totals.PARTIALLY_PAID.value
+  const wipAmount  = totals.WIP.value  + totals.ALMOST_THERE.value
+  const achieved   = groups.PAID.reduce((s, d) => s + (d.PaidActual || 0), 0)
+
+  return {
+    groups, totals, totalPipeline, paidAmount, wipAmount, atRiskAmount,
+    wipSlabHint: null, tAmount, commissionPreset: null, achieved,
+    isTeamView: true,
+  }
+}
+
 export const getDealsForSubtree = async (emails, month) => {
   const deals = await appsScript.getSalesSheet()
   const lower = emails.map(e => e.trim().toLowerCase())
