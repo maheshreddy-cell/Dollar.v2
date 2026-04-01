@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MonthProvider } from './contexts/MonthContext'
+import { PermissionsProvider } from './contexts/PermissionsContext'
 import Sidebar from './components/Sidebar'
 import Navbar from './components/Navbar'
 
@@ -15,6 +16,7 @@ import OrgPage from './pages/OrgPage'
 import CommissionConfig from './pages/CommissionConfig'
 import ManagerTargets from './pages/ManagerTargets'
 import FAQ from './pages/FAQ'
+import Permissions from './pages/Permissions'
 
 function AppLayout() {
   return (
@@ -60,6 +62,7 @@ function RequireRole({ roles, children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <PermissionsProvider>
       <MonthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -133,11 +136,20 @@ export default function App() {
               }
             />
             <Route path="/faq" element={<FAQ />} />
+            <Route
+              path="/permissions"
+              element={
+                <RequireRole roles={['Admin']}>
+                  <Permissions />
+                </RequireRole>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </MonthProvider>
+      </PermissionsProvider>
     </AuthProvider>
   )
 }

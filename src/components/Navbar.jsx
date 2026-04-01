@@ -16,6 +16,7 @@ const PAGE_TITLES = {
   '/commission-config':'Commission Config',
   '/manager-targets':  'My Targets',
   '/faq':              'FAQ',
+  '/permissions':      'Permissions & Access',
 }
 
 export default function Navbar() {

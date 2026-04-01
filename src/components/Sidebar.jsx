@@ -1,38 +1,57 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { usePermissions } from '../contexts/PermissionsContext'
 import { ROLE_COLORS } from '../utils/roles'
 
-// Role-based nav — each role sees exactly the pages they have access to.
-// When in ViewAs mode the viewed person's role is used, not the real user's.
-const NAV_GROUPS = [
+// Base nav definition — roles arrays are the minimum always-visible set.
+// PermissionsContext can expand them at runtime.
+const NAV_BASE = [
   {
     label: null,
     items: [
-      { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/deals',             label: 'Deals',             icon: Briefcase,       roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       roles: ['Admin','SalesHead','VH','Manager','Agent'] },
-      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/manager-targets',   label: 'My Targets',        icon: Star,            roles: ['Manager'] },
-      { to: '/team',              label: 'My Team',           icon: Users,           roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       roles: ['Admin','SalesHead','VH','Manager'] },
-      { to: '/commission-config', label: 'Commission Config', icon: Settings,        roles: ['Admin','SalesHead','VH'] },
+      { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/deals',             label: 'Deals',             icon: Briefcase,       baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       baseRoles: ['Admin','SalesHead','VH','Manager','Agent'],
+        permAdd: { presales_metrics: 'PreSales' } },
+      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      baseRoles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/manager-targets',   label: 'My Targets',        icon: Star,            baseRoles: ['Manager'],
+        permAdd: { agent_targets: 'Agent', presales_targets: 'PreSales' } },
+      { to: '/team',              label: 'My Team',           icon: Users,           baseRoles: ['Admin','SalesHead','VH','Manager'],
+        permAdd: { agent_team: 'Agent', presales_team: 'PreSales' } },
+      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       baseRoles: ['Admin','SalesHead','VH','Manager'],
+        permAdd: { agent_org: 'Agent', presales_org: 'PreSales' } },
+      { to: '/commission-config', label: 'Commission Config', icon: Settings,        baseRoles: ['Admin','SalesHead','VH'],
+        permAdd: { manager_commission: 'Manager' } },
+      { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'] },
     ],
   },
   {
     label: 'Support',
     items: [
-      { to: '/faq', label: 'FAQ', icon: MessageCircle, roles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/faq', label: 'FAQ', icon: MessageCircle, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
     ],
   },
 ]
 
 export default function Sidebar() {
   const { user, effectiveUser, isRole } = useAuth()
+  const { can } = usePermissions()
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
+
+  // Compute effective roles for a nav item (base + any unlocked by permissions)
+  function effectiveRoles(item) {
+    const roles = [...item.baseRoles]
+    if (item.permAdd) {
+      for (const [permKey, role] of Object.entries(item.permAdd)) {
+        if (can(permKey) && !roles.includes(role)) roles.push(role)
+      }
+    }
+    return roles
+  }
 
   return (
     <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 bg-gradient-to-b from-white to-gray-50/80">
@@ -43,10 +62,11 @@ export default function Sidebar() {
 
       {/* Nav groups */}
       <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
-        {NAV_GROUPS.map((group, gi) => {
+        {NAV_BASE.map((group, gi) => {
           const visible = group.items.filter(item => {
-            if (isViewAs) return item.roles.includes(effectiveUser.role)
-            return isRole(...item.roles)
+            const roles = effectiveRoles(item)
+            if (isViewAs) return roles.includes(effectiveUser.role)
+            return isRole(...roles)
           })
           if (!visible.length) return null
           return (
