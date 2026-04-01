@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -19,13 +19,14 @@ const NAV_BASE = [
         permAdd: { presales_metrics: 'PreSales' } },
       { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      baseRoles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/manager-targets',   label: 'My Targets',        icon: Star,            baseRoles: ['Manager'],
-        permAdd: { agent_targets: 'Agent', presales_targets: 'PreSales' } },
+        permAdd: { agent_targets: 'Agent', presales_targets: 'PreSales', vh_my_targets: 'VH', saleshead_my_targets: 'SalesHead' } },
       { to: '/team',              label: 'My Team',           icon: Users,           baseRoles: ['Admin','SalesHead','VH','Manager'],
         permAdd: { agent_team: 'Agent', presales_team: 'PreSales' } },
       { to: '/org',               label: 'Org Chart',         icon: GitBranch,       baseRoles: ['Admin','SalesHead','VH','Manager'],
         permAdd: { agent_org: 'Agent', presales_org: 'PreSales' } },
       { to: '/commission-config', label: 'Commission Config', icon: Settings,        baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_commission: 'Manager' } },
+      { to: '/kickers',           label: 'Kickers',           icon: Zap,             baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
       { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'] },
     ],
   },

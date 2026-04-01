@@ -17,6 +17,7 @@ const PAGE_TITLES = {
   '/manager-targets':  'My Targets',
   '/faq':              'FAQ',
   '/permissions':      'Permissions & Access',
+  '/kickers':          'Kickers',
 }
 
 export default function Navbar() {

@@ -899,6 +899,66 @@ export function calcManagerCommission(teamMetric, slabs) {
   return calcManagerCommissionInfo(teamMetric, slabs).commission
 }
 
+// ── Kickers ───────────────────────────────────────────────────────────────────
+function parseKickerRow(r) {
+  const safe = (key) => { try { const v = JSON.parse(r[key] || '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+  return {
+    id:             r.KickerId    || '',
+    title:          r.Title       || '',
+    message:        r.Message     || '',
+    type:           r.Type        || 'team_sales',
+    minSaleValue:   Number(r.MinSaleValue || 0),
+    dateFrom:       r.DateFrom    || '',
+    dateTo:         r.DateTo      || '',
+    slabs:          safe('Slabs'),
+    targetTeams:    safe('TargetTeams'),
+    targetRoles:    safe('TargetRoles'),
+    pinned:         r.Pinned === 'true',
+    announcedBy:    r.AnnouncedBy     || '',
+    announcedByRole:r.AnnouncedByRole || '',
+    announcedAt:    r.AnnouncedAt     || '',
+  }
+}
+
+export async function getKickers() {
+  try {
+    const rows = await appsScript.getSheet('Kickers')
+    return (rows || []).map(parseKickerRow).filter(k => k.id)
+  } catch { return [] }
+}
+
+export async function announceKicker(data, announcerEmail, announcerRole) {
+  const id  = `kicker_${Date.now()}`
+  await appsScript.appendRow('Kickers', [
+    id,
+    data.title,
+    data.message || '',
+    data.type,
+    data.minSaleValue || 0,
+    data.dateFrom,
+    data.dateTo,
+    JSON.stringify(data.slabs || []),
+    JSON.stringify(data.targetTeams || ['ALL']),
+    JSON.stringify(data.targetRoles || []),
+    data.pinned ? 'true' : 'false',
+    announcerEmail,
+    announcerRole,
+    new Date().toISOString(),
+  ])
+  clearCache()
+  return id
+}
+
+export async function deleteKicker(kickerId) {
+  await appsScript.deleteRow('Kickers', 'KickerId', kickerId)
+  clearCache()
+}
+
+export async function updateKicker(kickerId, updates) {
+  await appsScript.updateRow('Kickers', 'KickerId', kickerId, updates)
+  clearCache()
+}
+
 // ── Reassign agent to a different manager ────────────────────────────────────
 // Updates the ManagerEmail field in the Users sheet for the given agent.
 export async function reassignAgent(agentEmail, newManagerEmail, updatedByEmail) {

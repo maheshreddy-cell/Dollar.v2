@@ -17,6 +17,7 @@ import CommissionConfig from './pages/CommissionConfig'
 import ManagerTargets from './pages/ManagerTargets'
 import FAQ from './pages/FAQ'
 import Permissions from './pages/Permissions'
+import Kickers from './pages/Kickers'
 
 function AppLayout() {
   return (
@@ -136,6 +137,14 @@ export default function App() {
               }
             />
             <Route path="/faq" element={<FAQ />} />
+            <Route
+              path="/kickers"
+              element={
+                <RequireRole roles={['Admin','SalesHead','VH','Manager','Agent','PreSales']}>
+                  <Kickers />
+                </RequireRole>
+              }
+            />
             <Route
               path="/permissions"
               element={
