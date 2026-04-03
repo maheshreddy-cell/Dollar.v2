@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Megaphone, X, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { announceKicker, getSubtree } from '../services/api'
+import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -23,10 +23,13 @@ const ANNOUNCE_FOR = {
   Manager:   ['Agent', 'PreSales'],
 }
 
+// Role hierarchy for "can manage" check (higher index = higher authority)
+const ROLE_HIERARCHY = ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Admin']
+
 const TODAY = new Date().toISOString().split('T')[0]
 
 const EMPTY_SLAB = { threshold: '', salesThreshold: '', revenueThreshold: '', payout: '' }
-function emptySlabs() { return [EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB] }
+function emptySlabs() { return [{ ...EMPTY_SLAB }, { ...EMPTY_SLAB }, { ...EMPTY_SLAB }, { ...EMPTY_SLAB }] }
 
 function flatTree(node, acc = []) {
   if (!node) return acc
@@ -35,18 +38,123 @@ function flatTree(node, acc = []) {
   return acc
 }
 
+function kickerIsActive(k) {
+  const now  = Date.now()
+  const from = new Date(k.dateFrom).getTime()
+  const to   = new Date(k.dateTo).getTime() + 86399999
+  return now >= from && now <= to
+}
+function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date.now() }
+
+// Can the current user manage (edit/delete) this kicker?
+function canManage(kicker, user) {
+  if (kicker.announcedBy === user?.email) return true
+  const announcerIdx = ROLE_HIERARCHY.indexOf(kicker.announcedByRole)
+  const userIdx      = ROLE_HIERARCHY.indexOf(user?.role)
+  return userIdx > announcerIdx
+}
+
+// ── Compact ManageCard ────────────────────────────────────────────────────────
+function ManageCard({ kicker, onEdit, onDelete }) {
+  const [delConfirm, setDelConfirm] = useState(false)
+  const [expanded,   setExpanded]   = useState(false)
+
+  const active  = kickerIsActive(kicker)
+  const past    = kickerIsPast(kicker)
+
+  const statusBadge = past
+    ? <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>
+    : active
+      ? <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
+      : <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">Upcoming</span>
+
+  return (
+    <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${past ? 'opacity-70' : ''}`}>
+      <div className={`h-1 ${past ? 'bg-gray-200' : 'bg-gradient-to-r from-brand-500 via-purple-500 to-pink-400'}`} />
+      <div className="px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-1 mb-1">
+              {statusBadge}
+              {kicker.pinned && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌</span>}
+            </div>
+            <p className="text-sm font-bold text-gray-900 leading-snug">{kicker.title}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {kicker.dateFrom} → {kicker.dateTo} · by {kicker.announcedByRole}
+            </p>
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {(kicker.targetRoles || []).map(r => (
+                <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
+              ))}
+              {(kicker.targetTeams || []).includes('ALL')
+                ? <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
+                : <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
+              }
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => setExpanded(v => !v)} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors">
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            <button onClick={() => onEdit(kicker)} className="p-1.5 text-gray-400 hover:text-brand-600 transition-colors" title="Edit">
+              <Pencil size={14} />
+            </button>
+            {delConfirm ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => onDelete(kicker.id)} className="text-[11px] font-bold text-red-600 hover:underline">Confirm</button>
+                <button onClick={() => setDelConfirm(false)} className="text-[11px] text-gray-400 hover:underline">Cancel</button>
+              </div>
+            ) : (
+              <button onClick={() => setDelConfirm(true)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Delete">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Slabs summary */}
+        {expanded && (kicker.slabs || []).length > 0 && (
+          <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
+            <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Slabs</p>
+            {kicker.slabs.map((s, i) => {
+              const type = kicker.type || 'team_sales'
+              let desc = ''
+              if (type === 'team_sales' || type === 'individual_sales')
+                desc = `${s.threshold} sales → ${formatINR(Number(s.payout))}`
+              else if (type === 'team_revenue' || type === 'individual_revenue')
+                desc = `${formatINR(Number(s.threshold))} → ${formatINR(Number(s.payout))}`
+              else if (type === 'individual_or')
+                desc = `${s.salesThreshold} sales OR ${formatINR(Number(s.revenueThreshold))} → ${formatINR(Number(s.payout))}`
+              else if (type === 'individual_and')
+                desc = `${s.salesThreshold} sales AND ${formatINR(Number(s.revenueThreshold))} → ${formatINR(Number(s.payout))}`
+              return <p key={i} className="text-[10px] text-gray-600">S{i+1}: {desc}</p>
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnnounceKicker() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [form, setForm] = useState({
+  const BLANK_FORM = {
     title: '', message: '', type: 'team_sales', minSaleValue: '',
     dateFrom: TODAY, dateTo: TODAY,
     targetTeams: ['ALL'], targetRoles: [],
     pinned: false, slabs: emptySlabs(),
-  })
+  }
+
+  const [form,        setForm]        = useState(BLANK_FORM)
+  const [editingId,   setEditingId]   = useState(null)   // null = new, string = editing existing
   const [managers,    setManagers]    = useState([])
+  const [allKickers,  setAllKickers]  = useState([])
+  const [loadingList, setLoadingList] = useState(true)
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
   const [success,     setSuccess]     = useState(false)
@@ -55,13 +163,24 @@ export default function AnnounceKicker() {
   const typeInfo      = KICKER_TYPES.find(t => t.value === form.type)
   const isCombo       = form.type === 'individual_or' || form.type === 'individual_and'
 
-  useEffect(() => {
+  const manageable = allKickers.filter(k => canManage(k, user))
+
+  const loadData = useCallback(async () => {
     if (!user?.email) return
-    getSubtree(user.email).then(tree => {
+    setLoadingList(true)
+    try {
+      const [ks, tree] = await Promise.all([
+        getKickers(),
+        getSubtree(user.email),
+      ])
+      setAllKickers(ks)
       const all = flatTree(tree).filter(m => m.Email !== user.email && ['Manager','VH','SalesHead'].includes(m.Role))
       setManagers(all)
-    }).catch(() => {})
+    } catch {}
+    finally { setLoadingList(false) }
   }, [user?.email])
+
+  useEffect(() => { loadData() }, [loadData])
 
   const setField = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -86,6 +205,41 @@ export default function AnnounceKicker() {
     setForm(p => ({ ...p, slabs: p.slabs.map((s, idx) => idx === i ? { ...s, [field]: val } : s) }))
   }
 
+  function handleEdit(kicker) {
+    // Pad slabs to 4 rows
+    const padded = [...kicker.slabs]
+    while (padded.length < 4) padded.push({ ...EMPTY_SLAB })
+    setForm({
+      title:        kicker.title,
+      message:      kicker.message,
+      type:         kicker.type || 'team_sales',
+      minSaleValue: kicker.minSaleValue || '',
+      dateFrom:     kicker.dateFrom,
+      dateTo:       kicker.dateTo,
+      targetTeams:  kicker.targetTeams || ['ALL'],
+      targetRoles:  kicker.targetRoles || [],
+      pinned:       kicker.pinned || false,
+      slabs:        padded,
+    })
+    setEditingId(kicker.id)
+    setError('')
+    setSuccess(false)
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function handleCancelEdit() {
+    setForm(BLANK_FORM)
+    setEditingId(null)
+    setError('')
+  }
+
+  async function handleDelete(id) {
+    await deleteKicker(id)
+    setAllKickers(prev => prev.filter(k => k.id !== id))
+    if (editingId === id) handleCancelEdit()
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.title.trim())             { setError('Title is required.'); return }
@@ -95,45 +249,43 @@ export default function AnnounceKicker() {
     if (!filledSlabs.length)            { setError('Add at least one slab.'); return }
 
     setSubmitting(true); setError('')
+    const cleanSlabs = filledSlabs.map(s => ({
+      threshold:        Number(s.threshold        || 0),
+      salesThreshold:   Number(s.salesThreshold   || 0),
+      revenueThreshold: Number(s.revenueThreshold || 0),
+      payout:           Number(s.payout           || 0),
+    }))
+
     try {
-      await announceKicker({
-        ...form,
-        slabs: filledSlabs.map(s => ({
-          threshold:        Number(s.threshold        || 0),
-          salesThreshold:   Number(s.salesThreshold   || 0),
-          revenueThreshold: Number(s.revenueThreshold || 0),
-          payout:           Number(s.payout           || 0),
-        })),
-        minSaleValue: Number(form.minSaleValue || 0),
-      }, user.email, user.role)
+      if (editingId) {
+        await updateKicker(editingId, {
+          Title:       form.title,
+          Message:     form.message || '',
+          Type:        form.type,
+          MinSaleValue:Number(form.minSaleValue || 0),
+          DateFrom:    form.dateFrom,
+          DateTo:      form.dateTo,
+          Slabs:       JSON.stringify(cleanSlabs),
+          TargetTeams: JSON.stringify(form.targetTeams || ['ALL']),
+          TargetRoles: JSON.stringify(form.targetRoles || []),
+          Pinned:      form.pinned ? 'true' : 'false',
+        })
+      } else {
+        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0) }, user.email, user.role)
+      }
       setSuccess(true)
+      setForm(BLANK_FORM)
+      setEditingId(null)
+      // Refresh list
+      loadData()
     } catch (err) {
-      setError(err?.message ?? 'Failed to announce kicker.')
+      setError(err?.message ?? 'Failed to save kicker.')
       setSubmitting(false)
     }
   }
 
-  if (success) return (
-    <div className="max-w-2xl mx-auto mt-12">
-      <div className="bg-white rounded-2xl border border-green-200 p-12 flex flex-col items-center gap-4 text-center shadow-sm">
-        <CheckCircle size={48} className="text-green-500" />
-        <p className="text-lg font-bold text-green-700">Kicker announced! 🎉</p>
-        <p className="text-sm text-gray-400">Your incentive is now live for the selected teams and roles.</p>
-        <div className="flex gap-3 mt-2">
-          <button onClick={() => navigate('/kickers')} className="bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
-            View Kickers
-          </button>
-          <button onClick={() => { setSuccess(false); setForm({ title: '', message: '', type: 'team_sales', minSaleValue: '', dateFrom: TODAY, dateTo: TODAY, targetTeams: ['ALL'], targetRoles: [], pinned: false, slabs: emptySlabs() }) }}
-            className="border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
-            Announce Another
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
+    <div className="max-w-2xl mx-auto space-y-6">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -145,16 +297,68 @@ export default function AnnounceKicker() {
         </div>
         <div>
           <h2 className="text-base font-bold text-gray-900">Announce Kicker</h2>
-          <p className="text-xs text-gray-400">Create a new incentive for your team</p>
+          <p className="text-xs text-gray-400">Create & manage incentives for your team</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-4 bg-gradient-to-r from-brand-50 to-purple-50 border-b border-gray-100">
-          <p className="text-sm font-bold text-gray-800">New Kicker Details</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            As <span className="font-semibold text-brand-700">{user?.role}</span> you can announce kickers for: {eligibleRoles.join(', ')}
+      {/* Success banner */}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+          <p className="text-sm font-semibold text-green-700">
+            {editingId ? 'Kicker updated!' : 'Kicker announced! 🎉'} Your incentive is now live.
           </p>
+          <button onClick={() => setSuccess(false)} className="ml-auto text-green-400 hover:text-green-600 text-xs">✕</button>
+        </div>
+      )}
+
+      {/* ── Manage existing kickers ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Zap size={14} className="text-purple-500" />
+          <p className="text-sm font-bold text-gray-800">Your Kickers to Manage</p>
+          <span className="text-[10px] font-semibold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{manageable.length}</span>
+        </div>
+
+        {loadingList ? (
+          <div className="flex items-center justify-center h-16">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600" />
+          </div>
+        ) : manageable.length === 0 ? (
+          <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-6 text-center">
+            <p className="text-xs text-gray-400">No kickers yet. Create one below.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {manageable.sort((a, b) => new Date(b.announcedAt) - new Date(a.announcedAt)).map(k => (
+              <ManageCard
+                key={k.id}
+                kicker={k}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Create / Edit form ── */}
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="px-5 py-4 bg-gradient-to-r from-brand-50 to-purple-50 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-gray-800">
+              {editingId ? '✏️ Edit Kicker' : 'New Kicker'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              As <span className="font-semibold text-brand-700">{user?.role}</span> you can announce kickers for: {eligibleRoles.join(', ')}
+            </p>
+          </div>
+          {editingId && (
+            <button type="button" onClick={handleCancelEdit}
+              className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg">
+              Cancel Edit
+            </button>
+          )}
         </div>
 
         <div className="px-5 py-5 space-y-5">
@@ -323,14 +527,21 @@ export default function AnnounceKicker() {
           {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3">
-            <button type="button" onClick={() => navigate('/kickers')}
-              className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 font-semibold text-sm py-3 rounded-xl transition-colors">
-              Cancel
-            </button>
+            {editingId ? (
+              <button type="button" onClick={handleCancelEdit}
+                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 font-semibold text-sm py-3 rounded-xl transition-colors">
+                Cancel Edit
+              </button>
+            ) : (
+              <button type="button" onClick={() => navigate('/kickers')}
+                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 font-semibold text-sm py-3 rounded-xl transition-colors">
+                Back to Kickers
+              </button>
+            )}
             <button type="submit" disabled={submitting || eligibleRoles.length === 0}
               className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold text-sm py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
               <Megaphone size={15} />
-              {submitting ? 'Announcing…' : 'Announce Kicker 🚀'}
+              {submitting ? 'Saving…' : editingId ? 'Save Changes' : 'Announce Kicker 🚀'}
             </button>
           </div>
 

@@ -1,30 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Zap, ChevronDown, ChevronUp, Trash2, Clock, Megaphone } from 'lucide-react'
+import { Zap, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, deleteKicker, getDeals } from '../services/api'
+import { getKickers, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'team_sales',          label: '👥 Team Sales',             desc: 'Team hits X total sales → everyone gets payout',         unit: 'sales',   metric: 'team'   },
-  { value: 'team_revenue',        label: '👥 Team Revenue',           desc: 'Team hits X revenue total → everyone gets payout',       unit: 'revenue', metric: 'team'   },
-  { value: 'individual_sales',    label: '👤 Individual Sales',       desc: 'Each person hits X sales → they personally get payout',  unit: 'sales',   metric: 'ind'    },
-  { value: 'individual_revenue',  label: '👤 Individual Revenue',     desc: 'Each person hits X revenue → they get payout',           unit: 'revenue', metric: 'ind'    },
-  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', desc: 'X sales OR Y revenue → person gets payout',           unit: 'or',      metric: 'ind'    },
-  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue', desc: 'X sales AND Y revenue → person gets payout',         unit: 'and',     metric: 'ind'    },
+  { value: 'team_sales',          label: '👥 Team Sales',               unit: 'sales',   metric: 'team' },
+  { value: 'team_revenue',        label: '👥 Team Revenue',             unit: 'revenue', metric: 'team' },
+  { value: 'individual_sales',    label: '👤 Individual Sales',         unit: 'sales',   metric: 'ind'  },
+  { value: 'individual_revenue',  label: '👤 Individual Revenue',       unit: 'revenue', metric: 'ind'  },
+  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', unit: 'or',      metric: 'ind'  },
+  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue',unit: 'and',     metric: 'ind'  },
 ]
 
-const CAN_ANNOUNCE = ['Admin', 'SalesHead', 'VH', 'Manager']
-
-const TODAY = new Date().toISOString().split('T')[0]
+// Roles that see all kickers (oversight view)
+const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH']
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 function kickerIsActive(k) {
   const now  = Date.now()
   const from = new Date(k.dateFrom).getTime()
-  const to   = new Date(k.dateTo).getTime() + 86399999 // end of day
+  const to   = new Date(k.dateTo).getTime() + 86399999
   return now >= from && now <= to
 }
 function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date.now() }
@@ -91,12 +89,10 @@ function slabLabel(slab, type) {
 }
 
 function slabBarPct(slab, type, progress) {
-  if (type === 'team_sales' || type === 'individual_sales') {
+  if (type === 'team_sales' || type === 'individual_sales')
     return Math.min((progress.sales / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  }
-  if (type === 'team_revenue' || type === 'individual_revenue') {
+  if (type === 'team_revenue' || type === 'individual_revenue')
     return Math.min((progress.revenue / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  }
   if (type === 'individual_or') {
     const sp = progress.sales   / Math.max(Number(slab.salesThreshold),   1)
     const rp = progress.revenue / Math.max(Number(slab.revenueThreshold), 1)
@@ -136,10 +132,9 @@ function nudgeText(slab, type, progress) {
   return null
 }
 
-// ── KickerCard ────────────────────────────────────────────────────────────────
-function KickerCard({ kicker, deals, canDelete, onDelete }) {
-  const [expanded, setExpanded]     = useState(false)
-  const [delConfirm, setDelConfirm] = useState(false)
+// ── KickerCard (view-only) ────────────────────────────────────────────────────
+function KickerCard({ kicker, deals }) {
+  const [expanded, setExpanded] = useState(false)
 
   const active   = kickerIsActive(kicker)
   const past     = kickerIsPast(kicker)
@@ -159,53 +154,35 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
 
       <div className="px-5 py-4 space-y-3">
         {/* Header row */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
-              {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
-              {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
-              <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
-            </div>
-            <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
+            {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
+            {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
+            <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
+          </div>
+          <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
 
-            {/* Meta */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
-              <span>📅 {kicker.dateFrom} → {kicker.dateTo}</span>
-              {!past && <span className={`font-semibold ${countdown(kicker).includes('h') ? 'text-orange-500' : 'text-gray-500'}`}>⏱ {countdown(kicker)}</span>}
-              <span>By {kicker.announcedBy} ({kicker.announcedByRole})</span>
-            </div>
-
-            {/* Target chips */}
-            <div className="flex flex-wrap gap-1 mt-2">
-              {(kicker.targetRoles || []).map(r => (
-                <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
-              ))}
-              {(kicker.targetTeams || []).includes('ALL')
-                ? <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
-                : <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
-              }
-              {kicker.minSaleValue > 0 && (
-                <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
-              )}
-            </div>
+          {/* Meta */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
+            <span>📅 {kicker.dateFrom} → {kicker.dateTo}</span>
+            {!past && <span className={`font-semibold ${countdown(kicker).includes('h') ? 'text-orange-500' : 'text-gray-500'}`}>⏱ {countdown(kicker)}</span>}
+            <span>By {kicker.announcedBy} ({kicker.announcedByRole})</span>
           </div>
 
-          {/* Delete */}
-          {canDelete && (
-            <div className="flex-shrink-0">
-              {delConfirm ? (
-                <div className="flex gap-2">
-                  <button onClick={() => onDelete(kicker.id)} className="text-xs text-red-600 font-semibold hover:underline">Delete</button>
-                  <button onClick={() => setDelConfirm(false)} className="text-xs text-gray-400 hover:underline">Cancel</button>
-                </div>
-              ) : (
-                <button onClick={() => setDelConfirm(true)} className="text-gray-300 hover:text-red-400 transition-colors">
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
-          )}
+          {/* Target chips */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(kicker.targetRoles || []).map(r => (
+              <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
+            ))}
+            {(kicker.targetTeams || []).includes('ALL')
+              ? <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
+              : <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
+            }
+            {kicker.minSaleValue > 0 && (
+              <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
+            )}
+          </div>
         </div>
 
         {/* Message toggle */}
@@ -251,12 +228,12 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Incentive Slabs</p>
           {progress.sorted.map((slab, i) => {
-            const hitIdx   = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
-            const isHit    = hitIdx >= i
-            const isNext   = !isHit && progress.nextSlab === slab
-            const barPct   = slabBarPct(slab, type, progress)
-            const nudge    = isNext && active ? nudgeText(slab, type, progress) : null
-            const label    = slabLabel(slab, type)
+            const hitIdx = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
+            const isHit  = hitIdx >= i
+            const isNext = !isHit && progress.nextSlab === slab
+            const barPct = slabBarPct(slab, type, progress)
+            const nudge  = isNext && active ? nudgeText(slab, type, progress) : null
+            const label  = slabLabel(slab, type)
 
             return (
               <div key={i} className={`rounded-xl border p-3 transition-all ${
@@ -277,7 +254,6 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 {active && (
                   <>
                     <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -305,17 +281,15 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
 export default function Kickers() {
   const { user, effectiveUser } = useAuth()
   const { month } = useMonth()
-  const navigate = useNavigate()
 
   const [kickers, setKickers] = useState([])
-  const [deals, setDeals]     = useState([])
+  const [deals,   setDeals]   = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab]         = useState('active')
+  const [tab,     setTab]     = useState('active')
 
-  const canAnnounce = CAN_ANNOUNCE.includes(user?.role)
-
-  // Visibility check: can this user see this kicker?
+  // Admin/SalesHead/VH see all kickers (oversight); everyone else sees only relevant ones
   function isVisible(k) {
+    if (OVERSIGHT_ROLES.includes(user?.role)) return true
     if (k.announcedBy === effectiveUser?.email) return true
     const roles = k.targetRoles || []
     if (!roles.includes(effectiveUser?.role)) return false
@@ -332,10 +306,9 @@ export default function Kickers() {
     try {
       const [ks, ds] = await Promise.all([
         getKickers(),
-        getDeals(null, month),  // load all deals for the month for progress calc
+        getDeals(null, month),
       ])
       setKickers(ks)
-      // For team kickers, deals are already all loaded; individual will be filtered by email client-side
       setDeals(ds)
     } catch { /* show empty */ }
     finally { setLoading(false) }
@@ -343,25 +316,14 @@ export default function Kickers() {
 
   useEffect(() => { load() }, [load])
 
-  const visible  = kickers.filter(isVisible)
-  const active   = visible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
-  const past     = visible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
+  const visible   = kickers.filter(isVisible)
+  const active    = visible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
+  const past      = visible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
   const displayed = tab === 'active' ? active : past
 
-  async function handleDelete(id) {
-    await deleteKicker(id)
-    setKickers(prev => prev.filter(k => k.id !== id))
-  }
-
-  function canDelete(k) {
-    return k.announcedBy === user?.email || user?.role === 'Admin'
-      || (user?.role === 'SalesHead' && !['Admin'].includes(k.announcedByRole))
-  }
-
-  // For individual kickers, scope deals to the current user
   function dealsFor(k) {
     const isTeam = k.type?.startsWith('team_')
-    if (isTeam) return deals // all deals for team progress
+    if (isTeam) return deals
     return deals.filter(d => d.Email === effectiveUser?.email)
   }
 
@@ -375,22 +337,14 @@ export default function Kickers() {
     <div className="space-y-5 max-w-4xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
-            <Zap size={18} className="text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Kickers</h2>
-            <p className="text-xs text-gray-400">Special incentives & bonus opportunities</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
+          <Zap size={18} className="text-purple-600" />
         </div>
-        {canAnnounce && (
-          <button onClick={() => navigate('/announce-kicker')}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-            <Megaphone size={15} /> Announce Kicker
-          </button>
-        )}
+        <div>
+          <h2 className="text-base font-bold text-gray-900">My Kickers</h2>
+          <p className="text-xs text-gray-400">Your active incentives & bonus opportunities</p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -414,11 +368,6 @@ export default function Kickers() {
           <p className="text-sm font-semibold text-gray-400">
             {tab === 'active' ? 'No active kickers right now. Stay tuned!' : 'No past kickers to show.'}
           </p>
-          {canAnnounce && tab === 'active' && (
-            <button onClick={() => navigate('/announce-kicker')} className="text-xs text-brand-600 hover:underline font-semibold">
-              + Announce the first kicker
-            </button>
-          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -427,8 +376,6 @@ export default function Kickers() {
               key={k.id}
               kicker={k}
               deals={dealsFor(k)}
-              canDelete={canDelete(k)}
-              onDelete={handleDelete}
             />
           ))}
         </div>
