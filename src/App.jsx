@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, Outlet, Suspense, lazy } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MonthProvider } from './contexts/MonthContext'
 import { PermissionsProvider } from './contexts/PermissionsContext'
