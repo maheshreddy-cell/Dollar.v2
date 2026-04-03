@@ -960,10 +960,15 @@ export async function updateKicker(kickerId, updates) {
 }
 
 // ── Reassign agent to a different manager ────────────────────────────────────
-// Updates the ManagerEmail field in the Users sheet for the given agent.
 export async function reassignAgent(agentEmail, newManagerEmail, updatedByEmail) {
   await appsScript.updateRow('Users', 'Email', agentEmail, {
     ManagerEmail: newManagerEmail,
   })
+  clearCache()
+}
+
+// ── Change a member's role ────────────────────────────────────────────────────
+export async function changeRole(email, newRole) {
+  await appsScript.updateRow('Users', 'Email', email, { Role: newRole })
   clearCache()
 }

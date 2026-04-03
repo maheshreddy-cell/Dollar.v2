@@ -29,7 +29,7 @@ const NAV_BASE = [
         permAdd: { manager_org: 'Manager', agent_org: 'Agent', presales_org: 'PreSales' } },
       { to: '/commission-config', label: 'Commission Config', icon: Settings,        baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_commission: 'Manager', agent_commission: 'Agent', presales_commission: 'PreSales' } },
-      { to: '/kickers',           label: 'Kickers',           icon: Zap,             baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/kickers',           label: 'My Kickers',        icon: Zap,             baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_kickers: 'Manager', agent_kickers: 'Agent', presales_kickers: 'PreSales' } },
       { to: '/announce-kicker',   label: 'Announce Kicker',   icon: Megaphone,       baseRoles: ['Admin'],
         permAdd: { saleshead_announce_kicker: 'SalesHead', vh_announce_kicker: 'VH', manager_announce_kicker: 'Manager' } },
