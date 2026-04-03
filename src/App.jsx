@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MonthProvider } from './contexts/MonthContext'
@@ -23,6 +23,33 @@ const FAQ              = lazy(() => import('./pages/FAQ'))
 const Permissions      = lazy(() => import('./pages/Permissions'))
 const Kickers          = lazy(() => import('./pages/Kickers'))
 const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
+
+// Prefetch all page chunks in the background after login so navigation is instant
+const LAZY_CHUNKS = [
+  () => import('./pages/Dashboard'),
+  () => import('./pages/Deals'),
+  () => import('./pages/AssignTargets'),
+  () => import('./pages/Team'),
+  () => import('./pages/Metrics'),
+  () => import('./pages/OrgPage'),
+  () => import('./pages/CommissionConfig'),
+  () => import('./pages/ManagerTargets'),
+  () => import('./pages/FAQ'),
+  () => import('./pages/Permissions'),
+  () => import('./pages/Kickers'),
+  () => import('./pages/AnnounceKicker'),
+]
+
+function PrefetchChunks() {
+  useEffect(() => {
+    if ('requestIdleCallback' in window) {
+      LAZY_CHUNKS.forEach(fn => requestIdleCallback(fn, { timeout: 5000 }))
+    } else {
+      LAZY_CHUNKS.forEach((fn, i) => setTimeout(fn, i * 150 + 500))
+    }
+  }, [])
+  return null
+}
 
 function PageLoader() {
   return (
@@ -58,7 +85,7 @@ function RequireAuth({ children }) {
     )
   }
   if (!user) return <Navigate to="/login" replace />
-  return children
+  return <>{children}<PrefetchChunks /></>
 }
 
 function RequireRole({ roles, children }) {

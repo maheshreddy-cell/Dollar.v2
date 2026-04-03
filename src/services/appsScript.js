@@ -6,14 +6,11 @@ if (!BASE_URL) {
   console.error('[appsScript] VITE_APPS_SCRIPT_URL is not set in .env')
 }
 
-// ─── In-memory GET cache (55 s TTL — just under the 60 s refresh interval) ───
+// ─── In-memory GET cache (55 s TTL) ──────────────────────────────────────────
 const _cache = new Map()
 const CACHE_TTL = 55_000
 
-// Generation counter — incremented on every clearCache().
-// In-flight fetches capture their generation and only write to cache
-// if it still matches, preventing stale warmCache responses from
-// overwriting fresh data after a post-write cache clear.
+// Generation counter — incremented on every clearCache() to invalidate in-flight fetches
 let _gen = 0
 
 function cacheGet(key) {
@@ -23,39 +20,99 @@ function cacheGet(key) {
 }
 function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
 
+// ─── localStorage persistent cache (5 min TTL — survives page refresh) ───────
+const LS_PREFIX = 'dv2_'
+const LS_TTL    = 5 * 60 * 1000
+
+function _lsKey(key) {
+  // short deterministic key from params string
+  let h = 5381
+  for (let i = 0; i < key.length; i++) h = (h * 33 ^ key.charCodeAt(i)) >>> 0
+  return LS_PREFIX + h.toString(36)
+}
+
+function lsRead(key) {
+  try {
+    const raw = localStorage.getItem(_lsKey(key))
+    if (!raw) return null
+    const { d, t } = JSON.parse(raw)
+    return (Date.now() - t < LS_TTL) ? d : null
+  } catch { return null }
+}
+
+function lsWrite(key, data) {
+  try {
+    localStorage.setItem(_lsKey(key), JSON.stringify({ d: data, t: Date.now() }))
+  } catch {}
+}
+
 export function clearCache() {
   _cache.clear()
-  _gen++   // invalidate any in-flight fetches
+  _gen++
+  // Clear all dv2_ entries from localStorage too
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(LS_PREFIX))
+      .forEach(k => localStorage.removeItem(k))
+  } catch {}
 }
 
 // ─── In-flight deduplication ──────────────────────────────────────────────────
 const _inflight = new Map()
 
+// Fire-and-forget background network fetch — updates caches without blocking
+function _bgFetch(key, params) {
+  if (_inflight.has(key)) return
+  const url = new URL(BASE_URL)
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) url.searchParams.set(k, v)
+  })
+  const gen = _gen
+  const promise = fetch(url.toString())
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.error || 'Apps Script error')
+      if (_gen === gen) { cacheSet(key, data.data); lsWrite(key, data.data) }
+      _inflight.delete(key)
+      return data.data
+    })
+    .catch(err => { _inflight.delete(key); throw err })
+  _inflight.set(key, promise)
+}
+
 async function callGet(params) {
   const key = JSON.stringify(params)
-  const cached = cacheGet(key)
-  if (cached) return cached
 
-  // Deduplicate concurrent identical requests
+  // 1. Hot in-memory cache — zero latency
+  const mem = cacheGet(key)
+  if (mem) return mem
+
+  // 2. Stale-while-revalidate from localStorage — instant on revisit/refresh
+  //    Returns immediately and refreshes in background
+  const ls = lsRead(key)
+  if (ls) {
+    cacheSet(key, ls)          // warm in-memory so next call is even faster
+    _bgFetch(key, params)      // silently refresh in background
+    return ls
+  }
+
+  // 3. Full network fetch (only on very first load per sheet)
   if (_inflight.has(key)) return _inflight.get(key)
 
   const url = new URL(BASE_URL)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v)
   })
-
-  const gen = _gen   // capture generation at fetch start
+  const gen = _gen
   const promise = fetch(url.toString())
     .then(r => r.json())
     .then(data => {
       if (!data.success) throw new Error(data.error || 'Apps Script error')
-      // Only cache if clearCache() wasn't called while this fetch was in-flight
-      if (_gen === gen) cacheSet(key, data.data)
+      if (_gen === gen) { cacheSet(key, data.data); lsWrite(key, data.data) }
       _inflight.delete(key)
       return data.data
     })
     .catch(err => { _inflight.delete(key); throw err })
-
   _inflight.set(key, promise)
   return promise
 }
@@ -179,5 +236,7 @@ export function warmCache() {
     callGet({ action: 'getSheet', sheet: 'Users' }),
     callGet({ action: 'getSheet', sheet: 'Targets' }),
     callGet({ action: 'getSheet', sheet: 'Sales done raw dump' }),
+    callGet({ action: 'getSheet', sheet: 'CommissionConfig' }),
+    callGet({ action: 'getSheet', sheet: 'Kickers' }),
   ]).catch(() => { /* silent — just a best-effort pre-fetch */ })
 }
