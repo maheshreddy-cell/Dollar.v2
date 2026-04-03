@@ -44,7 +44,7 @@ export default function MetricsCard({
           {title}
         </p>
 
-        <p className={`mt-0.5 ${p.text} ${highlight ? 'text-2xl font-extrabold' : 'text-xl font-bold'}`}>
+        <p className={`mt-0.5 ${p.text} ${highlight ? 'text-2xl font-semibold' : 'text-xl font-semibold'}`}>
           {value}
         </p>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Zap, ChevronDown, ChevronUp, Clock } from 'lucide-react'
+import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals } from '../services/api'
@@ -282,15 +282,17 @@ export default function Kickers() {
   const { user, effectiveUser } = useAuth()
   const { month } = useMonth()
 
-  const [kickers, setKickers] = useState([])
-  const [deals,   setDeals]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [tab,     setTab]     = useState('active')
+  const [kickers,   setKickers]   = useState([])
+  const [deals,     setDeals]     = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [tab,       setTab]       = useState('active')
+  const [manMode,   setManMode]   = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
-  // Admin/SalesHead/VH see all kickers (oversight); everyone else sees only relevant ones
+  const isManager   = user?.role === 'Manager'
+  const isOversight = OVERSIGHT_ROLES.includes(user?.role)
+
   function isVisible(k) {
-    if (OVERSIGHT_ROLES.includes(user?.role)) return true
-    if (k.announcedBy === effectiveUser?.email) return true
+    if (isOversight) return true
     const roles = k.targetRoles || []
     if (!roles.includes(effectiveUser?.role)) return false
     const teams = k.targetTeams || []
@@ -316,9 +318,19 @@ export default function Kickers() {
 
   useEffect(() => { load() }, [load])
 
-  const visible   = kickers.filter(isVisible)
-  const active    = visible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
-  const past      = visible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
+  // For Manager: split into "For Me" (received) and "For My Team" (announced)
+  const forMeKickers     = isManager ? kickers.filter(isVisible) : []
+  const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === user?.email) : []
+
+  // For oversight and non-manager roles: all visible kickers
+  const allVisible = isOversight
+    ? kickers
+    : isManager
+      ? (manMode === 'forMe' ? forMeKickers : forMyTeamKickers)
+      : kickers.filter(isVisible)
+
+  const active    = allVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
+  const past      = allVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
   const displayed = tab === 'active' ? active : past
 
   function dealsFor(k) {
@@ -347,7 +359,23 @@ export default function Kickers() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Manager mode toggle */}
+      {isManager && (
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+          <button onClick={() => { setManMode('forMe'); setTab('active') }}
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMe' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <Zap size={13} className="text-purple-500" />
+            For Me ({forMeKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
+          </button>
+          <button onClick={() => { setManMode('forMyTeam'); setTab('active') }}
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMyTeam' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <Users size={13} className="text-brand-500" />
+            For My Team ({forMyTeamKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
+          </button>
+        </div>
+      )}
+
+      {/* Active/Past tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         <button onClick={() => setTab('active')}
           className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'active' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -366,17 +394,17 @@ export default function Kickers() {
         <div className="bg-white rounded-2xl border border-gray-200 p-12 flex flex-col items-center gap-3 text-center">
           <Zap size={32} className="text-gray-200" />
           <p className="text-sm font-semibold text-gray-400">
-            {tab === 'active' ? 'No active kickers right now. Stay tuned!' : 'No past kickers to show.'}
+            {tab === 'active'
+              ? isManager && manMode === 'forMyTeam'
+                ? 'No active kickers announced to your team yet.'
+                : 'No active kickers right now. Stay tuned!'
+              : 'No past kickers to show.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {displayed.map(k => (
-            <KickerCard
-              key={k.id}
-              kicker={k}
-              deals={dealsFor(k)}
-            />
+            <KickerCard key={k.id} kicker={k} deals={dealsFor(k)} />
           ))}
         </div>
       )}

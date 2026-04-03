@@ -153,8 +153,8 @@ export default function Dashboard() {
     {
       title: 'Total Money Made',
       value: formatINR(summary?.totalMoneyMade ?? 0),
-      sub:   'Commission + T+2 + Kickers',
-      icon: DollarSign, color: 'purple', highlight: true,
+      sub:   `Commission ${formatINR(summary?.totalCommission ?? 0)} · T+2 ${formatINR(summary?.totalT2Amount ?? 0)}`,
+      icon: DollarSign, color: 'purple', highlight: false,
     },
     {
       title: 'Achievement %',
@@ -213,7 +213,7 @@ export default function Dashboard() {
                       <span className="text-gray-300 text-xs">|</span>
                       <span className="text-sm text-gray-600"><span className={`font-bold ${achievedPct >= 100 ? 'text-green-600' : 'text-orange-600'}`}>{achievedPct.toFixed(0)}%</span> done</span>
                       <span className="text-gray-300 text-xs">|</span>
-                      <span className="text-sm text-gray-600">Earned <span className="font-bold text-purple-600">{formatINR(summary.totalMoneyMade ?? 0)}</span></span>
+                      <span className="text-sm text-gray-600">Earned <span className="font-medium text-purple-600">{formatINR(summary.totalMoneyMade ?? 0)}</span></span>
                     </div>
                   )}
                   {/* Rotating motivational note */}
@@ -404,8 +404,12 @@ export default function Dashboard() {
               <div className="rounded-xl px-5 py-4 bg-purple-50 border-2 border-purple-200 ring-1 ring-purple-100 flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-purple-500 mb-0.5">Total Incentives</p>
-                  <p className="text-2xl font-extrabold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
-                  <p className="text-xs text-purple-400 mt-0.5">Commission + T+2 + Kickers</p>
+                  <p className="text-2xl font-semibold text-purple-700">{formatINR(summary?.totalMoneyMade ?? 0)}</p>
+                  <div className="flex flex-col gap-0.5 mt-1.5">
+                    <p className="text-xs text-purple-500">Commission <span className="font-semibold text-purple-700">{formatINR(summary?.totalCommission ?? 0)}</span></p>
+                    <p className="text-xs text-purple-500">T+2 <span className="font-semibold text-purple-700">{formatINR(summary?.totalT2Amount ?? 0)}</span></p>
+                    <p className="text-xs text-purple-500">Kickers <span className="font-semibold text-purple-700">{formatINR(summary?.totalKickers ?? 0)}</span></p>
+                  </div>
                 </div>
                 <DollarSign size={36} className="text-purple-300 shrink-0" />
               </div>
@@ -631,7 +635,7 @@ export default function Dashboard() {
                               <p className="text-sm font-medium text-blue-600">{formatINR(row.totalT2Amount ?? 0)}</p>
                             </td>
                             <td className="px-4 py-3.5 text-right">
-                              <p className="text-sm font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
+                              <p className="text-sm font-medium text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
                             </td>
                             <td className="px-4 py-3.5 text-center">
                               {row.loanDocsTotal > 0 ? (

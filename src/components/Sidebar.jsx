@@ -62,10 +62,10 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 bg-gradient-to-b from-white to-gray-50/80">
+    <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 dark:border-gray-700 bg-gradient-to-b from-white to-gray-50/80 dark:from-gray-900 dark:to-gray-800">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-gray-100">
-        <span className="text-xl font-bold text-brand-700 tracking-tight">Dollar.v2</span>
+      <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700">
+        <span className="text-xl font-bold text-brand-700 dark:text-brand-400 tracking-tight">Dollar.v2</span>
       </div>
 
       {/* Nav groups */}
@@ -80,7 +80,7 @@ export default function Sidebar() {
           return (
             <div key={gi}>
               {group.label && (
-                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
                   {group.label}
                 </p>
               )}
@@ -92,8 +92,8 @@ export default function Sidebar() {
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-brand-50 text-brand-700 shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
+                          ? 'bg-brand-50 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-400'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-gray-700/60 hover:text-gray-900 dark:hover:text-gray-200'
                       }`
                     }
                   >
@@ -109,9 +109,9 @@ export default function Sidebar() {
 
       {/* User profile footer */}
       {user && (
-        <div className="px-4 py-4 border-t border-gray-100 bg-white/60">
-          <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-          <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
+        <div className="px-4 py-4 border-t border-gray-100 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{user.name}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">{user.email}</p>
           <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
             {user.role}
           </span>

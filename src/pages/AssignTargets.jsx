@@ -134,7 +134,6 @@ export default function AssignTargets() {
       if (!res.length) { setExisting(false); return }
       const t = res[0]
       setExisting(true)
-      setCommissionStartDate(t.CommissionStartDate?.split('T')[0] ?? '')
 
       if (['Agent', 'PreSales'].includes(selected.Role)) {
         const savedId = String(t.CommissionPct || '').trim().toLowerCase()
@@ -169,7 +168,6 @@ export default function AssignTargets() {
     setSelectedPreset(null)
     setAgentTarget('')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
-    setCommissionStartDate('')
   }
 
   function parseMgrSlabs(json) {

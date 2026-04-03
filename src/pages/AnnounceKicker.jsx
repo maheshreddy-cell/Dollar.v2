@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree } from '../services/api'
+import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getTeam } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -143,6 +143,13 @@ export default function AnnounceKicker() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  // Redirect PreSales — they cannot announce kickers
+  useEffect(() => {
+    if (user?.role === 'PreSales' || user?.role === 'Agent') {
+      navigate('/kickers', { replace: true })
+    }
+  }, [user?.role])
+
   const BLANK_FORM = {
     title: '', message: '', type: 'team_sales', minSaleValue: '',
     dateFrom: TODAY, dateTo: TODAY,
@@ -169,13 +176,24 @@ export default function AnnounceKicker() {
     if (!user?.email) return
     setLoadingList(true)
     try {
-      const [ks, tree] = await Promise.all([
-        getKickers(),
-        getSubtree(user.email),
-      ])
+      const ks = await getKickers()
       setAllKickers(ks)
-      const all = flatTree(tree).filter(m => m.Email !== user.email && ['Manager','VH','SalesHead'].includes(m.Role))
-      setManagers(all)
+      // Load team targets based on role:
+      // Manager → direct agents only (individual targets)
+      // VH/SalesHead/Admin → managers under them (team representatives)
+      if (user.role === 'Manager') {
+        const agents = await getTeam(user.email).catch(() => [])
+        setManagers(agents || [])
+      } else {
+        const tree = await getSubtree(user.email).catch(() => null)
+        const all = flatTree(tree).filter(m => m.Email !== user.email)
+        const managerRoles = user.role === 'VH'
+          ? ['Manager']
+          : user.role === 'SalesHead'
+            ? ['VH', 'Manager']
+            : ['VH', 'Manager', 'SalesHead'] // Admin
+        setManagers(all.filter(m => managerRoles.includes(m.Role)))
+      }
     } catch {}
     finally { setLoadingList(false) }
   }, [user?.email])
@@ -454,7 +472,7 @@ export default function AnnounceKicker() {
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                     form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}>
-                  {m.Name} ({m.Role})
+                  {m.Name || m.Email} {user.role === 'Manager' ? '' : `(${m.Role})`}
                 </button>
               ))}
             </div>

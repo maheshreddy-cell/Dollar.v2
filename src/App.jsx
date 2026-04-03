@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { MonthProvider } from './contexts/MonthContext'
 import { PermissionsProvider } from './contexts/PermissionsContext'
 import Sidebar from './components/Sidebar'
@@ -61,11 +62,11 @@ function PageLoader() {
 
 function AppLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F9F8F6]">
+    <div className="flex h-screen overflow-hidden bg-[#F9F8F6] dark:bg-gray-900">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 dark:bg-gray-900">
           <Suspense fallback={<PageLoader />}>
             <Outlet />
           </Suspense>
@@ -104,6 +105,7 @@ function RequireRole({ roles, children }) {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <PermissionsProvider>
       <MonthProvider>
@@ -210,5 +212,6 @@ export default function App() {
       </MonthProvider>
       </PermissionsProvider>
     </AuthProvider>
+    </ThemeProvider>
   )
 }
