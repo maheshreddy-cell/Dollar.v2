@@ -48,7 +48,6 @@ export default function AssignTargets() {
   const [success,          setSuccess]        = useState(false)
   const [submitting,       setSubmitting]     = useState(false)
   const [formError,        setFormError]      = useState('')
-  const [commissionStartDate, setCommissionStartDate] = useState('')
   const [selectedPreset,   setSelectedPreset] = useState(null)
   const [agentTarget,      setAgentTarget]    = useState('')
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
@@ -249,7 +248,6 @@ export default function AssignTargets() {
         targetAmount:        isAgent ? Number(agentTarget) : Math.max(...slabs.filter(s => s.targetAmount).map(s => Number(s.targetAmount))),
         presetId:            isAgent ? selectedPreset : undefined,
         commissionPct:       isAgent ? undefined : Number(slabs.filter(s => s.targetAmount)[0]?.commissionPct ?? 0),
-        commissionStartDate: commissionStartDate || undefined,
         slabs:               isAgent
           ? preset.slabs.map(s => ({ targetAmount: s.targetAmount, commissionPct: s.commissionPct }))
           : slabs.filter(s => s.targetAmount).map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) })),
@@ -647,7 +645,6 @@ export default function AssignTargets() {
                           <th className="px-4 py-2.5 text-left font-medium">Month</th>
                           <th className="px-4 py-2.5 text-right font-medium">Target</th>
                           <th className="px-4 py-2.5 text-left font-medium">Tier / Rate</th>
-                          <th className="px-4 py-2.5 text-left font-medium">Incentive Start</th>
                           <th className="px-4 py-2.5 text-center font-medium">Actions</th>
                         </tr>
                       </thead>
@@ -657,7 +654,6 @@ export default function AssignTargets() {
                           const rate     = String(t.CommissionPct ?? t.commissionPct ?? '')
                           const preset   = ALL_TARGET_PRESETS.find(p => p.id === rate.trim().toLowerCase())
                           const rateLabel = preset ? `${preset.label} Tier` : (rate ? `${rate}%` : '—')
-                          const start    = t.CommissionStartDate ?? t.commissionStartDate ?? ''
                           const isCurrent = mon === formMonth
                           const isDeleting = deletingMonth === mon
                           const isConfirm  = confirmDeleteMonth === mon
@@ -678,9 +674,6 @@ export default function AssignTargets() {
                                   preset?.id === 'pro'     ? 'bg-purple-50 text-purple-700' :
                                                              'bg-gray-100 text-gray-600'
                                 }`}>{rateLabel}</span>
-                              </td>
-                              <td className="px-4 py-3 text-xs text-gray-400">
-                                {start ? start.split('T')[0] : '—'}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
@@ -752,17 +745,6 @@ export default function AssignTargets() {
                       Target exists for {formMonth} — editing
                     </span>
                   )}
-                </div>
-
-                {/* Incentive Start Date */}
-                <div className="w-full sm:w-64">
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Incentive Start Date</label>
-                  <input
-                    type="date"
-                    value={commissionStartDate}
-                    onChange={e => setCommissionStartDate(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
                 </div>
 
                 {isAgent ? (

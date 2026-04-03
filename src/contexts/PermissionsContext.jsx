@@ -29,8 +29,12 @@ export const PERMISSION_DEFS = [
     category: 'Manager — Page Access',
     icon: '🟢',
     items: [
-      { key: 'manager_commission',      label: 'Commission Config',     desc: 'Managers can access the Commission Config page' },
-      { key: 'manager_org_visible',     label: 'Org Chart',             desc: 'Managers can view the full Org Chart (already enabled by default)' },
+      { key: 'manager_deals',           label: 'Deals',                 desc: 'Managers can access the Deals page',                             defaultOn: true  },
+      { key: 'manager_metrics',         label: 'Metrics',               desc: 'Managers can view the Metrics page',                             defaultOn: true  },
+      { key: 'manager_team',            label: 'My Team',               desc: 'Managers can access the My Team page',                           defaultOn: true  },
+      { key: 'manager_assign',          label: 'Assign Targets',        desc: 'Managers can access the Assign Targets page',                    defaultOn: true  },
+      { key: 'manager_org',             label: 'Org Chart',             desc: 'Managers can view the Org Chart',                                defaultOn: true  },
+      { key: 'manager_commission',      label: 'Commission Config',     desc: 'Managers can access the Commission Config page',                 defaultOn: false },
     ],
   },
   {

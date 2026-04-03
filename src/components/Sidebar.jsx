@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap, Megaphone,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -14,19 +14,22 @@ const NAV_BASE = [
     label: null,
     items: [
       { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/deals',             label: 'Deals',             icon: Briefcase,       baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
-      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       baseRoles: ['Admin','SalesHead','VH','Manager','Agent'],
-        permAdd: { presales_metrics: 'PreSales' } },
-      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      baseRoles: ['Admin','SalesHead','VH','Manager'] },
+      { to: '/deals',             label: 'Deals',             icon: Briefcase,       baseRoles: ['Admin','SalesHead','VH','Agent','PreSales'],
+        permAdd: { manager_deals: 'Manager' } },
+      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       baseRoles: ['Admin','SalesHead','VH','Agent'],
+        permAdd: { presales_metrics: 'PreSales', manager_metrics: 'Manager' } },
+      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      baseRoles: ['Admin','SalesHead','VH'],
+        permAdd: { manager_assign: 'Manager' } },
       { to: '/manager-targets',   label: 'My Targets',        icon: Star,            baseRoles: ['Manager'],
         permAdd: { agent_targets: 'Agent', presales_targets: 'PreSales', vh_my_targets: 'VH', saleshead_my_targets: 'SalesHead' } },
-      { to: '/team',              label: 'My Team',           icon: Users,           baseRoles: ['Admin','SalesHead','VH','Manager'],
-        permAdd: { agent_team: 'Agent', presales_team: 'PreSales' } },
-      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       baseRoles: ['Admin','SalesHead','VH','Manager'],
-        permAdd: { agent_org: 'Agent', presales_org: 'PreSales' } },
+      { to: '/team',              label: 'My Team',           icon: Users,           baseRoles: ['Admin','SalesHead','VH'],
+        permAdd: { manager_team: 'Manager', agent_team: 'Agent', presales_team: 'PreSales' } },
+      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       baseRoles: ['Admin','SalesHead','VH'],
+        permAdd: { manager_org: 'Manager', agent_org: 'Agent', presales_org: 'PreSales' } },
       { to: '/commission-config', label: 'Commission Config', icon: Settings,        baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_commission: 'Manager' } },
       { to: '/kickers',           label: 'Kickers',           icon: Zap,             baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/announce-kicker',   label: 'Announce Kicker',   icon: Megaphone,       baseRoles: ['Admin','SalesHead','VH','Manager'] },
       { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'] },
     ],
   },

@@ -1,23 +1,35 @@
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, Suspense, lazy } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { MonthProvider } from './contexts/MonthContext'
 import { PermissionsProvider } from './contexts/PermissionsContext'
 import Sidebar from './components/Sidebar'
 import Navbar from './components/Navbar'
 
+// Eagerly load auth pages (needed before app shell renders)
 import Login from './pages/Login'
 import InviteActivate from './pages/InviteActivate'
-import Dashboard from './pages/Dashboard'
-import Deals from './pages/Deals'
-import AssignTargets from './pages/AssignTargets'
-import Team from './pages/Team'
-import Metrics from './pages/Metrics'
-import OrgPage from './pages/OrgPage'
-import CommissionConfig from './pages/CommissionConfig'
-import ManagerTargets from './pages/ManagerTargets'
-import FAQ from './pages/FAQ'
-import Permissions from './pages/Permissions'
-import Kickers from './pages/Kickers'
+
+// Lazy-load all app pages for instant navigation after first visit
+const Dashboard        = lazy(() => import('./pages/Dashboard'))
+const Deals            = lazy(() => import('./pages/Deals'))
+const AssignTargets    = lazy(() => import('./pages/AssignTargets'))
+const Team             = lazy(() => import('./pages/Team'))
+const Metrics          = lazy(() => import('./pages/Metrics'))
+const OrgPage          = lazy(() => import('./pages/OrgPage'))
+const CommissionConfig = lazy(() => import('./pages/CommissionConfig'))
+const ManagerTargets   = lazy(() => import('./pages/ManagerTargets'))
+const FAQ              = lazy(() => import('./pages/FAQ'))
+const Permissions      = lazy(() => import('./pages/Permissions'))
+const Kickers          = lazy(() => import('./pages/Kickers'))
+const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-48">
+      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-brand-600" />
+    </div>
+  )
+}
 
 function AppLayout() {
   return (
@@ -26,7 +38,9 @@ function AppLayout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
         <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
@@ -142,6 +156,14 @@ export default function App() {
               element={
                 <RequireRole roles={['Admin','SalesHead','VH','Manager','Agent','PreSales']}>
                   <Kickers />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/announce-kicker"
+              element={
+                <RequireRole roles={['Admin','SalesHead','VH','Manager']}>
+                  <AnnounceKicker />
                 </RequireRole>
               }
             />
