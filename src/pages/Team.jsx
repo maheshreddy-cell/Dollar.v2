@@ -182,7 +182,9 @@ export default function Team() {
   // Reassign
   const [reassignTarget, setReassignTarget] = useState(null)
 
-  const canReassign = CAN_REASSIGN_ROLES.includes(user?.role) && can('enable_reassignment')
+  const roleReassignKey = { SalesHead: 'saleshead_reassign', VH: 'vh_reassign' }
+  const canReassign = CAN_REASSIGN_ROLES.includes(user?.role) && can('enable_reassignment') &&
+    (user?.role === 'Admin' || can(roleReassignKey[user?.role] ?? 'enable_reassignment'))
   const allowedRoles = INVITE_ROLES[user?.role] ?? []
 
   // Potential managers for invite form and reassign dropdown

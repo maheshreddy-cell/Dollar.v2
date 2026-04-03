@@ -33,7 +33,8 @@ const NAV_BASE = [
         permAdd: { manager_kickers: 'Manager', agent_kickers: 'Agent', presales_kickers: 'PreSales' } },
       { to: '/announce-kicker',   label: 'Announce Kicker',   icon: Megaphone,       baseRoles: ['Admin'],
         permAdd: { saleshead_announce_kicker: 'SalesHead', vh_announce_kicker: 'VH', manager_announce_kicker: 'Manager' } },
-      { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'] },
+      { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'],
+        permAdd: { saleshead_permissions: 'SalesHead', vh_permissions: 'VH' } },
     ],
   },
   {

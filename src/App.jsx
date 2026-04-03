@@ -171,7 +171,7 @@ export default function App() {
             <Route
               path="/permissions"
               element={
-                <RequireRole roles={['Admin']}>
+                <RequireRole roles={['Admin','SalesHead','VH']}>
                   <Permissions />
                 </RequireRole>
               }
