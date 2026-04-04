@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard } from '../services/api'
+import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
-import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle } from 'lucide-react'
+import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle, Award } from 'lucide-react'
 
 const SLAB_INDICATORS = ['①', '②', '③', '④', '⑤', '⑥']
 
@@ -263,6 +263,8 @@ export default function ManagerTargets() {
   const [projSlabs, setProjSlabs]         = useState([])
   const [realSlabs, setRealSlabs]         = useState([])
   const [teamData, setTeamData]           = useState(null)
+  const [kickerEarnings, setKickerEarnings] = useState(0)
+  const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState('')
 
@@ -270,11 +272,17 @@ export default function ManagerTargets() {
     if (!effectiveUser?.email) return
     if (tick === 0) setLoading(true)
     setError('')
+
+    const email = effectiveUser.email
+    const role  = effectiveUser.role
+
     Promise.all([
-      getManagerTargets(effectiveUser.email, month),
-      getLeaderboard(effectiveUser.email, month),
+      getManagerTargets(email, month),
+      getLeaderboard(email, month),
+      getKickers().catch(() => []),
+      getDeals().catch(() => []),
     ])
-      .then(([targets, agents]) => {
+      .then(([targets, agents, allKickers, allDeals]) => {
         const latest = targets[0] ?? null
         setManagerTarget(latest)
         const sortAsc = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
@@ -283,10 +291,47 @@ export default function ManagerTargets() {
         const teamSaleValue = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
         const teamAchieved  = agents.reduce((s, a) => s + (a.achieved || 0), 0)
         setTeamData({ teamSaleValue, teamAchieved, agentCount: agents.length })
+
+        // Compute kicker earnings for this manager from active/past kickers
+        const lowerEmail = email.trim().toLowerCase()
+        let totalKickers = 0
+        const details = []
+        for (const k of allKickers) {
+          if (!(k.targetRoles || []).includes(role)) continue
+          const from = new Date(k.dateFrom).getTime()
+          const to   = new Date(k.dateTo).getTime() + 86399999
+          if (Date.now() < from) continue // not started yet
+
+          const inRange = allDeals.filter(d => {
+            if ((d.Email || '').trim().toLowerCase() !== lowerEmail) return false
+            const dt = new Date(d.Timestamp || d.PaymentDate || 0).getTime()
+            return dt >= from && dt <= to
+          })
+          const sales   = (k.minSaleValue > 0 ? inRange.filter(d => (d.TotalValue || 0) >= k.minSaleValue) : inRange).length
+          const revenue = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+
+          const sorted = [...(k.slabs || [])].sort((a, b) => Number(a.threshold || a.salesThreshold || 0) - Number(b.threshold || b.salesThreshold || 0))
+          let earnedSlab = null
+          for (const slab of sorted) {
+            let hit = false
+            if      (k.type === 'team_sales'       || k.type === 'individual_sales')    hit = sales   >= Number(slab.threshold)
+            else if (k.type === 'team_revenue'     || k.type === 'individual_revenue')  hit = revenue >= Number(slab.threshold)
+            else if (k.type === 'individual_or')   hit = sales >= Number(slab.salesThreshold) || revenue >= Number(slab.revenueThreshold)
+            else if (k.type === 'individual_and')  hit = sales >= Number(slab.salesThreshold) && revenue >= Number(slab.revenueThreshold)
+            if (hit) earnedSlab = slab
+          }
+          if (earnedSlab) {
+            const payout = Number(earnedSlab.payout || 0)
+            totalKickers += payout
+            details.push({ title: k.title, payout, dateFrom: k.dateFrom, dateTo: k.dateTo })
+          }
+        }
+        setKickerEarnings(totalKickers)
+        setKickerDetails(details)
         setLoading(false)
       })
       .catch(() => { setError('Failed to load targets.'); setLoading(false) })
-  }, [effectiveUser?.email, month, tick])
+  }, [effectiveUser?.email, effectiveUser?.role, month, tick])
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -349,16 +394,29 @@ export default function ManagerTargets() {
             <p className="text-[10px] text-gray-400">Collected revenue</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-gray-400 mb-1">Total Commission</p>
+            <p className="text-xs text-gray-400 mb-1">Commission</p>
             <p className={`text-lg font-bold ${totalIsPartial ? 'text-amber-600' : 'text-purple-700'}`}>
               {formatINR(totalCommission)}
             </p>
-            <p className="text-[10px] text-gray-400">{totalIsPartial ? 'provisional estimate' : 'Projected + Realised'}</p>
+            <p className="text-[10px] text-gray-400">{totalIsPartial ? 'provisional estimate' : 'Proj + Realised'}</p>
           </div>
           <div className="text-center">
-            <p className="text-xs text-gray-400 mb-1">Agents Active</p>
-            <p className="text-lg font-bold text-blue-700">{agentCount}</p>
-            <p className="text-[10px] text-gray-400">in {month}</p>
+            <p className="text-xs text-gray-400 mb-1">Kicker Earnings</p>
+            <p className={`text-lg font-bold ${kickerEarnings > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>{formatINR(kickerEarnings)}</p>
+            <p className="text-[10px] text-gray-400">{kickerDetails.length > 0 ? `${kickerDetails.length} slab${kickerDetails.length > 1 ? 's' : ''} hit` : 'no slabs hit'}</p>
+          </div>
+        </div>
+
+        {/* Total Money Made strip */}
+        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-4 flex-wrap text-sm text-gray-500">
+            <span>Commission <span className={`font-semibold ${totalIsPartial ? 'text-amber-600' : 'text-purple-700'}`}>{formatINR(totalCommission)}</span></span>
+            <span className="text-gray-300">+</span>
+            <span>Kickers <span className={`font-semibold ${kickerEarnings > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>{formatINR(kickerEarnings)}</span></span>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Total Money Made</p>
+            <p className="text-2xl font-bold text-gray-900">{formatINR(totalCommission + kickerEarnings)}</p>
           </div>
         </div>
       </div>
@@ -485,6 +543,47 @@ export default function ManagerTargets() {
           </div>
         </div>
       </div>
+
+      {/* ── Kicker Earnings card ── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Award size={15} className="text-yellow-600" />
+            <p className="text-sm font-bold text-yellow-800">Kicker Earnings</p>
+          </div>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${kickerEarnings > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400'}`}>
+            {formatINR(kickerEarnings)}
+          </span>
+        </div>
+        <div className="px-5 py-4">
+          {kickerDetails.length > 0 ? (
+            <div className="space-y-2">
+              {kickerDetails.map((k, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{k.title}</p>
+                    <p className="text-[10px] text-gray-400">{k.dateFrom} → {k.dateTo}</p>
+                  </div>
+                  <span className="text-sm font-bold text-yellow-700">{formatINR(k.payout)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Total Kicker Earnings</p>
+                <p className="text-base font-bold text-yellow-700">{formatINR(kickerEarnings)}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 py-2">
+              <Zap size={16} className="text-gray-300 shrink-0" />
+              <div>
+                <p className="text-sm text-gray-500 font-medium">No kicker slabs hit yet</p>
+                <p className="text-xs text-gray-400 mt-0.5">Kickers announced by your VH or SalesHead will appear here once you hit a slab.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   )
 }

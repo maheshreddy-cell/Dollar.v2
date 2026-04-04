@@ -9,11 +9,11 @@ import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 import { Target, Calendar } from 'lucide-react'
 
 const STATUS_COLORS = {
-  Cleared:  'text-green-700 bg-green-50',
-  Pending:  'text-yellow-700 bg-yellow-50',
-  AtRisk:   'text-red-700 bg-red-50',
-  OnHold:   'text-orange-700 bg-orange-50',
-  Lost:     'text-gray-600 bg-gray-50',
+  Cleared:  'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20',
+  Pending:  'text-yellow-700 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20',
+  AtRisk:   'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20',
+  OnHold:   'text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20',
+  Lost:     'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-surface-hover',
 }
 
 export default function MyTargets() {
@@ -58,9 +58,9 @@ export default function MyTargets() {
 
   if (!target) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+      <div className="bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border p-10 text-center">
         <Target size={40} className="mx-auto text-gray-300 mb-3" />
-        <p className="text-gray-500 text-sm">No target assigned for {month}.</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">No target assigned for {month}.</p>
       </div>
     )
   }
@@ -97,42 +97,42 @@ export default function MyTargets() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-base font-semibold text-gray-800">My Targets — {month}</h2>
+        <h2 className="text-base font-semibold text-gray-800 dark:text-gray-100">My Targets — {month}</h2>
         <DaysLeftBadge month={month} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 uppercase font-medium tracking-wide mb-1">
+        <div className="bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border p-5">
+          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium tracking-wide mb-1">
             Target Amount
           </p>
-          <p className="text-2xl font-bold text-brand-700">{formatINR(target.TargetAmount ?? target.targetAmount)}</p>
+          <p className="text-2xl font-bold text-brand-700 dark:text-brand-400">{formatINR(target.TargetAmount ?? target.targetAmount)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 uppercase font-medium tracking-wide mb-1">
+        <div className="bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border p-5">
+          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium tracking-wide mb-1">
             Commission Rate
           </p>
-          <p className="text-2xl font-bold text-green-700">{commissionRateDisplay}</p>
+          <p className="text-2xl font-bold text-green-700 dark:text-green-400">{commissionRateDisplay}</p>
           {presetMatch && (
-            <p className="text-xs text-gray-400 mt-0.5">{presetMatch.description}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{presetMatch.description}</p>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border p-5">
           <div className="flex items-start gap-2">
             <Calendar size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-xs text-gray-500 uppercase font-medium tracking-wide mb-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium tracking-wide mb-1">
                 Commission Period
               </p>
               {startDateRaw ? (
-                <p className="text-sm font-semibold text-gray-800">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                   {new Date(startDateRaw).toLocaleDateString('en-IN')}
                   {endDateIsValid && (
                     <> — {new Date(endDateRaw).toLocaleDateString('en-IN')}</>
                   )}
                 </p>
               ) : (
-                <p className="text-sm text-gray-400">Not set</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">Not set</p>
               )}
             </div>
           </div>
@@ -146,8 +146,8 @@ export default function MyTargets() {
         commissionPct={commissionPct}
       />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Deal Breakdown</h3>
+      <div className="bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border p-5">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Deal Breakdown</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {breakdownByStatus.map(({ status, amount, count }) => (
             <div

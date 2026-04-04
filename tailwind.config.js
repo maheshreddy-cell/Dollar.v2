@@ -1,17 +1,31 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
+  darkMode: false,
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
+        // Claude's signature warm orange/terracotta palette
         brand: {
-          50:  '#eff6ff',
-          100: '#dbeafe',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          900: '#1e3a8a',
+          50:  '#fdf4f0',
+          100: '#fae5d8',
+          200: '#f5c9b0',
+          300: '#eeaa88',
+          400: '#e48a62',
+          500: '#da7756',  // Claude's primary accent
+          600: '#c4623e',
+          700: '#a34e30',
+          800: '#7f3c23',
+          900: '#5e2c18',
+        },
+        // Claude's dark surface palette
+        surface: {
+          dark:    '#1a1a1a',
+          darker:  '#141414',
+          card:    '#212121',
+          border:  '#2f2f2f',
+          hover:   '#2a2a2a',
+          muted:   '#3a3a3a',
         },
       },
       animation: {

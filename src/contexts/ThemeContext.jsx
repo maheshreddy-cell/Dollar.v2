@@ -1,17 +1,18 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext } from 'react'
 
-const ThemeContext = createContext({ dark: false, toggleTheme: () => {} })
+// Dark theme removed. Always light.
+// Immediately purge any leftover dark class + localStorage key.
+if (typeof window !== 'undefined') {
+  document.documentElement.classList.remove('dark')
+  localStorage.removeItem('dv2_theme_mode')
+  localStorage.removeItem('dv2_theme')
+}
+
+const ThemeContext = createContext({ mode: 'light', dark: false, setMode: () => {}, toggle: () => {} })
 
 export function ThemeProvider({ children }) {
-  const [dark, setDark] = useState(() => localStorage.getItem('dv2_theme') === 'dark')
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('dv2_theme', dark ? 'dark' : 'light')
-  }, [dark])
-
   return (
-    <ThemeContext.Provider value={{ dark, toggle: () => setDark(d => !d) }}>
+    <ThemeContext.Provider value={{ mode: 'light', dark: false, setMode: () => {}, toggle: () => {} }}>
       {children}
     </ThemeContext.Provider>
   )
