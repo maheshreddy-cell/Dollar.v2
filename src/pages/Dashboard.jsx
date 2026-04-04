@@ -127,7 +127,7 @@ export default function Dashboard() {
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     } else {
-      getSummary(effectiveUser?.email, month)
+      getSummary(effectiveUser?.email, month, effectiveUser?.role)
         .then((summaryRes) => {
           setSummary(summaryRes)
         })
