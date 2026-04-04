@@ -42,14 +42,15 @@ function computeProgress(kicker, allDeals) {
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
   const inRange = allDeals.filter(d => {
-    const dt = new Date(d.Timestamp || d['Payment date'] || d.DealDate || 0)
+    const dt = new Date(d.Timestamp || d.PaymentDate || 0)
     return dt >= from && dt <= to
   })
 
   const rawSales = inRange.length
-  const revenue  = inRange.reduce((s, d) => s + Number(d['Total sale Value'] || 0), 0)
+  // Use TotalValue (projected revenue = full sale value) for kicker progress
+  const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
   const sales    = kicker.minSaleValue > 0
-    ? inRange.filter(d => Number(d['Total sale Value'] || 0) >= kicker.minSaleValue).length
+    ? inRange.filter(d => (d.TotalValue || 0) >= kicker.minSaleValue).length
     : rawSales
 
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {

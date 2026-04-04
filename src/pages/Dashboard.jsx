@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard } from '../services/api'
 import MetricsCard   from '../components/MetricsCard'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
@@ -73,7 +73,15 @@ export default function Dashboard() {
   const [error,       setError]       = useState('')
   const [motivIdx,    setMotivIdx]    = useState(0)
 
+  // VH/SalesHead drill-down state
+  const [drillStack, setDrillStack] = useState([]) // [{email, name, role}] — breadcrumb
+  const [mgrsBoard,  setMgrsBoard]  = useState([]) // manager leaderboard rows
+  const [drillBoard, setDrillBoard] = useState([]) // agent rows when drilled in
+  const [drillLoading, setDrillLoading] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('all') // 'all'|'Manager'|'Agent'|'PreSales'
+
   const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
+  const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
   const tick      = useRefresh()
 
   // Rotate motivational message every 120s
@@ -85,6 +93,15 @@ export default function Dashboard() {
   useEffect(() => {
     if (tick === 0) setLoading(true)
     setError('')
+
+    // Load managers leaderboard for VH/SalesHead (separate from agent leaderboard)
+    if (isVHorAbove && effectiveUser?.role !== 'Admin') {
+      setDrillStack([])
+      setDrillBoard([])
+      getManagersLeaderboard(effectiveUser.email, month)
+        .then(setMgrsBoard)
+        .catch(() => {})
+    }
 
     if (isManager) {
       Promise.all([
@@ -119,12 +136,56 @@ export default function Dashboard() {
     }
   }, [month, effectiveUser?.email, tick])
 
+  async function drillInto(mgrEmail, mgrName, mgrRole) {
+    setDrillStack(s => [...s, { email: mgrEmail, name: mgrName, role: mgrRole }])
+    setDrillLoading(true)
+    try {
+      if (mgrRole === 'Manager') {
+        // Drill into agents
+        const rows = await getLeaderboard(mgrEmail, month)
+        setDrillBoard(rows)
+      } else {
+        // Drill into sub-managers (VH→Manager, SalesHead→VH)
+        const rows = await getManagersLeaderboard(mgrEmail, month)
+        setMgrsBoard(rows)
+        setDrillBoard([])
+      }
+    } catch {}
+    finally { setDrillLoading(false) }
+  }
+
+  function drillBack() {
+    const newStack = drillStack.slice(0, -1)
+    setDrillStack(newStack)
+    setDrillBoard([])
+    if (newStack.length === 0) {
+      getManagersLeaderboard(effectiveUser.email, month).then(setMgrsBoard).catch(() => {})
+    } else {
+      const parent = newStack[newStack.length - 1]
+      getManagersLeaderboard(parent.email, month).then(setMgrsBoard).catch(() => {})
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
       </div>
     )
+  }
+
+  // Sum row for leaderboard
+  function leaderboardTotals(rows) {
+    return {
+      target:          rows.reduce((s, r) => s + (r.target || 0), 0),
+      achieved:        rows.reduce((s, r) => s + (r.achieved || 0), 0),
+      totalSaleValue:  rows.reduce((s, r) => s + (r.totalSaleValue || r.pipeline || 0), 0),
+      commission:      rows.reduce((s, r) => s + (r.commission || 0), 0),
+      totalT2Amount:   rows.reduce((s, r) => s + (r.totalT2Amount || r.t2 || 0), 0),
+      moneyMade:       rows.reduce((s, r) => s + (r.moneyMade || 0), 0),
+      loanDocsDone:    rows.reduce((s, r) => s + (r.loanDocsDone || r.loanDocsOk || 0), 0),
+      loanDocsPending: rows.reduce((s, r) => s + (r.loanDocsPending || 0), 0),
+    }
   }
 
   const achievedPct  = summary ? getAchievementPct(summary.totalTarget, summary.totalAchieved) : 0
@@ -537,8 +598,179 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* ── Leaderboard ── */}
-          {leaderboard.length > 0 && (
+          {/* ── VH/SalesHead drill-down: managers → agents ── */}
+          {isVHorAbove && effectiveUser?.role !== 'Admin' && (
+            <FadeIn delay={240}>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                {/* Header + breadcrumb */}
+                <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap text-sm">
+                    <button
+                      onClick={() => { setDrillStack([]); setDrillBoard([]); getManagersLeaderboard(effectiveUser.email, month).then(setMgrsBoard).catch(() => {}) }}
+                      className="font-semibold text-brand-600 hover:underline"
+                    >
+                      {effectiveUser.name?.split(' ')[0]}
+                    </button>
+                    {drillStack.map((crumb, ci) => (
+                      <span key={crumb.email} className="flex items-center gap-1.5">
+                        <span className="text-gray-300">›</span>
+                        <button
+                          onClick={() => {
+                            const ns = drillStack.slice(0, ci + 1)
+                            setDrillStack(ns)
+                            if (crumb.role === 'Manager') {
+                              getLeaderboard(crumb.email, month).then(r => { setDrillBoard(r); setMgrsBoard([]) }).catch(() => {})
+                            } else {
+                              getManagersLeaderboard(crumb.email, month).then(r => { setMgrsBoard(r); setDrillBoard([]) }).catch(() => {})
+                            }
+                          }}
+                          className="font-medium text-gray-700 hover:underline"
+                        >
+                          {crumb.name}
+                        </button>
+                      </span>
+                    ))}
+                    <span className="text-gray-400 text-xs ml-1">— {month}</span>
+                  </div>
+                  {drillStack.length > 0 && (
+                    <button onClick={drillBack} className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                      ← Back
+                    </button>
+                  )}
+                </div>
+
+                {drillLoading ? (
+                  <div className="flex items-center justify-center h-20">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600" />
+                  </div>
+                ) : drillBoard.length > 0 ? (
+                  /* Agent drill-down table */
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[900px] w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                          <th className="px-4 py-3 text-left w-8 font-medium">#</th>
+                          <th className="px-4 py-3 text-left font-medium">Agent</th>
+                          <th className="px-4 py-3 text-right font-medium">Pipeline</th>
+                          <th className="px-4 py-3 text-right font-medium">Paid</th>
+                          <th className="px-4 py-3 text-right font-medium">Commission</th>
+                          <th className="px-4 py-3 text-right font-medium">T+2</th>
+                          <th className="px-4 py-3 text-right font-medium">Money Made</th>
+                          <th className="px-4 py-3 text-center font-medium">Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {drillBoard.map((row, i) => (
+                          <tr key={row.email ?? i} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+                            <td className="px-4 py-3 font-medium text-gray-800">{row.name}</td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-700">{formatINR(row.totalSaleValue)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-semibold text-gray-800">{formatINR(row.achieved)}</td>
+                            <td className="px-4 py-3 text-right text-sm text-purple-600">{formatINR(row.commission)}</td>
+                            <td className="px-4 py-3 text-right text-sm text-blue-600">{formatINR(row.totalT2Amount ?? 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-purple-700">{formatINR(row.moneyMade ?? 0)}</td>
+                            <td className="px-4 py-3 text-center">
+                              {row.loanDocsDone !== undefined ? (
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${row.loanDocsDone > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {row.loanDocsDone} done / {row.loanDocsPending} pend
+                                </span>
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        {(() => { const t = leaderboardTotals(drillBoard); return (
+                          <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                            <td className="px-4 py-3 text-gray-500 text-xs" colSpan={2}>Total ({drillBoard.length})</td>
+                            <td className="px-4 py-3 text-right text-gray-700">{formatINR(t.totalSaleValue)}</td>
+                            <td className="px-4 py-3 text-right text-gray-800">{formatINR(t.achieved)}</td>
+                            <td className="px-4 py-3 text-right text-purple-600">{formatINR(t.commission)}</td>
+                            <td className="px-4 py-3 text-right text-blue-600">{formatINR(t.totalT2Amount)}</td>
+                            <td className="px-4 py-3 text-right text-purple-700">{formatINR(t.moneyMade)}</td>
+                            <td className="px-4 py-3 text-center text-gray-600 text-xs">{t.loanDocsDone}d / {t.loanDocsPending}p</td>
+                          </tr>
+                        )})()}
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  /* Managers table */
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[860px] w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
+                          <th className="px-4 py-3 text-left w-8 font-medium">#</th>
+                          <th className="px-4 py-3 text-left font-medium">Manager</th>
+                          <th className="px-4 py-3 text-right font-medium">Agents</th>
+                          <th className="px-4 py-3 text-right font-medium">Pipeline</th>
+                          <th className="px-4 py-3 text-right font-medium">Paid</th>
+                          <th className="px-4 py-3 text-right font-medium">Commission</th>
+                          <th className="px-4 py-3 text-right font-medium">T+2</th>
+                          <th className="px-4 py-3 text-right font-medium">Money Made</th>
+                          <th className="px-4 py-3 text-center font-medium">Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {mgrsBoard.length > 0 ? mgrsBoard.map((row, i) => (
+                          <tr key={row.email ?? i} onClick={() => drillInto(row.email, row.name, row.role)}
+                            className="hover:bg-brand-50/40 cursor-pointer transition-colors">
+                            <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-gray-800">{row.name}</p>
+                              <p className="text-xs text-brand-500 mt-0.5">{row.role} · click to drill in →</p>
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-600">{row.agentCount}</td>
+                            <td className="px-4 py-3 text-right text-sm text-gray-700">{formatINR(row.pipeline)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-semibold text-gray-800">{formatINR(row.paid)}</td>
+                            <td className="px-4 py-3 text-right text-sm text-purple-600">{formatINR(row.commission)}</td>
+                            <td className="px-4 py-3 text-right text-sm text-blue-600">{formatINR(row.t2)}</td>
+                            <td className="px-4 py-3 text-right text-sm font-medium text-purple-700">{formatINR(row.moneyMade)}</td>
+                            <td className="px-4 py-3 text-center">
+                              {row.loanDocsDone + row.loanDocsPending > 0 ? (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700">
+                                  {row.loanDocsDone}d / {row.loanDocsPending}p
+                                </span>
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan={9} className="px-4 py-8 text-center text-xs text-gray-400">No managers found under your account</td></tr>
+                        )}
+                      </tbody>
+                      {mgrsBoard.length > 0 && (() => {
+                        const totPipeline = mgrsBoard.reduce((s, r) => s + r.pipeline, 0)
+                        const totPaid     = mgrsBoard.reduce((s, r) => s + r.paid, 0)
+                        const totComm     = mgrsBoard.reduce((s, r) => s + r.commission, 0)
+                        const totT2       = mgrsBoard.reduce((s, r) => s + r.t2, 0)
+                        const totMM       = mgrsBoard.reduce((s, r) => s + r.moneyMade, 0)
+                        const totDone     = mgrsBoard.reduce((s, r) => s + r.loanDocsDone, 0)
+                        const totPend     = mgrsBoard.reduce((s, r) => s + r.loanDocsPending, 0)
+                        const totAgents   = mgrsBoard.reduce((s, r) => s + r.agentCount, 0)
+                        return (
+                          <tfoot>
+                            <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                              <td className="px-4 py-3 text-gray-500 text-xs" colSpan={2}>Total ({mgrsBoard.length} managers)</td>
+                              <td className="px-4 py-3 text-right text-gray-600">{totAgents}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">{formatINR(totPipeline)}</td>
+                              <td className="px-4 py-3 text-right text-gray-800">{formatINR(totPaid)}</td>
+                              <td className="px-4 py-3 text-right text-purple-600">{formatINR(totComm)}</td>
+                              <td className="px-4 py-3 text-right text-blue-600">{formatINR(totT2)}</td>
+                              <td className="px-4 py-3 text-right text-purple-700">{formatINR(totMM)}</td>
+                              <td className="px-4 py-3 text-center text-gray-600 text-xs">{totDone}d / {totPend}p</td>
+                            </tr>
+                          </tfoot>
+                        )
+                      })()}
+                    </table>
+                  </div>
+                )}
+              </div>
+            </FadeIn>
+          )}
+
+          {/* ── Manager leaderboard (agent view) ── */}
+          {effectiveUser?.role === 'Manager' && leaderboard.length > 0 && (
             <FadeIn delay={240}>
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -576,9 +808,7 @@ export default function Dashboard() {
                             </td>
                             <td className="px-4 py-3.5 text-right">
                               <p className="text-sm font-medium text-gray-700">{formatINR(row.totalSaleValue)}</p>
-                              {row.pendingCollection > 0 && (
-                                <p className="text-xs text-orange-500">+{formatINR(row.pendingCollection)} pending</p>
-                              )}
+                              {row.pendingCollection > 0 && <p className="text-xs text-orange-500">+{formatINR(row.pendingCollection)} pending</p>}
                             </td>
                             <td className="px-4 py-3.5 text-right">
                               <p className="text-sm font-semibold text-gray-800">{formatINR(row.achieved)}</p>
@@ -589,47 +819,30 @@ export default function Dashboard() {
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-2">
                                     <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full transition-all ${
-                                          !si.eligible ? 'bg-red-400' : si.nextSlab ? 'bg-blue-500' : 'bg-green-500'
-                                        }`}
-                                        style={{ width: `${si.progressPct}%` }}
-                                      />
+                                      <div className={`h-full rounded-full transition-all ${!si.eligible ? 'bg-red-400' : si.nextSlab ? 'bg-blue-500' : 'bg-green-500'}`}
+                                        style={{ width: `${si.progressPct}%` }} />
                                     </div>
                                     <span className="text-xs text-gray-500 w-8 text-right">{si.progressPct.toFixed(0)}%</span>
                                   </div>
-                                  {si.nextSlab ? (
-                                    <p className="text-xs text-gray-400 leading-snug">
-                                      {formatINR(si.gapToNext)} to Slab {si.currentSlabIdx + 2}
-                                      <span className="text-green-600 font-medium"> → {formatINR(si.potentialAtNext)}</span>
-                                    </p>
-                                  ) : (
-                                    <p className="text-xs text-green-600 font-medium">Max slab reached</p>
-                                  )}
+                                  {si.nextSlab
+                                    ? <p className="text-xs text-gray-400 leading-snug">{formatINR(si.gapToNext)} to Slab {si.currentSlabIdx + 2}<span className="text-green-600 font-medium"> → {formatINR(si.potentialAtNext)}</span></p>
+                                    : <p className="text-xs text-green-600 font-medium">Max slab reached</p>
+                                  }
                                 </div>
                               ) : <span className="text-xs text-gray-300">—</span>}
                             </td>
                             <td className="px-4 py-3.5 text-center">
-                              {si ? (
-                                si.eligible ? (
-                                  <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">
-                                    ✓ Eligible
-                                  </span>
-                                ) : (
-                                  <div className="space-y-0.5">
-                                    <span className="inline-block text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full">
-                                      Not Eligible
-                                    </span>
+                              {si ? (si.eligible
+                                ? <span className="inline-flex items-center gap-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full">✓ Eligible</span>
+                                : <div className="space-y-0.5">
+                                    <span className="inline-block text-xs font-medium bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full">Not Eligible</span>
                                     <p className="text-xs text-red-400">↑ {formatINR(si.gapToSlab1)} to recover</p>
                                   </div>
-                                )
                               ) : <span className="text-xs text-gray-300">—</span>}
                             </td>
                             <td className="px-4 py-3.5 text-right">
                               <p className="font-semibold text-purple-600">{formatINR(row.commission)}</p>
-                              {si?.nextSlab && (
-                                <p className="text-xs text-gray-400">→ {formatINR(si.potentialAtNext)} next</p>
-                              )}
+                              {si?.nextSlab && <p className="text-xs text-gray-400">→ {formatINR(si.potentialAtNext)} next</p>}
                             </td>
                             <td className="px-4 py-3.5 text-right">
                               <p className="text-sm font-medium text-blue-600">{formatINR(row.totalT2Amount ?? 0)}</p>
@@ -638,13 +851,9 @@ export default function Dashboard() {
                               <p className="text-sm font-medium text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
                             </td>
                             <td className="px-4 py-3.5 text-center">
-                              {row.loanDocsTotal > 0 ? (
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                                  row.loanDocsOk === row.loanDocsTotal ? 'bg-green-50 text-green-700'
-                                  : row.loanDocsOk > 0                  ? 'bg-yellow-50 text-yellow-700'
-                                  :                                        'bg-gray-100 text-gray-500'
-                                }`}>
-                                  {row.loanDocsOk}/{row.loanDocsTotal}
+                              {row.loanDocsDone !== undefined ? (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${row.loanDocsDone > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {row.loanDocsDone} done / {row.loanDocsPending} pend
                                 </span>
                               ) : <span className="text-xs text-gray-300">—</span>}
                             </td>
@@ -652,6 +861,20 @@ export default function Dashboard() {
                         )
                       })}
                     </tbody>
+                    <tfoot>
+                      {(() => { const t = leaderboardTotals(leaderboard); return (
+                        <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold text-sm">
+                          <td className="px-4 py-3 text-gray-500 text-xs" colSpan={2}>Total ({leaderboard.length} agents)</td>
+                          <td className="px-4 py-3 text-right text-gray-700">{formatINR(t.totalSaleValue)}</td>
+                          <td className="px-4 py-3 text-right text-gray-800">{formatINR(t.achieved)}</td>
+                          <td colSpan={2} />
+                          <td className="px-4 py-3 text-right text-purple-600">{formatINR(t.commission)}</td>
+                          <td className="px-4 py-3 text-right text-blue-600">{formatINR(t.totalT2Amount)}</td>
+                          <td className="px-4 py-3 text-right text-purple-700">{formatINR(t.moneyMade)}</td>
+                          <td className="px-4 py-3 text-center text-gray-600 text-xs">{t.loanDocsDone}d / {t.loanDocsPending}p</td>
+                        </tr>
+                      )})()}
+                    </tfoot>
                   </table>
                 </div>
               </div>
