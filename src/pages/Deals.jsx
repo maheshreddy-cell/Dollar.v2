@@ -16,9 +16,11 @@ const STAGE_GROUPS = [
     bg: 'bg-green-50',
     border: 'border-green-200',
     text: 'text-green-700',
+    badgeBg: 'bg-green-100',
     barColor: 'bg-green-500',
     subBg: 'bg-green-50/40',
-    defaultOpen: true,
+    dot: 'bg-green-500',
+    defaultOpen: false,
     atRiskStages: [],
   },
   {
@@ -27,9 +29,11 @@ const STAGE_GROUPS = [
     bg: 'bg-orange-50',
     border: 'border-orange-200',
     text: 'text-orange-700',
+    badgeBg: 'bg-orange-100',
     barColor: 'bg-orange-400',
     subBg: 'bg-orange-50/40',
-    defaultOpen: true,
+    dot: 'bg-orange-400',
+    defaultOpen: false,
     atRiskStages: [],
   },
   {
@@ -38,9 +42,11 @@ const STAGE_GROUPS = [
     bg: 'bg-blue-50',
     border: 'border-blue-200',
     text: 'text-blue-700',
+    badgeBg: 'bg-blue-100',
     barColor: 'bg-blue-500',
     subBg: 'bg-blue-50/40',
-    defaultOpen: true,
+    dot: 'bg-blue-500',
+    defaultOpen: false,
     atRiskStages: [],
   },
   {
@@ -49,8 +55,10 @@ const STAGE_GROUPS = [
     bg: 'bg-amber-50',
     border: 'border-amber-200',
     text: 'text-amber-700',
+    badgeBg: 'bg-amber-100',
     barColor: 'bg-amber-400',
     subBg: 'bg-amber-50/40',
+    dot: 'bg-amber-400',
     defaultOpen: false,
     atRiskStages: ['awaiting for docs', 'post_approval pending'],
   },
@@ -60,8 +68,10 @@ const STAGE_GROUPS = [
     bg: 'bg-red-50',
     border: 'border-red-200',
     text: 'text-red-700',
+    badgeBg: 'bg-red-100',
     barColor: 'bg-red-400',
     subBg: 'bg-red-50/40',
+    dot: 'bg-red-400',
     defaultOpen: false,
     atRiskStages: [],
   },
@@ -227,7 +237,7 @@ export default function Deals() {
         .slide-in { animation: slideInLeft 0.28s ease both; }
       `}</style>
 
-      <div className="space-y-0">
+      <div className="space-y-1">
         {/* Page header */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
@@ -427,6 +437,7 @@ export default function Deals() {
         )}
 
         {/* Stage groups */}
+        <div className="space-y-3">
         {STAGE_GROUPS.map((group, idx) => {
           const groupData = data.groups[group.key] || []
           const total     = data.totals[group.key] || { value: 0, count: 0 }
@@ -443,50 +454,54 @@ export default function Deals() {
             if (!subGroupMap[stage]) subGroupMap[stage] = []
             subGroupMap[stage].push(deal)
           }
-          const subGroupEntries  = Object.entries(subGroupMap)
-          const showSubHeaders   = subGroupEntries.length > 1
+          const subGroupEntries = Object.entries(subGroupMap)
+          const showSubHeaders  = subGroupEntries.length > 1
 
           return (
             <div
               key={group.key}
-              className={`slide-in rounded-xl border ${group.border} overflow-hidden mb-3`}
+              className={`slide-in rounded-2xl border-2 ${group.border} overflow-hidden shadow-sm`}
               style={{ animationDelay: `${idx * 50}ms` }}
             >
-              {/* Group header */}
+              {/* Group header — always visible, click to expand */}
               <button
-                className={`w-full flex items-center justify-between px-4 py-3.5 ${group.bg} hover:brightness-95 transition-all`}
+                className={`w-full flex items-center justify-between px-5 py-4 ${group.bg} hover:brightness-95 transition-all`}
                 onClick={() => setOpenGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
               >
-                <div className="flex items-center gap-3">
-                  <span className={`font-semibold text-sm ${group.text}`}>{group.label}</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${group.bg} ${group.text} border ${group.border}`}>
+                {/* Left: dot + label + badges */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${group.dot}`} />
+                  <span className={`font-bold text-sm ${group.text}`}>{group.label}</span>
+                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${group.badgeBg} ${group.text}`}>
                     {total.count} deal{total.count !== 1 ? 's' : ''}
                   </span>
                   {groupAtRisk > 0 && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
                       <AlertTriangle size={10} /> {groupAtRisk} at risk
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-4">
+
+                {/* Right: total value + mini bar + chevron */}
+                <div className="flex items-center gap-4 shrink-0">
                   <div className="text-right hidden sm:block">
-                    <p className={`text-sm font-bold ${group.text}`}>{formatINR(total.value)}</p>
-                    <p className="text-xs text-gray-400">{pct}% of pipeline</p>
+                    <p className={`text-base font-bold ${group.text}`}>{formatINR(total.value)}</p>
+                    <p className="text-[11px] text-gray-400">{pct}% of pipeline</p>
                   </div>
-                  <div className="w-20 h-1.5 bg-white/60 rounded-full overflow-hidden hidden sm:block">
-                    <div className={`h-full rounded-full ${group.barColor}`} style={{ width: `${pct}%` }} />
+                  <div className="w-24 h-2 bg-white/70 rounded-full overflow-hidden hidden sm:block">
+                    <div className={`h-full rounded-full ${group.barColor} transition-all duration-700`} style={{ width: `${Math.max(Number(pct), total.count > 0 ? 4 : 0)}%` }} />
                   </div>
-                  {isOpen
-                    ? <ChevronDown size={16} className="text-gray-400" />
-                    : <ChevronRight size={16} className="text-gray-400" />}
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center bg-white/60 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
+                    <ChevronRight size={15} className="text-gray-500" />
+                  </div>
                 </div>
               </button>
 
               {/* Deal cards */}
               {isOpen && (
-                <div className="bg-white">
+                <div className="bg-white dark:bg-surface-card">
                   {groupData.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-4">No deals in this stage</p>
+                    <p className="text-sm text-gray-400 text-center py-8">No deals in this stage</p>
                   ) : (
                     subGroupEntries.map(([stageName, stageDeals]) => {
                       const isAtRiskStage  = group.atRiskStages.includes(stageName.toLowerCase())
@@ -496,21 +511,21 @@ export default function Deals() {
                       return (
                         <div key={stageName}>
                           {showSubHeaders && (
-                            <div className={`px-4 py-2 ${group.subBg} border-b border-gray-100 flex items-center justify-between`}>
+                            <div className={`px-5 py-2.5 ${group.subBg} border-b border-gray-100 flex items-center justify-between`}>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-semibold text-gray-700">{stageName}</span>
+                                <span className="text-xs font-bold text-gray-700">{stageName}</span>
                                 {isAtRiskStage && (
-                                  <span className="flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                                  <span className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
                                     <AlertTriangle size={9} /> At Risk Stage
                                   </span>
                                 )}
                                 {stageAtRiskCnt > 0 && (
-                                  <span className="text-[10px] font-medium text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
+                                  <span className="text-[10px] font-semibold text-red-500 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full">
                                     {stageAtRiskCnt} flagged
                                   </span>
                                 )}
                               </div>
-                              <span className="text-xs text-gray-400 shrink-0">
+                              <span className="text-xs font-medium text-gray-400 shrink-0">
                                 {stageDeals.length} deal{stageDeals.length !== 1 ? 's' : ''} · {formatINR(stageTotal)}
                               </span>
                             </div>
@@ -523,16 +538,17 @@ export default function Deals() {
                               return (
                                 <div key={dealKey}>
                                   <button
-                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors text-left"
                                     onClick={() => setExpandedDeals(prev => ({ ...prev, [dealKey]: !prev[dealKey] }))}
                                   >
                                     <div className="flex items-center gap-3 min-w-0">
-                                      {isExpanded
-                                        ? <ChevronDown size={14} className="text-gray-400 shrink-0" />
-                                        : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
+                                      <ChevronRight
+                                        size={14}
+                                        className={`text-gray-300 shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
+                                      />
                                       <div className="min-w-0">
                                         <p className="text-sm font-semibold text-gray-800 truncate">{deal.LeadName || '—'}</p>
-                                        <p className="text-xs text-gray-400">
+                                        <p className="text-xs text-gray-400 mt-0.5">
                                           {deal.Timestamp
                                             ? new Date(deal.Timestamp).toLocaleDateString('en-IN')
                                             : deal.PaymentDate
@@ -546,39 +562,39 @@ export default function Deals() {
                                         </p>
                                       </div>
                                       {deal.isAtRisk && (
-                                        <span className="ml-1 flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full shrink-0">
+                                        <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full shrink-0">
                                           <AlertTriangle size={10} /> At Risk
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-sm font-bold text-gray-700 shrink-0 ml-2">{formatINR(deal.TotalValue || 0)}</p>
+                                    <p className="text-sm font-bold text-gray-700 shrink-0 ml-3">{formatINR(deal.TotalValue || 0)}</p>
                                   </button>
 
                                   {isExpanded && (
-                                    <div className="px-10 pb-3 bg-gray-50/50 border-t border-gray-100">
-                                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
+                                    <div className="mx-5 mb-4 rounded-xl bg-gray-50 border border-gray-100 px-5 py-4">
+                                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                         <div>
-                                          <p className="text-[10px] font-semibold uppercase text-gray-400 mb-0.5">Lead</p>
-                                          <p className="text-xs font-bold text-gray-700">{deal.LeadName || '—'}</p>
+                                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Lead</p>
+                                          <p className="text-sm font-semibold text-gray-700">{deal.LeadName || '—'}</p>
                                         </div>
                                         <div>
-                                          <p className="text-[10px] font-semibold uppercase text-gray-400 mb-0.5">Amount</p>
-                                          <p className="text-xs font-bold text-gray-700">{formatINR(deal.TotalValue || 0)}</p>
+                                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Amount</p>
+                                          <p className="text-sm font-semibold text-gray-700">{formatINR(deal.TotalValue || 0)}</p>
                                         </div>
                                         <div>
-                                          <p className="text-[10px] font-semibold uppercase text-gray-400 mb-0.5">Course</p>
-                                          <p className="text-xs font-bold text-gray-700">{deal.Course || deal.Vertical || '—'}</p>
+                                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Course</p>
+                                          <p className="text-sm font-semibold text-gray-700">{deal.Course || deal.Vertical || '—'}</p>
                                         </div>
                                         <div>
-                                          <p className="text-[10px] font-semibold uppercase text-gray-400 mb-0.5">Stage</p>
-                                          <p className="text-xs font-bold text-gray-700">{deal.LoanDocsCollected || '—'}</p>
+                                          <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Stage</p>
+                                          <p className="text-sm font-semibold text-gray-700">{deal.LoanDocsCollected || '—'}</p>
                                         </div>
                                       </div>
                                       {deal.isAtRisk && (
-                                        <div className="mt-2 flex items-start gap-2 bg-red-50 rounded-lg px-3 py-2.5 border border-red-100">
+                                        <div className="mt-3 flex items-start gap-2 bg-red-50 rounded-xl px-4 py-3 border border-red-100">
                                           <AlertTriangle size={13} className="text-red-500 shrink-0 mt-0.5" />
                                           <div>
-                                            <p className="text-xs font-semibold text-red-700">At Risk — Action Required</p>
+                                            <p className="text-xs font-bold text-red-700">At Risk — Action Required</p>
                                             <p className="text-xs text-red-600 mt-0.5">
                                               {deal.daysInStage} working day{deal.daysInStage !== 1 ? 's' : ''} stuck in "{deal.LoanDocsCollected}".
                                               Follow up immediately — your manager can see this and may reassign the deal.
@@ -601,6 +617,7 @@ export default function Deals() {
             </div>
           )
         })}
+        </div>
       </div>
     </>
   )
