@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { LogOut, Eye, X, Sun, Moon, Monitor } from 'lucide-react'
+import { LogOut, Eye, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { useTheme } from '../contexts/ThemeContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getAllUsers } from '../services/api'
 
@@ -20,41 +19,6 @@ const PAGE_TITLES = {
   '/permissions':      'Permissions & Access',
   '/kickers':          'Kickers',
   '/announce-kicker': 'Announce Kicker',
-}
-
-const THEME_OPTIONS = [
-  { value: 'light', icon: Sun,     title: 'Light' },
-  { value: 'auto',  icon: Monitor, title: 'Auto'  },
-  { value: 'dark',  icon: Moon,    title: 'Dark'  },
-]
-
-function ThemePicker() {
-  const { mode, setMode } = useTheme()
-
-  return (
-    <div
-      className="flex items-center gap-0.5 bg-gray-100 dark:bg-surface-card rounded-lg p-0.5"
-      title="Color mode"
-    >
-      {THEME_OPTIONS.map(({ value, icon: Icon, title }) => {
-        const active = mode === value
-        return (
-          <button
-            key={value}
-            onClick={() => setMode(value)}
-            title={title}
-            className={`flex items-center justify-center w-7 h-7 rounded-md transition-all ${
-              active
-                ? 'bg-white dark:bg-surface-muted text-brand-600 dark:text-brand-400 shadow-sm'
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            <Icon size={13} />
-          </button>
-        )
-      })}
-    </div>
-  )
 }
 
 export default function Navbar() {
@@ -76,13 +40,10 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="h-14 bg-white border-b border-gray-200 dark:bg-surface-card dark:border-surface-border flex items-center justify-between px-6 shrink-0">
-        <h1 className="text-base font-semibold text-gray-800 dark:text-gray-100">{title}</h1>
+      <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
+        <h1 className="text-base font-semibold text-gray-800">{title}</h1>
 
         <div className="flex items-center gap-3">
-          {/* 3-way theme picker */}
-          <ThemePicker />
-
           {/* View As — Admin only */}
           {user?.role === 'Admin' && allUsers.length > 0 && (
             <div className="flex items-center gap-2">
@@ -94,7 +55,7 @@ export default function Navbar() {
                   const u = allUsers.find(u => u.Email === e.target.value)
                   if (u) setViewAs({ email: u.Email, name: u.Name, role: u.Role, managerEmail: u.ManagerEmail })
                 }}
-                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 max-w-[180px] dark:bg-surface-hover dark:border-surface-border dark:text-gray-200"
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 max-w-[180px]"
               >
                 <option value="">View as agent…</option>
                 {allUsers.map(u => (
@@ -106,19 +67,19 @@ export default function Navbar() {
 
           {/* Month picker */}
           <div className="flex items-center gap-2">
-            <label htmlFor="month-picker" className="text-xs text-gray-500 dark:text-gray-400 font-medium">Month</label>
+            <label htmlFor="month-picker" className="text-xs text-gray-500 font-medium">Month</label>
             <input
               id="month-picker"
               type="month"
               value={month}
               onChange={e => setMonth(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 dark:bg-surface-hover dark:border-surface-border dark:text-gray-200"
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700"
             />
           </div>
 
           <button
             onClick={logout}
-            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50"
           >
             <LogOut size={16} />
             Logout
@@ -128,14 +89,14 @@ export default function Navbar() {
 
       {/* View As banner */}
       {viewAs && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-6 py-2 flex items-center justify-between">
-          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center justify-between">
+          <p className="text-xs font-medium text-amber-800">
             Viewing as <span className="font-bold">{viewAs.name}</span>
-            <span className="ml-1 text-amber-600 dark:text-amber-400">({viewAs.role} · {viewAs.email})</span>
+            <span className="ml-1 text-amber-600">({viewAs.role} · {viewAs.email})</span>
           </p>
           <button
             onClick={clearViewAs}
-            className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 transition-colors"
+            className="flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900 transition-colors"
           >
             <X size={13} /> Exit View
           </button>
