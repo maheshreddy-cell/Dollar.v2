@@ -289,8 +289,8 @@ export default function Kickers() {
   const [tab,       setTab]       = useState('active')
   const [manMode,   setManMode]   = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
-  const isManager   = user?.role === 'Manager'
-  const isOversight = OVERSIGHT_ROLES.includes(user?.role)
+  const isManager   = effectiveUser?.role === 'Manager'
+  const isOversight = OVERSIGHT_ROLES.includes(effectiveUser?.role) && effectiveUser?.email === user?.email
 
   function isVisible(k) {
     if (isOversight) return true
@@ -321,7 +321,7 @@ export default function Kickers() {
 
   // For Manager: split into "For Me" (received) and "For My Team" (announced)
   const forMeKickers     = isManager ? kickers.filter(isVisible) : []
-  const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === user?.email) : []
+  const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === effectiveUser?.email) : []
 
   // For oversight and non-manager roles: all visible kickers
   const allVisible = isOversight
