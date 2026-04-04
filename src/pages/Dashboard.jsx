@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
   DollarSign, AlertTriangle, CheckCircle, Zap, Award,
-  Target, TrendingUp, BarChart2, Percent,
+  Target, TrendingUp, BarChart2, Percent, Phone,
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary } from '../services/api'
 import MetricsCard   from '../components/MetricsCard'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
@@ -79,10 +79,12 @@ export default function Dashboard() {
   const [drillBoard, setDrillBoard] = useState([]) // agent rows when drilled in
   const [drillLoading, setDrillLoading] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all') // 'all'|'Manager'|'Agent'|'PreSales'
+  const [psSummary,  setPsSummary]  = useState(null)   // PreSales calls+sales summary
 
-  const isManager = MANAGER_ROLES.includes(effectiveUser?.role)
+  const isManager   = MANAGER_ROLES.includes(effectiveUser?.role)
   const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
-  const tick      = useRefresh()
+  const isPreSales  = effectiveUser?.role === 'PreSales'
+  const tick        = useRefresh()
 
   // Rotate motivational message every 120s
   useEffect(() => {
@@ -124,6 +126,12 @@ export default function Dashboard() {
           })
           setLeaderboard(rows)
         })
+        .catch(() => setError('Failed to load dashboard data.'))
+        .finally(() => setLoading(false))
+    } else if (isPreSales) {
+      // PreSales: load calls+sales summary (no revenue commission)
+      getPreSalesSummary(effectiveUser?.email, month)
+        .then(setPsSummary)
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     } else {
@@ -249,9 +257,160 @@ export default function Dashboard() {
       )}
 
       {/* ══════════════════════════════════
+          PRESALES VIEW
+      ══════════════════════════════════ */}
+      {!isManager && isPreSales && (
+        <div className="space-y-4">
+
+          {/* Welcome header */}
+          <FadeIn>
+            <div
+              className="relative rounded-2xl overflow-hidden mb-2"
+              style={bgStyle ? { ...bgStyle, minHeight: 120 } : { background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)', minHeight: 120 }}
+            >
+              <div className="absolute inset-0 bg-white/75 backdrop-blur-[2px]" />
+              <div className="relative px-6 py-5 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-800">
+                    Welcome back, {effectiveUser?.name?.split(' ')[0]} ✨
+                  </h2>
+                  <div className="flex items-center gap-4 mt-1 flex-wrap">
+                    <span className="text-sm text-gray-600">
+                      Calls <span className="font-bold text-gray-800">{psSummary?.callsCount ?? 0}</span>
+                    </span>
+                    <span className="text-gray-300 text-xs">|</span>
+                    <span className="text-sm text-gray-600">
+                      Sales <span className="font-bold text-gray-800">{psSummary?.salesCount ?? 0}</span>
+                    </span>
+                    <span className="text-gray-300 text-xs">|</span>
+                    <span className="text-sm text-gray-600">
+                      Earned <span className="font-medium text-purple-600">{formatINR(psSummary?.totalEarnings ?? 0)}</span>
+                    </span>
+                  </div>
+                </div>
+                <DaysLeftBadge month={month} />
+              </div>
+            </div>
+          </FadeIn>
+
+          {/* Progression note for M2 */}
+          {(psSummary?.salesCount ?? 0) < 8 && (
+            <FadeIn delay={100}>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Zap size={15} className="text-amber-500 shrink-0" />
+                  <p className="text-sm text-amber-800">
+                    <strong>{8 - (psSummary?.salesCount ?? 0)} more sales</strong> to be eligible for Agent role promotion.
+                  </p>
+                </div>
+                <span className="text-xs font-semibold bg-amber-100 border border-amber-300 text-amber-700 px-3 py-1 rounded-lg">
+                  {psSummary?.salesCount ?? 0}/8 sales
+                </span>
+              </div>
+            </FadeIn>
+          )}
+
+          {/* Two progress tracks */}
+          <FadeIn delay={140}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              {/* Calls track */}
+              {(() => {
+                const count     = psSummary?.callsCount ?? 0
+                const current   = psSummary?.currentCallSlab
+                const next      = psSummary?.nextCallSlab
+                const targetN   = next ? next.minCalls : (current ? current.minCalls : 40)
+                const pct       = Math.min(100, Math.round((count / targetN) * 100))
+                const gap       = Math.max(0, targetN - count)
+                return (
+                  <div className="bg-white rounded-xl border border-gray-200 p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Phone size={15} className="text-teal-600" />
+                      <p className="text-xs font-bold uppercase tracking-wide text-gray-600">Calls Scheduled</p>
+                    </div>
+                    <p className="text-3xl font-bold text-gray-900 mb-1">{count}</p>
+                    {current && <p className="text-xs text-teal-700 font-semibold mb-2">₹{current.ratePerCall}/call · Slab active ✓</p>}
+                    {!current && <p className="text-xs text-gray-400 mb-2">Below first slab (40 calls)</p>}
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-1">
+                      <div className={`h-full rounded-full transition-all ${current ? 'bg-teal-500' : 'bg-gray-300'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-[10px] text-gray-400">
+                      {next
+                        ? `${gap} more call${gap !== 1 ? 's' : ''} to unlock ₹${next.ratePerCall}/call (${next.minCalls}+ slab)`
+                        : '🏆 Top slab achieved!'}
+                    </p>
+                  </div>
+                )
+              })()}
+
+              {/* Sales track */}
+              {(() => {
+                const count     = psSummary?.salesCount ?? 0
+                const current   = psSummary?.currentSalesSlab
+                const next      = psSummary?.nextSalesSlab
+                const targetN   = next ? next.minSales : (current ? current.minSales : 4)
+                const pct       = Math.min(100, Math.round((count / targetN) * 100))
+                const gap       = Math.max(0, targetN - count)
+                return (
+                  <div className="bg-white rounded-xl border border-gray-200 p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target size={15} className="text-cyan-600" />
+                      <p className="text-xs font-bold uppercase tracking-wide text-gray-600">Sales from Calls</p>
+                    </div>
+                    <p className="text-3xl font-bold text-gray-900 mb-1">{count}</p>
+                    {current && <p className="text-xs text-cyan-700 font-semibold mb-2">₹{current.ratePerSale}/sale · Slab active ✓</p>}
+                    {!current && <p className="text-xs text-gray-400 mb-2">Below first slab (4 sales)</p>}
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-1">
+                      <div className={`h-full rounded-full transition-all ${current ? 'bg-cyan-500' : 'bg-gray-300'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-[10px] text-gray-400">
+                      {next
+                        ? `${gap} more sale${gap !== 1 ? 's' : ''} to unlock ₹${next.ratePerSale}/sale (${next.minSales}+ slab)`
+                        : '🏆 Top slab achieved!'}
+                    </p>
+                  </div>
+                )
+              })()}
+            </div>
+          </FadeIn>
+
+          {/* Incentives breakdown */}
+          <FadeIn delay={180}>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500">🏆 Incentives Breakdown</p>
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-gray-100">
+                <div className="px-5 py-4">
+                  <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-1">Calls Earned</p>
+                  <p className="text-xl font-semibold text-teal-700">{formatINR(psSummary?.callsEarnings ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{psSummary?.callsCount ?? 0} calls × rate</p>
+                </div>
+                <div className="px-5 py-4">
+                  <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-1">Sales Earned</p>
+                  <p className="text-xl font-semibold text-cyan-700">{formatINR(psSummary?.salesEarnings ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{psSummary?.salesCount ?? 0} sales × rate</p>
+                </div>
+                <div className="px-5 py-4">
+                  <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-1">Kickers</p>
+                  <p className="text-xl font-semibold text-purple-700">{formatINR(0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Announced by manager</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-sm font-bold text-gray-700">Total Incentive This Month</p>
+                <p className="text-xl font-bold text-gray-900">{formatINR(psSummary?.totalEarnings ?? 0)}</p>
+              </div>
+            </div>
+          </FadeIn>
+
+        </div>
+      )}
+
+      {/* ══════════════════════════════════
           AGENT VIEW
       ══════════════════════════════════ */}
-      {!isManager && (
+      {!isManager && !isPreSales && (
         <div className="space-y-4">
 
           {/* ── Header with background and motivational note ── */}

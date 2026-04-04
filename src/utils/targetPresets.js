@@ -45,39 +45,40 @@ export const AGENT_TARGET_PRESETS = [
   },
 ]
 
-// Pre-Sales specific presets — lower revenue thresholds suited to the ramp-up journey.
+// Pre-Sales specific presets — 3-phase ramp-up journey.
+// M1 + M2: calls+sales incentive model (no revenue target).
+// M3: revenue-based target (transition to Agent role).
 export const PRESALES_TARGET_PRESETS = [
   {
-    id: 'ps-starter',
-    label: 'PS Starter',
-    description: 'Month 1 ramp — scheduling focused',
-    slabs: [
-      { targetAmount: 100000, commissionPct: 0.5 },
-      { targetAmount: 200000, commissionPct: 1   },
-      { targetAmount: 300000, commissionPct: 1.5 },
-      { targetAmount: 400000, commissionPct: 2   },
-    ],
+    id: 'ps-basic',
+    label: 'Basic',
+    description: 'Month 1 — Calls scheduling focused. No revenue target.',
+    type: 'presales-calls',
+    defaultMinCalls: 40,
+    targetAmount: 0,
+    slabs: [],
   },
   {
-    id: 'ps-mid',
-    label: 'PS Mid-Ramp',
-    description: 'Month 2-3 ramp — independent calls',
-    slabs: [
-      { targetAmount: 200000, commissionPct: 1   },
-      { targetAmount: 350000, commissionPct: 1.5 },
-      { targetAmount: 500000, commissionPct: 2   },
-      { targetAmount: 650000, commissionPct: 2.5 },
-    ],
+    id: 'ps-warm-up',
+    label: 'Warm Up',
+    description: 'Month 2 — Hit 8 sales to progress to Agent role.',
+    type: 'presales-calls',
+    defaultMinCalls: 40,
+    targetAmount: 0,
+    slabs: [],
   },
   {
-    id: 'ps-full',
-    label: 'PS Full Slab',
-    description: 'Full pre-sales commission',
+    id: 'ps-mob',
+    label: 'Make or Break',
+    description: 'Month 3 — ₹4,00,000 revenue target. Transition to Agent.',
+    type: 'presales-revenue',
+    defaultMinCalls: 0,
+    targetAmount: 400000,
     slabs: [
-      { targetAmount: 300000, commissionPct: 1   },
-      { targetAmount: 500000, commissionPct: 2   },
-      { targetAmount: 700000, commissionPct: 2.5 },
-      { targetAmount: 900000, commissionPct: 3   },
+      { targetAmount: 400000, commissionPct: 1 },
+      { targetAmount: 600000, commissionPct: 2 },
+      { targetAmount: 800000, commissionPct: 3 },
+      { targetAmount: 900000, commissionPct: 4 },
     ],
   },
 ]
