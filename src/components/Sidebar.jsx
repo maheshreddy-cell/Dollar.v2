@@ -73,7 +73,7 @@ export default function Sidebar() {
         {NAV_BASE.map((group, gi) => {
           const visible = group.items.filter(item => {
             const roles = effectiveRoles(item)
-            if (isViewAs) return roles.includes(effectiveUser.role)
+            if (isViewAs) return roles.includes(effectiveUser?.role)
             return isRole(...roles)
           })
           if (!visible.length) return null
