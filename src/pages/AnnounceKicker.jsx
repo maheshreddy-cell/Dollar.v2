@@ -266,7 +266,7 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
       : <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">Upcoming</span>
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${past ? 'opacity-70' : ''}`}>
+    <div className={`bg-white dark:bg-surface-card rounded-xl border border-gray-200 dark:border-surface-border overflow-hidden ${past ? 'opacity-70' : ''}`}>
       <div className={`h-1 ${past ? 'bg-gray-200' : 'bg-gradient-to-r from-brand-500 via-purple-500 to-pink-400'}`} />
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-3">
@@ -275,7 +275,7 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
               {statusBadge}
               {kicker.pinned && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌</span>}
             </div>
-            <p className="text-sm font-bold text-gray-900 leading-snug">{kicker.title}</p>
+            <p className="text-sm font-bold text-gray-900 dark:text-white leading-snug">{kicker.title}</p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               {kicker.dateFrom} → {kicker.dateTo} · by {kicker.announcedByRole}
             </p>
@@ -313,7 +313,7 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
 
         {/* Slabs summary */}
         {expanded && (kicker.slabs || []).length > 0 && (
-          <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
+          <div className="mt-3 space-y-1 border-t border-gray-100 dark:border-surface-border pt-2">
             <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Slabs</p>
             {kicker.slabs.map((s, i) => {
               const type = kicker.type || 'team_sales'
@@ -549,11 +549,11 @@ export default function AnnounceKicker() {
         <button onClick={() => navigate('/kickers')} className="text-gray-400 hover:text-gray-600 transition-colors">
           <ArrowLeft size={18} />
         </button>
-        <div className="w-9 h-9 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800 flex items-center justify-center">
           <Megaphone size={18} className="text-brand-600" />
         </div>
         <div>
-          <h2 className="text-base font-bold text-gray-900">Announce Kicker</h2>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">Announce Kicker</h2>
           <p className="text-xs text-gray-400">Create & manage incentives for your team</p>
         </div>
       </div>
@@ -573,7 +573,7 @@ export default function AnnounceKicker() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Zap size={14} className="text-purple-500" />
-          <p className="text-sm font-bold text-gray-800">Your Kickers to Manage</p>
+          <p className="text-sm font-bold text-gray-800 dark:text-gray-100">Your Kickers to Manage</p>
           <span className="text-[10px] font-semibold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{manageable.length}</span>
         </div>
 
@@ -582,7 +582,7 @@ export default function AnnounceKicker() {
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600" />
           </div>
         ) : manageable.length === 0 ? (
-          <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-6 text-center">
+          <div className="bg-gray-50 dark:bg-surface-hover rounded-xl border border-gray-100 dark:border-surface-border px-4 py-6 text-center">
             <p className="text-xs text-gray-400">No kickers yet. Create one below.</p>
           </div>
         ) : (
@@ -601,10 +601,10 @@ export default function AnnounceKicker() {
       </div>
 
       {/* ── Create / Edit form ── */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-4 bg-gradient-to-r from-brand-50 to-purple-50 border-b border-gray-100 flex items-center justify-between">
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-surface-card rounded-2xl border border-gray-200 dark:border-surface-border overflow-hidden shadow-sm">
+        <div className="px-5 py-4 bg-gradient-to-r from-brand-50 to-purple-50 dark:from-surface-hover dark:to-surface-hover border-b border-gray-100 dark:border-surface-border flex items-center justify-between">
           <div>
-            <p className="text-sm font-bold text-gray-800">
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-100">
               {editingId ? '✏️ Edit Kicker' : 'New Kicker'}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
@@ -619,32 +619,32 @@ export default function AnnounceKicker() {
           )}
         </div>
 
-        <div className="px-5 py-5 space-y-5">
+        <div className="px-5 py-5 space-y-5 dark:bg-surface-card">
 
           {/* Title */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Kicker Title *</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">Kicker Title *</label>
             <input value={form.title} onChange={e => setField('title', e.target.value)}
               placeholder="e.g. Month-End Push — Let's Go!"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
 
           {/* Message */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Motivational Message (optional)</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">Motivational Message (optional)</label>
             <textarea rows={4} value={form.message} onChange={e => setField('message', e.target.value)}
               placeholder="Paste your announcement message here…"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+              className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
           </div>
 
           {/* Type */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Kicker Type *</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Kicker Type *</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {KICKER_TYPES.map(t => (
                 <button key={t.value} type="button" onClick={() => setField('type', t.value)}
                   className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
-                    form.type === t.value ? 'border-brand-400 bg-brand-50 text-brand-800 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    form.type === t.value ? 'border-brand-400 dark:border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-800 dark:text-brand-300 font-semibold' : 'border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-surface-muted'
                   }`}>
                   <p className="font-semibold">{t.label}</p>
                   <p className="text-[10px] text-gray-400 mt-0.5">{t.desc}</p>
@@ -656,22 +656,22 @@ export default function AnnounceKicker() {
           {/* Min sale value */}
           {(form.type.includes('sales') || form.type.includes('or') || form.type.includes('and')) && (
             <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Minimum Sale Value (optional)</label>
+              <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">Minimum Sale Value (optional)</label>
               <input type="number" value={form.minSaleValue} onChange={e => setField('minSaleValue', e.target.value)}
                 placeholder="e.g. 50000 — only sales above this count"
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           )}
 
           {/* Date range */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Date Range *</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1.5">Date Range *</label>
             <div className="flex items-center gap-3">
               <input type="date" value={form.dateFrom} onChange={e => setField('dateFrom', e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-              <span className="text-gray-400 text-xs">to</span>
+                className="flex-1 border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              <span className="text-gray-400 dark:text-gray-500 text-xs">to</span>
               <input type="date" value={form.dateTo} onChange={e => setField('dateTo', e.target.value)}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                className="flex-1 border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               <button type="button" onClick={() => { setField('dateFrom', TODAY); setField('dateTo', TODAY) }}
                 className="text-xs text-brand-600 font-semibold border border-brand-200 bg-brand-50 px-2.5 py-2 rounded-xl hover:bg-brand-100 whitespace-nowrap">
                 Today Only
@@ -681,12 +681,12 @@ export default function AnnounceKicker() {
 
           {/* Target Roles */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Who Is This For? *</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Who Is This For? *</label>
             <div className="flex flex-wrap gap-2">
               {eligibleRoles.map(role => (
                 <button key={role} type="button" onClick={() => toggleRole(role)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                    form.targetRoles.includes(role) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    form.targetRoles.includes(role) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-surface-muted'
                   }`}>
                   {role}
                 </button>
@@ -699,18 +699,18 @@ export default function AnnounceKicker() {
 
           {/* Target Teams */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Which Teams?</label>
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Which Teams?</label>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => toggleTeam('ALL')}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  form.targetTeams.includes('ALL') ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  form.targetTeams.includes('ALL') ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-surface-muted'
                 }`}>
                 All Teams
               </button>
               {managers.map(m => (
                 <button key={m.Email} type="button" onClick={() => toggleTeam(m.Email)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                    form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-surface-muted'
                   }`}>
                   {m.Name || m.Email} {activeUser?.role === 'Manager' ? '' : `(${m.Role})`}
                 </button>
@@ -720,8 +720,8 @@ export default function AnnounceKicker() {
 
           {/* Slabs */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs (up to 4)</label>
-            <div className="rounded-xl overflow-hidden border border-gray-200">
+            <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2">Incentive Slabs (up to 4)</label>
+            <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-surface-border">
               <table className="w-full text-xs">
                 <thead>
                   <tr className={`text-[10px] font-bold uppercase ${isCombo ? 'bg-purple-50 text-purple-600' : 'bg-brand-50 text-brand-600'}`}>
@@ -737,7 +737,7 @@ export default function AnnounceKicker() {
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-surface-border">
                   {form.slabs.map((s, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2 font-bold text-gray-400">S{i + 1}</td>
@@ -745,11 +745,11 @@ export default function AnnounceKicker() {
                         <>
                           <td className="px-2 py-2">
                             <input type="number" value={s.salesThreshold} onChange={e => setSlab(i, 'salesThreshold', e.target.value)}
-                              placeholder="e.g. 2" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                              placeholder="e.g. 2" className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
                           </td>
                           <td className="px-2 py-2">
                             <input type="number" value={s.revenueThreshold} onChange={e => setSlab(i, 'revenueThreshold', e.target.value)}
-                              placeholder="e.g. 125000" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                              placeholder="e.g. 125000" className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
                             {s.revenueThreshold && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.revenueThreshold))}</p>}
                           </td>
                         </>
@@ -757,13 +757,13 @@ export default function AnnounceKicker() {
                         <td className="px-2 py-2">
                           <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
                             placeholder={typeInfo?.unit === 'sales' ? 'e.g. 15' : 'e.g. 1250000'}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                            className="w-full border border-gray-200 dark:border-surface-border dark:bg-surface-hover dark:text-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
                           {s.threshold && typeInfo?.unit !== 'sales' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
                         </td>
                       )}
                       <td className="px-2 py-2">
                         <input type="number" value={s.payout} onChange={e => setSlab(i, 'payout', e.target.value)}
-                          placeholder="e.g. 1000" className="w-full border border-green-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
+                          placeholder="e.g. 1000" className="w-full border border-green-200 dark:border-green-900 dark:bg-surface-hover dark:text-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
                         {s.payout && <p className="text-[10px] text-green-600 mt-0.5 font-semibold">{formatINR(Number(s.payout))}</p>}
                       </td>
                     </tr>
@@ -779,7 +779,7 @@ export default function AnnounceKicker() {
               className={`relative w-11 h-6 rounded-full transition-colors ${form.pinned ? 'bg-yellow-400' : 'bg-gray-200'}`}>
               <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.pinned ? 'translate-x-5' : ''}`} />
             </button>
-            <span className="text-sm text-gray-600 font-medium">📌 Pin this kicker to top</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">📌 Pin this kicker to top</span>
           </div>
 
           {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -787,12 +787,12 @@ export default function AnnounceKicker() {
           <div className="flex gap-3">
             {editingId ? (
               <button type="button" onClick={handleCancelEdit}
-                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 font-semibold text-sm py-3 rounded-xl transition-colors">
+                className="flex-1 border border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-surface-hover font-semibold text-sm py-3 rounded-xl transition-colors">
                 Cancel Edit
               </button>
             ) : (
               <button type="button" onClick={() => navigate('/kickers')}
-                className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 font-semibold text-sm py-3 rounded-xl transition-colors">
+                className="flex-1 border border-gray-200 dark:border-surface-border text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-surface-hover font-semibold text-sm py-3 rounded-xl transition-colors">
                 Back to Kickers
               </button>
             )}
