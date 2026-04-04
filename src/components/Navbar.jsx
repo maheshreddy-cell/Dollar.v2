@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { LogOut, Eye, X } from 'lucide-react'
+import { LogOut, Eye, X, Moon, Sun } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getAllUsers } from '../services/api'
 
@@ -18,10 +19,12 @@ const PAGE_TITLES = {
   '/faq':              'FAQ',
   '/permissions':      'Permissions & Access',
   '/kickers':          'Kickers',
+  '/announce-kicker': 'Announce Kicker',
 }
 
 export default function Navbar() {
   const { user, logout, viewAs, setViewAs, clearViewAs } = useAuth()
+  const { dark, toggle } = useTheme()
   const { month, setMonth } = useMonth()
   const location = useLocation()
 
@@ -39,10 +42,17 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
-        <h1 className="text-base font-semibold text-gray-800">{title}</h1>
+      <header className="h-14 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700 flex items-center justify-between px-6 shrink-0">
+        <h1 className="text-base font-semibold text-gray-800 dark:text-gray-100">{title}</h1>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={toggle}
+            className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+            title={dark ? 'Light mode' : 'Dark mode'}
+          >
+            {dark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           {/* View As — Admin only */}
           {user?.role === 'Admin' && allUsers.length > 0 && (
             <div className="flex items-center gap-2">

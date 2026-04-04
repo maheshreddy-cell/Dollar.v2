@@ -409,13 +409,69 @@ export const getSummary = async (userEmail, month) => {
 }
 
 export const getLeaderboard = async (rootEmail, month) => {
-  const [users, targets, deals] = await Promise.all([
+  const [users, targets, deals, allKickers] = await Promise.all([
     appsScript.getSheet('Users'),
     appsScript.getSheet('Targets'),
     appsScript.getSalesSheet(),
+    appsScript.getSheet('Kickers').catch(() => []),
   ])
   const emails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
   const agents = users.filter(u => emails.includes(u.Email) && ['Agent', 'PreSales'].includes(u.Role))
+
+  // Parse kickers for progress computation
+  function parseKickerRow(r) {
+    const safe = (key) => { try { const v = JSON.parse(r[key] || '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+    return {
+      id: r.KickerId || '',
+      type: r.Type || 'team_sales',
+      minSaleValue: Number(r.MinSaleValue || 0),
+      dateFrom: r.DateFrom || '',
+      dateTo: r.DateTo || '',
+      slabs: safe('Slabs'),
+      targetRoles: safe('TargetRoles'),
+      targetTeams: safe('TargetTeams'),
+    }
+  }
+  const parsedKickers = (allKickers || []).map(parseKickerRow).filter(k => k.id)
+
+  // Helper: compute kicker earnings for an agent given their deals
+  function computeKickerEarnings(agentEmail, agentRole, agentDeals) {
+    let total = 0
+    const now = Date.now()
+    for (const k of parsedKickers) {
+      // Check if kicker targets this agent's role
+      if (!k.targetRoles.includes(agentRole)) continue
+      // Check date range
+      const from = new Date(k.dateFrom).getTime()
+      const to   = new Date(k.dateTo).getTime() + 86399999
+      if (now < from || now > to) continue // only active kickers
+
+      const inRange = agentDeals.filter(d => {
+        const dt = new Date(d.Timestamp || d.PaymentDate || 0)
+        return dt >= new Date(k.dateFrom) && dt <= new Date(new Date(k.dateTo).setHours(23,59,59))
+      })
+
+      const rawSales = inRange.length
+      const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+      const sales    = k.minSaleValue > 0
+        ? inRange.filter(d => (d.TotalValue || 0) >= k.minSaleValue).length
+        : rawSales
+
+      const sorted = [...k.slabs].sort((a, b) => Number(a.threshold || a.salesThreshold || 0) - Number(b.threshold || b.salesThreshold || 0))
+      let earnedSlab = null
+      for (const slab of sorted) {
+        let hit = false
+        const type = k.type
+        if (type === 'team_sales' || type === 'individual_sales')       hit = sales   >= Number(slab.threshold)
+        else if (type === 'team_revenue' || type === 'individual_revenue') hit = revenue >= Number(slab.threshold)
+        else if (type === 'individual_or')  hit = sales >= Number(slab.salesThreshold) || revenue >= Number(slab.revenueThreshold)
+        else if (type === 'individual_and') hit = sales >= Number(slab.salesThreshold) && revenue >= Number(slab.revenueThreshold)
+        if (hit) earnedSlab = slab
+      }
+      if (earnedSlab) total += Number(earnedSlab.payout || 0)
+    }
+    return total
+  }
 
   return agents.map(agent => {
     const target     = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
@@ -434,14 +490,14 @@ export const getLeaderboard = async (rootEmail, month) => {
     const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
     const totalT2Amount   = agentDeals.reduce((s, d) => s + (d.T2Amount    || 0), 0)
     const commission      = target ? calcTieredCommission(achieved, target) : 0
-    const moneyMade       = commission + totalT2Amount  // kickers = 0 until feature built
+    const kickerEarnings  = computeKickerEarnings(agentEmail, agent.Role || 'Agent', agentDeals)
+    const moneyMade       = commission + totalT2Amount + kickerEarnings
 
-    // Loan docs: count deals where LoanDocsCollected is a meaningful "yes" value
-    const loanDocsTotal = agentDeals.length
-    const loanDocsOk    = agentDeals.filter(d => {
-      const v = (d.LoanDocsCollected || '').trim().toLowerCase()
-      return v && !['no', 'pending', 'not collected', 'n/a', '-', ''].includes(v)
-    }).length
+    // Loan docs: count "payment cleared" as done, everything else as pending
+    const loanDocsDone    = agentDeals.filter(d =>
+      (d.LoanDocsCollected || '').trim().toLowerCase() === 'payment cleared'
+    ).length
+    const loanDocsPending = agentDeals.length - loanDocsDone
 
     return {
       name:              agent.Name,
@@ -451,15 +507,78 @@ export const getLeaderboard = async (rootEmail, month) => {
       dealsCount,
       totalSaleValue,
       totalT2Amount,
+      kickerEarnings,
       moneyMade,
       pendingCollection: Math.max(0, totalSaleValue - achieved),
-      loanDocsOk,
-      loanDocsTotal,
+      loanDocsDone,
+      loanDocsPending,
       pct:               tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
       commission,
       slabInfo:          getSlabInfo(achieved, target),
     }
   }).sort((a, b) => b.achieved - a.achieved)
+}
+
+// Returns direct subordinate managers/VHs with their team aggregates
+export const getManagersLeaderboard = async (rootEmail, month) => {
+  const [users, targets, deals, allKickers] = await Promise.all([
+    appsScript.getSheet('Users'),
+    appsScript.getSheet('Targets'),
+    appsScript.getSalesSheet(),
+    appsScript.getSheet('Kickers').catch(() => []),
+  ])
+
+  // Get direct reports of rootEmail who are Manager or VH
+  const rootLower = (rootEmail || '').trim().toLowerCase()
+  const directReports = users.filter(u =>
+    (u.ManagerEmail || '').trim().toLowerCase() === rootLower &&
+    ['Manager', 'VH'].includes(u.Role)
+  )
+
+  return directReports.map(mgr => {
+    const mgrEmail = (mgr.Email || '').trim().toLowerCase()
+    // Collect all emails in this manager's subtree (agents under them)
+    const subtreeEmails = collectEmails(users, mgrEmail).map(e => e.trim().toLowerCase())
+    const teamEmails    = subtreeEmails.filter(e => e !== mgrEmail)
+
+    // All deals from agents under this manager for the month
+    const teamDeals = deals.filter(d =>
+      teamEmails.includes((d.Email || '').trim().toLowerCase()) &&
+      (!month || d.Month === month)
+    )
+
+    const pipeline     = teamDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
+    const paid         = teamDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+    const t2           = teamDeals.reduce((s, d) => s + (d.T2Amount || 0), 0)
+
+    // Commission: sum commission for each agent under this manager
+    const agentUsers = users.filter(u => teamEmails.includes((u.Email || '').trim().toLowerCase()) && ['Agent','PreSales'].includes(u.Role))
+    let totalCommission = 0
+    for (const agent of agentUsers) {
+      const aEmail = (agent.Email || '').trim().toLowerCase()
+      const target = latestTarget(targets, aEmail, month)
+      if (!target) continue
+      const aPaid = teamDeals.filter(d => (d.Email||'').trim().toLowerCase() === aEmail && d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+      totalCommission += calcTieredCommission(aPaid, target)
+    }
+
+    const loanDocsDone    = teamDeals.filter(d => (d.LoanDocsCollected || '').trim().toLowerCase() === 'payment cleared').length
+    const loanDocsPending = teamDeals.length - loanDocsDone
+
+    return {
+      name:           mgr.Name || mgr.Email,
+      email:          mgr.Email,
+      role:           mgr.Role,
+      agentCount:     agentUsers.length,
+      pipeline,
+      paid,
+      commission:     totalCommission,
+      t2,
+      moneyMade:      totalCommission + t2,
+      loanDocsDone,
+      loanDocsPending,
+    }
+  }).sort((a, b) => b.paid - a.paid)
 }
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
@@ -960,10 +1079,15 @@ export async function updateKicker(kickerId, updates) {
 }
 
 // ── Reassign agent to a different manager ────────────────────────────────────
-// Updates the ManagerEmail field in the Users sheet for the given agent.
 export async function reassignAgent(agentEmail, newManagerEmail, updatedByEmail) {
   await appsScript.updateRow('Users', 'Email', agentEmail, {
     ManagerEmail: newManagerEmail,
   })
+  clearCache()
+}
+
+// ── Change a member's role ────────────────────────────────────────────────────
+export async function changeRole(email, newRole) {
+  await appsScript.updateRow('Users', 'Email', email, { Role: newRole })
   clearCache()
 }

@@ -1,44 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Zap, Plus, X, ChevronDown, ChevronUp, Trash2, Clock, Megaphone, CheckCircle } from 'lucide-react'
+import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, announceKicker, deleteKicker, getSubtree, getDeals } from '../services/api'
+import { getKickers, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'team_sales',          label: '👥 Team Sales',             desc: 'Team hits X total sales → everyone gets payout',         unit: 'sales',   metric: 'team'   },
-  { value: 'team_revenue',        label: '👥 Team Revenue',           desc: 'Team hits X revenue total → everyone gets payout',       unit: 'revenue', metric: 'team'   },
-  { value: 'individual_sales',    label: '👤 Individual Sales',       desc: 'Each person hits X sales → they personally get payout',  unit: 'sales',   metric: 'ind'    },
-  { value: 'individual_revenue',  label: '👤 Individual Revenue',     desc: 'Each person hits X revenue → they get payout',           unit: 'revenue', metric: 'ind'    },
-  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', desc: 'X sales OR Y revenue → person gets payout',           unit: 'or',      metric: 'ind'    },
-  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue', desc: 'X sales AND Y revenue → person gets payout',         unit: 'and',     metric: 'ind'    },
+  { value: 'team_sales',          label: '👥 Team Sales',               unit: 'sales',   metric: 'team' },
+  { value: 'team_revenue',        label: '👥 Team Revenue',             unit: 'revenue', metric: 'team' },
+  { value: 'individual_sales',    label: '👤 Individual Sales',         unit: 'sales',   metric: 'ind'  },
+  { value: 'individual_revenue',  label: '👤 Individual Revenue',       unit: 'revenue', metric: 'ind'  },
+  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', unit: 'or',      metric: 'ind'  },
+  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue',unit: 'and',     metric: 'ind'  },
 ]
 
-// Roles each announcer level can target
-const ANNOUNCE_FOR = {
-  Admin:     ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead'],
-  SalesHead: ['Agent', 'PreSales', 'Manager', 'VH'],
-  VH:        ['Agent', 'PreSales', 'Manager'],
-  Manager:   ['Agent', 'PreSales'],
-}
-
-const CAN_ANNOUNCE = Object.keys(ANNOUNCE_FOR)
-
-const TODAY = new Date().toISOString().split('T')[0]
-
-function flatTree(node, acc = []) {
-  if (!node) return acc
-  acc.push(node)
-  ;(node.children || []).forEach(c => flatTree(c, acc))
-  return acc
-}
+// Roles that see all kickers (oversight view)
+const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH']
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 function kickerIsActive(k) {
   const now  = Date.now()
   const from = new Date(k.dateFrom).getTime()
-  const to   = new Date(k.dateTo).getTime() + 86399999 // end of day
+  const to   = new Date(k.dateTo).getTime() + 86399999
   return now >= from && now <= to
 }
 function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date.now() }
@@ -58,14 +42,15 @@ function computeProgress(kicker, allDeals) {
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
   const inRange = allDeals.filter(d => {
-    const dt = new Date(d.Timestamp || d['Payment date'] || d.DealDate || 0)
+    const dt = new Date(d.Timestamp || d.PaymentDate || 0)
     return dt >= from && dt <= to
   })
 
   const rawSales = inRange.length
-  const revenue  = inRange.reduce((s, d) => s + Number(d['Total sale Value'] || 0), 0)
+  // Use TotalValue (projected revenue = full sale value) for kicker progress
+  const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
   const sales    = kicker.minSaleValue > 0
-    ? inRange.filter(d => Number(d['Total sale Value'] || 0) >= kicker.minSaleValue).length
+    ? inRange.filter(d => (d.TotalValue || 0) >= kicker.minSaleValue).length
     : rawSales
 
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
@@ -105,12 +90,10 @@ function slabLabel(slab, type) {
 }
 
 function slabBarPct(slab, type, progress) {
-  if (type === 'team_sales' || type === 'individual_sales') {
+  if (type === 'team_sales' || type === 'individual_sales')
     return Math.min((progress.sales / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  }
-  if (type === 'team_revenue' || type === 'individual_revenue') {
+  if (type === 'team_revenue' || type === 'individual_revenue')
     return Math.min((progress.revenue / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  }
   if (type === 'individual_or') {
     const sp = progress.sales   / Math.max(Number(slab.salesThreshold),   1)
     const rp = progress.revenue / Math.max(Number(slab.revenueThreshold), 1)
@@ -150,10 +133,9 @@ function nudgeText(slab, type, progress) {
   return null
 }
 
-// ── KickerCard ────────────────────────────────────────────────────────────────
-function KickerCard({ kicker, deals, canDelete, onDelete }) {
-  const [expanded, setExpanded]     = useState(false)
-  const [delConfirm, setDelConfirm] = useState(false)
+// ── KickerCard (view-only) ────────────────────────────────────────────────────
+function KickerCard({ kicker, deals }) {
+  const [expanded, setExpanded] = useState(false)
 
   const active   = kickerIsActive(kicker)
   const past     = kickerIsPast(kicker)
@@ -173,53 +155,35 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
 
       <div className="px-5 py-4 space-y-3">
         {/* Header row */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
-              {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
-              {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
-              <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
-            </div>
-            <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap gap-1.5 mb-1.5">
+            {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
+            {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
+            {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
+            <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
+          </div>
+          <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
 
-            {/* Meta */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
-              <span>📅 {kicker.dateFrom} → {kicker.dateTo}</span>
-              {!past && <span className={`font-semibold ${countdown(kicker).includes('h') ? 'text-orange-500' : 'text-gray-500'}`}>⏱ {countdown(kicker)}</span>}
-              <span>By {kicker.announcedBy} ({kicker.announcedByRole})</span>
-            </div>
-
-            {/* Target chips */}
-            <div className="flex flex-wrap gap-1 mt-2">
-              {(kicker.targetRoles || []).map(r => (
-                <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
-              ))}
-              {(kicker.targetTeams || []).includes('ALL')
-                ? <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
-                : <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
-              }
-              {kicker.minSaleValue > 0 && (
-                <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
-              )}
-            </div>
+          {/* Meta */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
+            <span>📅 {kicker.dateFrom} → {kicker.dateTo}</span>
+            {!past && <span className={`font-semibold ${countdown(kicker).includes('h') ? 'text-orange-500' : 'text-gray-500'}`}>⏱ {countdown(kicker)}</span>}
+            <span>By {kicker.announcedBy} ({kicker.announcedByRole})</span>
           </div>
 
-          {/* Delete */}
-          {canDelete && (
-            <div className="flex-shrink-0">
-              {delConfirm ? (
-                <div className="flex gap-2">
-                  <button onClick={() => onDelete(kicker.id)} className="text-xs text-red-600 font-semibold hover:underline">Delete</button>
-                  <button onClick={() => setDelConfirm(false)} className="text-xs text-gray-400 hover:underline">Cancel</button>
-                </div>
-              ) : (
-                <button onClick={() => setDelConfirm(true)} className="text-gray-300 hover:text-red-400 transition-colors">
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
-          )}
+          {/* Target chips */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(kicker.targetRoles || []).map(r => (
+              <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
+            ))}
+            {(kicker.targetTeams || []).includes('ALL')
+              ? <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
+              : <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
+            }
+            {kicker.minSaleValue > 0 && (
+              <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
+            )}
+          </div>
         </div>
 
         {/* Message toggle */}
@@ -265,12 +229,12 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Incentive Slabs</p>
           {progress.sorted.map((slab, i) => {
-            const hitIdx   = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
-            const isHit    = hitIdx >= i
-            const isNext   = !isHit && progress.nextSlab === slab
-            const barPct   = slabBarPct(slab, type, progress)
-            const nudge    = isNext && active ? nudgeText(slab, type, progress) : null
-            const label    = slabLabel(slab, type)
+            const hitIdx = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
+            const isHit  = hitIdx >= i
+            const isNext = !isHit && progress.nextSlab === slab
+            const barPct = slabBarPct(slab, type, progress)
+            const nudge  = isNext && active ? nudgeText(slab, type, progress) : null
+            const label  = slabLabel(slab, type)
 
             return (
               <div key={i} className={`rounded-xl border p-3 transition-all ${
@@ -291,7 +255,6 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
                   </div>
                 </div>
 
-                {/* Progress bar */}
                 {active && (
                   <>
                     <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -315,283 +278,22 @@ function KickerCard({ kicker, deals, canDelete, onDelete }) {
   )
 }
 
-// ── Announce Form ─────────────────────────────────────────────────────────────
-const EMPTY_SLAB = { threshold: '', salesThreshold: '', revenueThreshold: '', payout: '' }
-function emptySlabs() { return [EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB] }
-
-function AnnounceForm({ user, onDone, onCancel }) {
-  const [form, setForm] = useState({
-    title: '', message: '', type: 'team_sales', minSaleValue: '',
-    dateFrom: TODAY, dateTo: TODAY,
-    targetTeams: ['ALL'], targetRoles: [],
-    pinned: false, slabs: emptySlabs(),
-  })
-  const [managers, setManagers]     = useState([])
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError]           = useState('')
-  const [success, setSuccess]       = useState(false)
-
-  const eligibleRoles = ANNOUNCE_FOR[user.role] ?? []
-  const typeInfo      = KICKER_TYPES.find(t => t.value === form.type)
-  const isCombo       = form.type === 'individual_or' || form.type === 'individual_and'
-
-  useEffect(() => {
-    getSubtree(user.email).then(tree => {
-      const all = flatTree(tree).filter(m => m.Email !== user.email && ['Manager','VH','SalesHead'].includes(m.Role))
-      setManagers(all)
-    }).catch(() => {})
-  }, [user.email])
-
-  const setField = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  function toggleTeam(email) {
-    if (email === 'ALL') { setField('targetTeams', ['ALL']); return }
-    setForm(p => {
-      const prev = p.targetTeams.filter(t => t !== 'ALL')
-      return { ...p, targetTeams: prev.includes(email) ? prev.filter(t => t !== email) : [...prev, email] }
-    })
-  }
-
-  function toggleRole(role) {
-    setForm(p => ({ ...p, targetRoles: p.targetRoles.includes(role) ? p.targetRoles.filter(r => r !== role) : [...p.targetRoles, role] }))
-  }
-
-  function setSlab(i, field, val) {
-    setForm(p => ({ ...p, slabs: p.slabs.map((s, idx) => idx === i ? { ...s, [field]: val } : s) }))
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!form.title.trim())           { setError('Title is required.'); return }
-    if (!form.dateFrom || !form.dateTo) { setError('Date range is required.'); return }
-    if (form.targetRoles.length === 0)  { setError('Select at least one target role.'); return }
-    const filledSlabs = form.slabs.filter(s => s.payout !== '')
-    if (!filledSlabs.length)            { setError('Add at least one slab.'); return }
-
-    setSubmitting(true); setError('')
-    try {
-      await announceKicker({
-        ...form,
-        slabs: filledSlabs.map(s => ({
-          threshold:        Number(s.threshold        || 0),
-          salesThreshold:   Number(s.salesThreshold   || 0),
-          revenueThreshold: Number(s.revenueThreshold || 0),
-          payout:           Number(s.payout           || 0),
-        })),
-        minSaleValue: Number(form.minSaleValue || 0),
-      }, user.email, user.role)
-      setSuccess(true)
-      setTimeout(onDone, 1000)
-    } catch (err) {
-      setError(err?.message ?? 'Failed to announce kicker.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (success) return (
-    <div className="bg-white rounded-2xl border border-green-200 p-10 flex flex-col items-center gap-3 text-center">
-      <CheckCircle size={36} className="text-green-500" />
-      <p className="text-sm font-bold text-green-700">Kicker announced! 🎉</p>
-    </div>
-  )
-
-  return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-      <div className="px-5 py-4 bg-gradient-to-r from-brand-50 to-purple-50 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Megaphone size={16} className="text-brand-600" />
-          <p className="text-sm font-bold text-gray-800">Announce New Kicker</p>
-        </div>
-        <button type="button" onClick={onCancel} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
-      </div>
-
-      <div className="px-5 py-5 space-y-5">
-
-        {/* Title */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Kicker Title *</label>
-          <input value={form.title} onChange={e => setField('title', e.target.value)}
-            placeholder="e.g. Month-End Push — Let's Go!"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-        </div>
-
-        {/* Message */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Motivational Message (optional)</label>
-          <textarea rows={4} value={form.message} onChange={e => setField('message', e.target.value)}
-            placeholder="Paste your Slack-style announcement message here…"
-            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
-        </div>
-
-        {/* Type */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Kicker Type *</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {KICKER_TYPES.map(t => (
-              <button key={t.value} type="button" onClick={() => setField('type', t.value)}
-                className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
-                  form.type === t.value ? 'border-brand-400 bg-brand-50 text-brand-800 font-semibold' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}>
-                <p className="font-semibold">{t.label}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{t.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Min sale value (for sales types) */}
-        {(form.type.includes('sales') || form.type.includes('or') || form.type.includes('and')) && (
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Minimum Sale Value (optional)</label>
-            <input type="number" value={form.minSaleValue} onChange={e => setField('minSaleValue', e.target.value)}
-              placeholder="e.g. 50000 — only sales above this count"
-              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-          </div>
-        )}
-
-        {/* Date range */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Date Range *</label>
-          <div className="flex items-center gap-3">
-            <input type="date" value={form.dateFrom} onChange={e => setField('dateFrom', e.target.value)}
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            <span className="text-gray-400 text-xs">to</span>
-            <input type="date" value={form.dateTo} onChange={e => setField('dateTo', e.target.value)}
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            <button type="button" onClick={() => { setField('dateFrom', TODAY); setField('dateTo', TODAY) }}
-              className="text-xs text-brand-600 font-semibold border border-brand-200 bg-brand-50 px-2.5 py-2 rounded-xl hover:bg-brand-100 whitespace-nowrap">Today Only</button>
-          </div>
-        </div>
-
-        {/* Target Roles */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Who Is This For? *</label>
-          <div className="flex flex-wrap gap-2">
-            {eligibleRoles.map(role => (
-              <button key={role} type="button" onClick={() => toggleRole(role)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  form.targetRoles.includes(role) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}>
-                {role}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Target Teams */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Which Teams?</label>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => toggleTeam('ALL')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                form.targetTeams.includes('ALL') ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-              }`}>
-              All Teams
-            </button>
-            {managers.map(m => (
-              <button key={m.Email} type="button" onClick={() => toggleTeam(m.Email)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}>
-                {m.Name} ({m.Role})
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Slabs */}
-        <div>
-          <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs (up to 4)</label>
-          <div className="rounded-xl overflow-hidden border border-gray-200">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className={`text-[10px] font-bold uppercase ${isCombo ? 'bg-purple-50 text-purple-600' : 'bg-brand-50 text-brand-600'}`}>
-                  <th className="px-3 py-2 text-left w-8">#</th>
-                  {isCombo ? (
-                    <>
-                      <th className="px-3 py-2 text-left">Sales Threshold</th>
-                      <th className="px-3 py-2 text-left">Revenue Threshold (₹)</th>
-                    </>
-                  ) : (
-                    <th className="px-3 py-2 text-left">{typeInfo?.unit === 'sales' ? 'Sales Count' : 'Revenue (₹)'}</th>
-                  )}
-                  <th className="px-3 py-2 text-left">Payout (₹)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {form.slabs.map((s, i) => (
-                  <tr key={i}>
-                    <td className="px-3 py-2 font-bold text-gray-400">S{i+1}</td>
-                    {isCombo ? (
-                      <>
-                        <td className="px-2 py-2">
-                          <input type="number" value={s.salesThreshold} onChange={e => setSlab(i, 'salesThreshold', e.target.value)}
-                            placeholder="e.g. 2" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input type="number" value={s.revenueThreshold} onChange={e => setSlab(i, 'revenueThreshold', e.target.value)}
-                            placeholder="e.g. 125000" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                          {s.revenueThreshold && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.revenueThreshold))}</p>}
-                        </td>
-                      </>
-                    ) : (
-                      <td className="px-2 py-2">
-                        <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
-                          placeholder={typeInfo?.unit === 'sales' ? 'e.g. 15' : 'e.g. 1250000'}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        {s.threshold && typeInfo?.unit !== 'sales' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
-                      </td>
-                    )}
-                    <td className="px-2 py-2">
-                      <input type="number" value={s.payout} onChange={e => setSlab(i, 'payout', e.target.value)}
-                        placeholder="e.g. 1000" className="w-full border border-green-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
-                      {s.payout && <p className="text-[10px] text-green-600 mt-0.5 font-semibold">{formatINR(Number(s.payout))}</p>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pin toggle */}
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={() => setField('pinned', !form.pinned)}
-            className={`relative w-11 h-6 rounded-full transition-colors ${form.pinned ? 'bg-yellow-400' : 'bg-gray-200'}`}>
-            <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.pinned ? 'translate-x-5' : ''}`} />
-          </button>
-          <span className="text-sm text-gray-600 font-medium">📌 Pin this kicker to top</span>
-        </div>
-
-        {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>}
-
-        <button type="submit" disabled={submitting}
-          className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold text-sm py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-          <Megaphone size={15} />
-          {submitting ? 'Announcing…' : 'Announce Kicker 🚀'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Kickers() {
   const { user, effectiveUser } = useAuth()
   const { month } = useMonth()
 
-  const [kickers, setKickers]     = useState([])
-  const [deals, setDeals]         = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [tab, setTab]             = useState('active')
-  const [announcing, setAnnouncing] = useState(false)
+  const [kickers,   setKickers]   = useState([])
+  const [deals,     setDeals]     = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [tab,       setTab]       = useState('active')
+  const [manMode,   setManMode]   = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
-  const canAnnounce = CAN_ANNOUNCE.includes(user?.role)
+  const isManager   = user?.role === 'Manager'
+  const isOversight = OVERSIGHT_ROLES.includes(user?.role)
 
-  // Visibility check: can this user see this kicker?
   function isVisible(k) {
-    if (k.announcedBy === effectiveUser?.email) return true
+    if (isOversight) return true
     const roles = k.targetRoles || []
     if (!roles.includes(effectiveUser?.role)) return false
     const teams = k.targetTeams || []
@@ -607,10 +309,9 @@ export default function Kickers() {
     try {
       const [ks, ds] = await Promise.all([
         getKickers(),
-        getDeals(null, month),  // load all deals for the month for progress calc
+        getDeals(null, month),
       ])
       setKickers(ks)
-      // For team kickers, deals are already all loaded; individual will be filtered by email client-side
       setDeals(ds)
     } catch { /* show empty */ }
     finally { setLoading(false) }
@@ -618,25 +319,24 @@ export default function Kickers() {
 
   useEffect(() => { load() }, [load])
 
-  const visible  = kickers.filter(isVisible)
-  const active   = visible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
-  const past     = visible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
+  // For Manager: split into "For Me" (received) and "For My Team" (announced)
+  const forMeKickers     = isManager ? kickers.filter(isVisible) : []
+  const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === user?.email) : []
+
+  // For oversight and non-manager roles: all visible kickers
+  const allVisible = isOversight
+    ? kickers
+    : isManager
+      ? (manMode === 'forMe' ? forMeKickers : forMyTeamKickers)
+      : kickers.filter(isVisible)
+
+  const active    = allVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
+  const past      = allVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
   const displayed = tab === 'active' ? active : past
 
-  async function handleDelete(id) {
-    await deleteKicker(id)
-    setKickers(prev => prev.filter(k => k.id !== id))
-  }
-
-  function canDelete(k) {
-    return k.announcedBy === user?.email || user?.role === 'Admin'
-      || (user?.role === 'SalesHead' && !['Admin'].includes(k.announcedByRole))
-  }
-
-  // For individual kickers, scope deals to the current user
   function dealsFor(k) {
     const isTeam = k.type?.startsWith('team_')
-    if (isTeam) return deals // all deals for team progress
+    if (isTeam) return deals
     return deals.filter(d => d.Email === effectiveUser?.email)
   }
 
@@ -650,34 +350,33 @@ export default function Kickers() {
     <div className="space-y-5 max-w-4xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
-            <Zap size={18} className="text-purple-600" />
-          </div>
-          <div>
-            <h2 className="text-base font-bold text-gray-900">Kickers</h2>
-            <p className="text-xs text-gray-400">Special incentives & bonus opportunities</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
+          <Zap size={18} className="text-purple-600" />
         </div>
-        {canAnnounce && !announcing && (
-          <button onClick={() => setAnnouncing(true)}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-            <Plus size={15} /> Announce Kicker
-          </button>
-        )}
+        <div>
+          <h2 className="text-base font-bold text-gray-900">My Kickers</h2>
+          <p className="text-xs text-gray-400">Your active incentives & bonus opportunities</p>
+        </div>
       </div>
 
-      {/* Announce form */}
-      {announcing && (
-        <AnnounceForm
-          user={user}
-          onCancel={() => setAnnouncing(false)}
-          onDone={() => { setAnnouncing(false); load() }}
-        />
+      {/* Manager mode toggle */}
+      {isManager && (
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+          <button onClick={() => { setManMode('forMe'); setTab('active') }}
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMe' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <Zap size={13} className="text-purple-500" />
+            For Me ({forMeKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
+          </button>
+          <button onClick={() => { setManMode('forMyTeam'); setTab('active') }}
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMyTeam' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <Users size={13} className="text-brand-500" />
+            For My Team ({forMyTeamKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
+          </button>
+        </div>
       )}
 
-      {/* Tabs */}
+      {/* Active/Past tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         <button onClick={() => setTab('active')}
           className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'active' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -696,24 +395,17 @@ export default function Kickers() {
         <div className="bg-white rounded-2xl border border-gray-200 p-12 flex flex-col items-center gap-3 text-center">
           <Zap size={32} className="text-gray-200" />
           <p className="text-sm font-semibold text-gray-400">
-            {tab === 'active' ? 'No active kickers right now. Stay tuned!' : 'No past kickers to show.'}
+            {tab === 'active'
+              ? isManager && manMode === 'forMyTeam'
+                ? 'No active kickers announced to your team yet.'
+                : 'No active kickers right now. Stay tuned!'
+              : 'No past kickers to show.'}
           </p>
-          {canAnnounce && tab === 'active' && (
-            <button onClick={() => setAnnouncing(true)} className="text-xs text-brand-600 hover:underline font-semibold">
-              + Announce the first kicker
-            </button>
-          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {displayed.map(k => (
-            <KickerCard
-              key={k.id}
-              kicker={k}
-              deals={dealsFor(k)}
-              canDelete={canDelete(k)}
-              onDelete={handleDelete}
-            />
+            <KickerCard key={k.id} kicker={k} deals={dealsFor(k)} />
           ))}
         </div>
       )}
