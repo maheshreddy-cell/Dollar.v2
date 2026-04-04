@@ -7,12 +7,12 @@ import { clearCache } from '../services/appsScript'
 import InviteLinkModal from '../components/InviteLinkModal'
 
 const ROLE_COLORS = {
-  Admin:     'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
-  SalesHead: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-  VH:        'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-  Manager:   'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-  Agent:     'bg-gray-100 dark:bg-surface-muted text-gray-700 dark:text-gray-300',
-  PreSales:  'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300',
+  Admin:     'bg-red-100 text-red-700',
+  SalesHead: 'bg-purple-100 text-purple-700',
+  VH:        'bg-blue-100 text-blue-700',
+  Manager:   'bg-green-100 text-green-700',
+  Agent:     'bg-gray-100 text-gray-700',
+  PreSales:  'bg-teal-100 text-teal-700',
 }
 
 const ROLE_DOTS = {
@@ -103,11 +103,11 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-white dark:bg-surface-card shadow-2xl flex flex-col animate-slide-in-right border-l dark:border-surface-border">
+      <div className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col animate-slide-in-right border-l">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-surface-border">
-          <p className="text-sm font-bold text-gray-800 dark:text-white">Member Details</p>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <p className="text-sm font-bold text-gray-800">Member Details</p>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X size={18} />
           </button>
@@ -116,13 +116,13 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
           {/* Member card */}
-          <div className="bg-gray-50 dark:bg-surface-hover rounded-2xl p-4 flex items-center gap-4">
+          <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-lg font-bold text-brand-700 flex-shrink-0">
               {member.Name?.charAt(0) ?? '?'}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{member.Name}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{member.Email}</p>
+              <p className="text-sm font-bold text-gray-900 truncate">{member.Name}</p>
+              <p className="text-xs text-gray-500 truncate">{member.Email}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'}`}>
                   {member.Role}
@@ -143,7 +143,7 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
           </div>
 
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
           {/* ── Change Role ── */}
@@ -395,7 +395,7 @@ export default function Team() {
               </select>
             </div>
           </div>
-          {formError && <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{formError}</div>}
+          {formError && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{formError}</div>}
           <button type="submit" disabled={submitting}
             className="bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-colors">
             {submitting ? 'Creating Invite…' : 'Send Invite'}
@@ -403,7 +403,7 @@ export default function Team() {
         </form>
       )}
 
-      {error && <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>}
+      {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">

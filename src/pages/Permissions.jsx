@@ -54,13 +54,13 @@ function PermCard({ group, permissions, onToggle, justSaved }) {
   const allOff = onCount === 0
 
   return (
-    <div className={`rounded-2xl border ${style.border} overflow-hidden dark:border-surface-border`}>
+    <div className={`rounded-2xl border ${style.border} overflow-hidden`}>
       {/* Card header */}
       <div className={`${style.bg} px-5 py-3.5 flex items-center justify-between gap-3`}>
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-lg leading-none">{group.icon}</span>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-gray-800 dark:text-gray-100 leading-tight">{group.category}</p>
+            <p className="text-sm font-bold text-gray-800 leading-tight">{group.category}</p>
             <p className="text-[11px] text-gray-400 mt-0.5">
               <span className={`font-semibold ${onCount > 0 ? 'text-brand-600' : 'text-gray-400'}`}>{onCount}</span>
               <span className="text-gray-300"> / </span>{total} enabled
@@ -77,7 +77,7 @@ function PermCard({ group, permissions, onToggle, justSaved }) {
           )}
           {!allOff && (
             <button onClick={disableAll}
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-surface-border text-gray-500 dark:text-gray-400 bg-white dark:bg-surface-hover hover:bg-gray-50 dark:hover:bg-surface-muted transition-colors">
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 bg-white hover:bg-gray-50 transition-colors">
               Disable All
             </button>
           )}
@@ -89,22 +89,22 @@ function PermCard({ group, permissions, onToggle, justSaved }) {
 
       {/* Items */}
       {!collapsed && (
-        <div className="divide-y divide-gray-100 dark:divide-surface-border bg-white dark:bg-surface-card">
+        <div className="divide-y divide-gray-100 bg-white">
           {group.items.map(item => {
             const on   = permissions[item.key] ?? false
             const saved = justSaved === item.key
             return (
               <div key={item.key}
-                className={`flex items-center gap-4 px-5 py-3 transition-colors ${saved ? 'bg-green-50 dark:bg-green-950/20' : 'hover:bg-gray-50/60 dark:hover:bg-surface-hover'}`}>
+                className={`flex items-center gap-4 px-5 py-3 transition-colors ${saved ? 'bg-green-50' : 'hover:bg-gray-50/60'}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${on ? style.dot : 'bg-gray-300'}`} />
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.label}</p>
+                    <p className="text-sm font-semibold text-gray-800">{item.label}</p>
                     {saved && (
                       <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">Saved</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 pl-3.5 leading-relaxed">{item.desc}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 pl-3.5 leading-relaxed">{item.desc}</p>
                 </div>
                 <Toggle on={on} onChange={v => onToggle(item.key, v)} />
               </div>
@@ -139,12 +139,12 @@ export default function Permissions() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center">
             <Shield size={18} className="text-brand-600" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">Permissions & Access Control</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            <h2 className="text-base font-bold text-gray-900">Permissions & Access Control</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
               {totalOn} of {allItems.length} permissions enabled · Changes apply instantly
             </p>
           </div>
@@ -159,21 +159,21 @@ export default function Permissions() {
           </div>
         ) : (
           <button onClick={() => setShowReset(true)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 border border-gray-200 dark:border-surface-border rounded-lg px-3 py-1.5 transition-colors">
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors">
             <RotateCcw size={12} /> Reset to defaults
           </button>
         )}
       </div>
 
       {/* Info banner */}
-      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-xl px-4 py-3 text-xs text-blue-700 dark:text-blue-300">
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
         ℹ️ Permissions are saved on this device. Use <strong>Enable All / Disable All</strong> per role for quick bulk changes,
         or toggle individual items. All changes take effect immediately across the app.
       </div>
 
       {/* Page Access */}
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-1">Page Access — by Role</p>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">Page Access — by Role</p>
         <div className="space-y-3">
           {pageGroups.map(group => (
             <PermCard key={group.category} group={group} permissions={permissions} onToggle={handleToggle} justSaved={justSaved} />
@@ -184,7 +184,7 @@ export default function Permissions() {
       {/* Actions & Features */}
       {actionGroups.length > 0 && (
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-1">Actions & Features</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">Actions & Features</p>
           <div className="space-y-3">
             {actionGroups.map(group => (
               <PermCard key={group.category} group={group} permissions={permissions} onToggle={handleToggle} justSaved={justSaved} />

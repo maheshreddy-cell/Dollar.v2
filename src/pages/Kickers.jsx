@@ -147,8 +147,8 @@ function KickerCard({ kicker, deals }) {
   const isTeam   = type.startsWith('team_')
 
   return (
-    <div className={`bg-white dark:bg-surface-card rounded-2xl border shadow-sm overflow-hidden transition-all ${
-      kicker.pinned ? 'border-yellow-300 dark:border-yellow-700 ring-2 ring-yellow-100 dark:ring-yellow-900/30' : 'border-gray-200 dark:border-surface-border'
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+      kicker.pinned ? 'border-yellow-300 ring-2 ring-yellow-100' : 'border-gray-200'
     } ${past ? 'opacity-60' : ''}`}>
       {/* Top accent */}
       <div className={`h-1.5 ${past ? 'bg-gray-300' : 'bg-gradient-to-r from-brand-500 via-purple-500 to-pink-400'}`} />
@@ -157,15 +157,15 @@ function KickerCard({ kicker, deals }) {
         {/* Header row */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
-            {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
-            {past && <span className="text-[10px] font-bold uppercase bg-gray-100 dark:bg-surface-muted text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full">Ended</span>}
-            <span className="text-[10px] font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
+            {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
+            {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
+            {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
+            <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
           </div>
-          <h3 className="text-base font-bold text-gray-900 dark:text-white leading-snug">{kicker.title}</h3>
+          <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
 
           {/* Meta */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400 dark:text-gray-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
             <span>📅 {kicker.dateFrom} → {kicker.dateTo}</span>
             {!past && <span className={`font-semibold ${countdown(kicker).includes('h') ? 'text-orange-500' : 'text-gray-500'}`}>⏱ {countdown(kicker)}</span>}
             <span>By {kicker.announcedBy} ({kicker.announcedByRole})</span>
@@ -174,14 +174,14 @@ function KickerCard({ kicker, deals }) {
           {/* Target chips */}
           <div className="flex flex-wrap gap-1 mt-2">
             {(kicker.targetRoles || []).map(r => (
-              <span key={r} className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full">{r}</span>
+              <span key={r} className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">{r}</span>
             ))}
             {(kicker.targetTeams || []).includes('ALL')
-              ? <span className="text-[10px] font-semibold bg-gray-100 dark:bg-surface-muted text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full">All Teams</span>
-              : <span className="text-[10px] font-semibold bg-gray-100 dark:bg-surface-muted text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
+              ? <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">All Teams</span>
+              : <span className="text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{(kicker.targetTeams || []).length} team(s)</span>
             }
             {kicker.minSaleValue > 0 && (
-              <span className="text-[10px] font-semibold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
+              <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Min sale {formatINR(kicker.minSaleValue)}</span>
             )}
           </div>
         </div>
@@ -194,7 +194,7 @@ function KickerCard({ kicker, deals }) {
               {expanded ? 'Hide announcement' : 'View full announcement'}
             </button>
             {expanded && (
-              <div className="mt-2 bg-gray-50 dark:bg-surface-hover border border-gray-100 dark:border-surface-border rounded-xl px-4 py-3 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+              <div className="mt-2 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {kicker.message}
               </div>
             )}
@@ -205,19 +205,19 @@ function KickerCard({ kicker, deals }) {
         {active && (
           <div className="flex gap-2">
             {isSales && (
-              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-blue-50' : 'bg-indigo-50'}`}>
                 <p className="text-xl font-black text-blue-700">{progress.sales}</p>
                 <p className="text-[10px] text-blue-500 font-semibold">{isTeam ? 'Team' : 'Your'} Sales</p>
               </div>
             )}
             {isRev && (
-              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-green-50 dark:bg-green-900/20' : 'bg-teal-50 dark:bg-teal-900/20'}`}>
+              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-green-50' : 'bg-teal-50'}`}>
                 <p className="text-sm font-black text-green-700">{formatINR(progress.revenue)}</p>
                 <p className="text-[10px] text-green-500 font-semibold">{isTeam ? 'Team' : 'Your'} Revenue</p>
               </div>
             )}
             {progress.activeSlab && (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-amber-50 border border-amber-200">
                 <p className="text-sm font-black text-amber-700">{formatINR(Number(progress.activeSlab.payout))}</p>
                 <p className="text-[10px] text-amber-600 font-semibold">🎉 Earned!</p>
               </div>
@@ -227,7 +227,7 @@ function KickerCard({ kicker, deals }) {
 
         {/* Slabs with progress bars */}
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">Incentive Slabs</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Incentive Slabs</p>
           {progress.sorted.map((slab, i) => {
             const hitIdx = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
             const isHit  = hitIdx >= i
@@ -238,26 +238,26 @@ function KickerCard({ kicker, deals }) {
 
             return (
               <div key={i} className={`rounded-xl border p-3 transition-all ${
-                isHit  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-900' :
-                isNext ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' :
-                         'bg-gray-50 dark:bg-surface-hover border-gray-100 dark:border-surface-border'
+                isHit  ? 'bg-green-50 border-green-200' :
+                isNext ? 'bg-amber-50 border-amber-200' :
+                         'bg-gray-50 border-gray-100'
               }`}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-bold ${isHit ? 'text-green-600' : isNext ? 'text-amber-500' : 'text-gray-400'}`}>
                       {'①②③④⑤⑥'[i] ?? `${i + 1}`}
                     </span>
-                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+                    <span className="text-xs font-semibold text-gray-700">{label}</span>
                   </div>
                   <div className="flex gap-1">
-                    {isHit  && <span className="text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-1.5 py-0.5 rounded-full">✓ Hit!</span>}
-                    {isNext && <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 rounded-full">↑ Next</span>}
+                    {isHit  && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Hit!</span>}
+                    {isNext && <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">↑ Next</span>}
                   </div>
                 </div>
 
                 {active && (
                   <>
-                    <div className="h-2 bg-gray-200 dark:bg-surface-muted rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-700 ${isHit ? 'bg-green-500' : isNext ? 'bg-amber-400' : 'bg-gray-300'}`}
                         style={{ width: `${barPct}%` }}
@@ -351,25 +351,25 @@ export default function Kickers() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
           <Zap size={18} className="text-purple-600" />
         </div>
         <div>
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">My Kickers</h2>
-          <p className="text-xs text-gray-400 dark:text-gray-500">Your active incentives & bonus opportunities</p>
+          <h2 className="text-base font-bold text-gray-900">My Kickers</h2>
+          <p className="text-xs text-gray-400">Your active incentives & bonus opportunities</p>
         </div>
       </div>
 
       {/* Manager mode toggle */}
       {isManager && (
-        <div className="flex gap-1 bg-gray-100 dark:bg-surface-card rounded-xl p-1 w-fit border dark:border-surface-border">
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit border">
           <button onClick={() => { setManMode('forMe'); setTab('active') }}
-            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMe' ? 'bg-white dark:bg-surface-muted text-gray-800 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMe' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             <Zap size={13} className="text-purple-500" />
             For Me ({forMeKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
           </button>
           <button onClick={() => { setManMode('forMyTeam'); setTab('active') }}
-            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMyTeam' ? 'bg-white dark:bg-surface-muted text-gray-800 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMyTeam' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             <Users size={13} className="text-brand-500" />
             For My Team ({forMyTeamKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
           </button>
@@ -379,12 +379,12 @@ export default function Kickers() {
       {/* Active/Past tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
         <button onClick={() => setTab('active')}
-          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'active' ? 'bg-white dark:bg-surface-muted text-gray-800 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'active' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Zap size={13} className="text-purple-500" />
           Active ({active.length})
         </button>
         <button onClick={() => setTab('past')}
-          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'past' ? 'bg-white dark:bg-surface-muted text-gray-800 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'past' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Clock size={13} />
           Past ({past.length})
         </button>
@@ -392,9 +392,9 @@ export default function Kickers() {
 
       {/* Cards */}
       {displayed.length === 0 ? (
-        <div className="bg-white dark:bg-surface-card rounded-2xl border border-gray-200 dark:border-surface-border p-12 flex flex-col items-center gap-3 text-center">
+        <div className="bg-white rounded-2xl border border-gray-200 p-12 flex flex-col items-center gap-3 text-center">
           <Zap size={32} className="text-gray-200" />
-          <p className="text-sm font-semibold text-gray-400 dark:text-gray-500">
+          <p className="text-sm font-semibold text-gray-400">
             {tab === 'active'
               ? isManager && manMode === 'forMyTeam'
                 ? 'No active kickers announced to your team yet.'

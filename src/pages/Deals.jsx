@@ -499,7 +499,7 @@ export default function Deals() {
 
               {/* Deal cards */}
               {isOpen && (
-                <div className="bg-white dark:bg-surface-card">
+                <div className="bg-white">
                   {groupData.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-8">No deals in this stage</p>
                   ) : (
