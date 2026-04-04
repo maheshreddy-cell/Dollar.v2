@@ -293,19 +293,28 @@ export default function Dashboard() {
             </div>
           </FadeIn>
 
-          {/* Progression note for M2 */}
-          {(psSummary?.salesCount ?? 0) < 8 && (
+          {/* Next slab nudge — calls or sales whichever is closer */}
+          {psSummary && (psSummary.nextCallSlab || psSummary.nextSalesSlab) && (
             <FadeIn delay={100}>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+              <div className="bg-brand-50 border border-brand-200 rounded-xl px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Zap size={15} className="text-amber-500 shrink-0" />
-                  <p className="text-sm text-amber-800">
-                    <strong>{8 - (psSummary?.salesCount ?? 0)} more sales</strong> to be eligible for Agent role promotion.
-                  </p>
+                  <Zap size={15} className="text-brand-500 shrink-0" />
+                  <div className="text-sm text-brand-800 flex flex-wrap gap-3">
+                    {psSummary.nextCallSlab && (
+                      <span>
+                        📞 <strong>{psSummary.nextCallSlab.minCalls - psSummary.callsCount} more calls</strong> → unlock ₹{psSummary.nextCallSlab.ratePerCall}/call
+                      </span>
+                    )}
+                    {psSummary.nextCallSlab && psSummary.nextSalesSlab && (
+                      <span className="text-brand-300">·</span>
+                    )}
+                    {psSummary.nextSalesSlab && (
+                      <span>
+                        🎯 <strong>{psSummary.nextSalesSlab.minSales - psSummary.salesCount} more sales</strong> → unlock ₹{psSummary.nextSalesSlab.ratePerSale}/sale
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="text-xs font-semibold bg-amber-100 border border-amber-300 text-amber-700 px-3 py-1 rounded-lg">
-                  {psSummary?.salesCount ?? 0}/8 sales
-                </span>
               </div>
             </FadeIn>
           )}
