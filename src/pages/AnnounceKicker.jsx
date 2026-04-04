@@ -367,7 +367,7 @@ export default function AnnounceKicker() {
     if (user?.role === 'PreSales' || user?.role === 'Agent') {
       navigate('/kickers', { replace: true })
     }
-  }, [user?.role])
+  }, [user?.role, navigate])
 
   const BLANK_FORM = {
     title: '', message: '', type: 'team_sales', minSaleValue: '',

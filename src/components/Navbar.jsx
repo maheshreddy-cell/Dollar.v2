@@ -34,7 +34,7 @@ export default function Navbar() {
   useEffect(() => {
     if (user?.role !== 'Admin') return
     getAllUsers()
-      .then(users => setAllUsers((users ?? []).filter(u => u.Email !== user.email)))
+      .then(users => setAllUsers((users ?? []).filter(u => u.Email !== user?.email)))
       .catch(() => {})
   }, [user])
 
@@ -64,7 +64,7 @@ export default function Navbar() {
                   const u = allUsers.find(u => u.Email === e.target.value)
                   if (u) setViewAs({ email: u.Email, name: u.Name, role: u.Role, managerEmail: u.ManagerEmail })
                 }}
-                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 max-w-[180px]"
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 max-w-[180px] dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
               >
                 <option value="">View as agent…</option>
                 {allUsers.map(u => (
@@ -82,7 +82,7 @@ export default function Navbar() {
               type="month"
               value={month}
               onChange={e => setMonth(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700"
+              className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
             />
           </div>
 

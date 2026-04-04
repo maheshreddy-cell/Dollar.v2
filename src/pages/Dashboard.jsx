@@ -98,15 +98,15 @@ export default function Dashboard() {
     if (isVHorAbove && effectiveUser?.role !== 'Admin') {
       setDrillStack([])
       setDrillBoard([])
-      getManagersLeaderboard(effectiveUser.email, month)
+      getManagersLeaderboard(effectiveUser?.email, month)
         .then(setMgrsBoard)
         .catch(() => {})
     }
 
     if (isManager) {
       Promise.all([
-        getLeaderboard(effectiveUser.email, month),
-        getTeamSalesAnalytics(effectiveUser.email, month, effectiveUser.role === 'Admin'),
+        getLeaderboard(effectiveUser?.email, month),
+        getTeamSalesAnalytics(effectiveUser?.email, month, effectiveUser?.role === 'Admin'),
       ])
         .then(([rows, anal]) => {
           const totalTarget     = rows.reduce((s, r) => s + r.target,             0)
@@ -127,14 +127,14 @@ export default function Dashboard() {
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     } else {
-      getSummary(effectiveUser.email, month)
+      getSummary(effectiveUser?.email, month)
         .then((summaryRes) => {
           setSummary(summaryRes)
         })
         .catch(() => setError('Failed to load dashboard data.'))
         .finally(() => setLoading(false))
     }
-  }, [month, effectiveUser?.email, tick])
+  }, [month, effectiveUser?.email, effectiveUser?.role, tick])
 
   async function drillInto(mgrEmail, mgrName, mgrRole) {
     setDrillStack(s => [...s, { email: mgrEmail, name: mgrName, role: mgrRole }])
@@ -159,10 +159,10 @@ export default function Dashboard() {
     setDrillStack(newStack)
     setDrillBoard([])
     if (newStack.length === 0) {
-      getManagersLeaderboard(effectiveUser.email, month).then(setMgrsBoard).catch(() => {})
+      getManagersLeaderboard(effectiveUser?.email, month).then(setMgrsBoard).catch(() => {})
     } else {
       const parent = newStack[newStack.length - 1]
-      getManagersLeaderboard(parent.email, month).then(setMgrsBoard).catch(() => {})
+      getManagersLeaderboard(parent?.email, month).then(setMgrsBoard).catch(() => {})
     }
   }
 
