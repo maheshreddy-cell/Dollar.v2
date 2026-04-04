@@ -1,18 +1,96 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, AlertTriangle } from 'lucide-react'
-import { getCommissionConfig, addSlab, deleteSlab } from '../services/api'
+import { Plus, Trash2, AlertTriangle, Phone, Star, TrendingUp } from 'lucide-react'
+import { getCommissionConfig, addSlab, deleteSlab, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { formatINR } from '../utils/commission'
-import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
+import { AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
 
 const INITIAL_FORM = { slabName: '', maxTarget: '', commissionPct: '' }
 
-const PRESET_COLORS = {
-  basic:   { badge: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200',   accent: 'text-blue-700' },
+const AGENT_PRESET_COLORS = {
+  basic:   { badge: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200',   accent: 'text-blue-700'   },
   average: { badge: 'bg-green-100 text-green-700', header: 'bg-green-50 border-green-200', accent: 'text-green-700' },
   pro:     { badge: 'bg-purple-100 text-purple-700', header: 'bg-purple-50 border-purple-200', accent: 'text-purple-700' },
 }
 
+const PS_PRESET_COLORS = {
+  'ps-basic':    { badge: 'bg-teal-100 text-teal-700',   header: 'bg-teal-50 border-teal-200',   accent: 'text-teal-700',   phase: 'M1' },
+  'ps-warm-up':  { badge: 'bg-cyan-100 text-cyan-700',   header: 'bg-cyan-50 border-cyan-200',   accent: 'text-cyan-700',   phase: 'M2' },
+  'ps-mob':      { badge: 'bg-orange-100 text-orange-700', header: 'bg-orange-50 border-orange-200', accent: 'text-orange-700', phase: 'M3' },
+}
+
+// ── PreSales Phase Card ───────────────────────────────────────────────────────
+function PSPhaseCard({ preset }) {
+  const colors = PS_PRESET_COLORS[preset.id] ?? PS_PRESET_COLORS['ps-basic']
+  const isCallsBased = preset.type === 'presales-calls'
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Header */}
+      <div className={`px-5 py-3.5 border-b ${colors.header}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${colors.badge}`}>
+              {colors.phase}
+            </span>
+            <span className={`text-sm font-bold ${colors.accent}`}>{preset.label}</span>
+          </div>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            isCallsBased ? 'bg-teal-100 text-teal-600' : 'bg-orange-100 text-orange-600'
+          }`}>
+            {isCallsBased ? '📞 Calls + Sales' : '📈 Revenue'}
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">{preset.description}</p>
+      </div>
+
+      {/* Body */}
+      <div className="px-5 py-4 space-y-3">
+        {isCallsBased ? (
+          <>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Phone size={12} className="text-teal-500 shrink-0" />
+              <span>Min. calls per month: <span className="font-bold text-gray-800">{preset.defaultMinCalls}</span></span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Star size={12} className="text-cyan-500 shrink-0" />
+              <span>Incentive tracks: <span className="font-bold text-gray-800">Calls × rate + Sales × rate</span> (independent)</span>
+            </div>
+            <p className="text-[11px] text-gray-400 italic">See Calls Incentive Rates & Sales Incentive Rates below ↓</p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <TrendingUp size={12} className="text-orange-500 shrink-0" />
+              <span>Base revenue target: <span className="font-bold text-gray-800">{formatINR(preset.targetAmount)}</span></span>
+            </div>
+            {/* Revenue slabs table */}
+            <table className="min-w-full text-sm mt-1">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 uppercase">Revenue (₹)</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 uppercase">Rate %</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-gray-500 uppercase">Payout</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {preset.slabs.map((slab, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-right text-gray-700">{formatINR(slab.targetAmount)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${colors.accent}`}>{slab.commissionPct}%</td>
+                    <td className="px-3 py-2 text-right text-gray-600">{formatINR(slab.targetAmount * slab.commissionPct / 100)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function CommissionConfig() {
   const { user } = useAuth()
   const [slabs, setSlabs] = useState([])
@@ -50,14 +128,8 @@ export default function CommissionConfig() {
     e.preventDefault()
     setFormError('')
     if (!form.slabName.trim()) { setFormError('Slab name is required.'); return }
-    if (!form.maxTarget || Number(form.maxTarget) <= 0) {
-      setFormError('Enter a valid max target.')
-      return
-    }
-    if (!form.commissionPct || Number(form.commissionPct) <= 0) {
-      setFormError('Enter a valid commission %.')
-      return
-    }
+    if (!form.maxTarget || Number(form.maxTarget) <= 0) { setFormError('Enter a valid max target.'); return }
+    if (!form.commissionPct || Number(form.commissionPct) <= 0) { setFormError('Enter a valid commission %.'); return }
     setSubmitting(true)
     try {
       await addSlab({
@@ -96,6 +168,12 @@ export default function CommissionConfig() {
     )
   }
 
+  const TABS = [
+    { id: 'agent',    label: 'Agent Rates' },
+    { id: 'presales', label: 'PreSales Rates' },
+    { id: 'other',    label: 'Manager / VH / SalesHead' },
+  ]
+
   return (
     <div className="space-y-5">
       <h2 className="text-base font-semibold text-gray-800">Commission Config</h2>
@@ -107,46 +185,33 @@ export default function CommissionConfig() {
       )}
 
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('agent')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'agent'
-              ? 'bg-white text-gray-800 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Agent Rates
-        </button>
-        <button
-          onClick={() => setActiveTab('other')}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-            activeTab === 'other'
-              ? 'bg-white text-gray-800 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Manager / VH / SalesHead Rates
-        </button>
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              activeTab === tab.id
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* ── Agent Presets Tab ── */}
       {activeTab === 'agent' && (
         <div className="space-y-5">
           <p className="text-xs text-gray-500">
-            These three fixed commission rate tiers apply exclusively to Agents.
-            When assigning a target to an Agent, select one of these rate types.
+            Three fixed commission rate tiers for Agents. When assigning a target to an Agent, select one of these rate types.
           </p>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {AGENT_TARGET_PRESETS.map((preset) => {
-              const colors = PRESET_COLORS[preset.id]
+              const colors = AGENT_PRESET_COLORS[preset.id]
               return (
-                <div
-                  key={preset.id}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden"
-                >
-                  {/* Preset header */}
+                <div key={preset.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className={`px-5 py-3.5 border-b ${colors.header}`}>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${colors.badge}`}>
@@ -155,34 +220,20 @@ export default function CommissionConfig() {
                       <span className="text-xs text-gray-500">{preset.description}</span>
                     </div>
                   </div>
-
-                  {/* Slabs table */}
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">
-                          Revenue (₹)
-                        </th>
-                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">
-                          Slab %
-                        </th>
-                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">
-                          Amount
-                        </th>
+                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">Revenue (₹)</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">Slab %</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {preset.slabs.map((slab, i) => (
                         <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 text-right text-gray-700">
-                            {formatINR(slab.targetAmount)}
-                          </td>
-                          <td className={`px-4 py-2.5 text-right font-semibold ${colors.accent}`}>
-                            {slab.commissionPct}%
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-gray-600">
-                            {formatINR(slab.targetAmount * slab.commissionPct / 100)}
-                          </td>
+                          <td className="px-4 py-2.5 text-right text-gray-700">{formatINR(slab.targetAmount)}</td>
+                          <td className={`px-4 py-2.5 text-right font-semibold ${colors.accent}`}>{slab.commissionPct}%</td>
+                          <td className="px-4 py-2.5 text-right text-gray-600">{formatINR(slab.targetAmount * slab.commissionPct / 100)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -194,7 +245,128 @@ export default function CommissionConfig() {
         </div>
       )}
 
-      {/* ── Other Roles Tab ── */}
+      {/* ── PreSales Rates Tab ── */}
+      {activeTab === 'presales' && (
+        <div className="space-y-6">
+          <p className="text-xs text-gray-500">
+            PreSales follows a 3-phase ramp-up model. M1 &amp; M2 use a calls + sales incentive track.
+            M3 (Make or Break) transitions to a revenue target — same structure as Agent slabs.
+          </p>
+
+          {/* Phase preset cards */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Phase Presets</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {PRESALES_TARGET_PRESETS.map(preset => (
+                <PSPhaseCard key={preset.id} preset={preset} />
+              ))}
+            </div>
+          </div>
+
+          {/* Calls incentive rates */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              📞 Calls Incentive Rates <span className="font-normal normal-case text-gray-400">(M1 &amp; M2 — rate × total calls scheduled)</span>
+            </p>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-teal-50">
+                  <tr>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-teal-700 uppercase">Min. Calls / Month</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-teal-700 uppercase">Rate per Call</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-teal-700 uppercase">Example (at threshold)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {PS_CALLS_SLABS.map((slab, i) => (
+                    <tr key={i} className="hover:bg-teal-50/30">
+                      <td className="px-5 py-3">
+                        <span className="font-bold text-gray-800">{slab.minCalls}+ calls</span>
+                        {i === 0 && <span className="ml-2 text-[10px] font-bold text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded-full">Best</span>}
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-teal-700">₹{slab.ratePerCall} / call</td>
+                      <td className="px-5 py-3 text-right text-gray-500 text-xs">
+                        {slab.minCalls} calls → {formatINR(slab.minCalls * slab.ratePerCall)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50">
+                    <td className="px-5 py-3 text-xs text-gray-400 italic" colSpan={3}>
+                      Below {PS_CALLS_SLABS[PS_CALLS_SLABS.length - 1].minCalls} calls → ₹0 (no incentive)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Sales incentive rates */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              🎯 Sales Incentive Rates <span className="font-normal normal-case text-gray-400">(M1 &amp; M2 — rate × total sales closed)</span>
+            </p>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-cyan-50">
+                  <tr>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-cyan-700 uppercase">Min. Sales / Month</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-cyan-700 uppercase">Rate per Sale</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-cyan-700 uppercase">Example (at threshold)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {PS_SALES_SLABS.map((slab, i) => (
+                    <tr key={i} className="hover:bg-cyan-50/30">
+                      <td className="px-5 py-3">
+                        <span className="font-bold text-gray-800">{slab.minSales}+ sales</span>
+                        {i === 0 && <span className="ml-2 text-[10px] font-bold text-cyan-600 bg-cyan-100 px-1.5 py-0.5 rounded-full">Best</span>}
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-cyan-700">₹{slab.ratePerSale.toLocaleString('en-IN')} / sale</td>
+                      <td className="px-5 py-3 text-right text-gray-500 text-xs">
+                        {slab.minSales} sales → {formatINR(slab.minSales * slab.ratePerSale)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50">
+                    <td className="px-5 py-3 text-xs text-gray-400 italic" colSpan={3}>
+                      Below {PS_SALES_SLABS[PS_SALES_SLABS.length - 1].minSales} sales → ₹0 (no incentive)
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Combined example */}
+          <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-100 rounded-xl px-5 py-4">
+            <p className="text-xs font-bold text-teal-800 mb-2">💡 Example — Month with 55 calls &amp; 9 sales</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
+              <div>
+                <p className="text-gray-500">Calls slab</p>
+                <p className="font-bold text-teal-700">50+ → ₹30/call</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Calls earnings</p>
+                <p className="font-bold text-teal-700">55 × ₹30 = {formatINR(55 * 30)}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Sales slab</p>
+                <p className="font-bold text-cyan-700">8+ → ₹1,000/sale</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Sales earnings</p>
+                <p className="font-bold text-cyan-700">9 × ₹1,000 = {formatINR(9 * 1000)}</p>
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-teal-100 flex items-center justify-between">
+              <span className="text-xs text-teal-700 font-semibold">Total Incentive</span>
+              <span className="text-base font-bold text-teal-800">{formatINR(55 * 30 + 9 * 1000)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manager / VH / SalesHead Tab ── */}
       {activeTab === 'other' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -211,16 +383,11 @@ export default function CommissionConfig() {
           </div>
 
           {showForm && (
-            <form
-              onSubmit={handleAdd}
-              className="bg-white rounded-xl border border-gray-200 p-5 space-y-4"
-            >
+            <form onSubmit={handleAdd} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h3 className="text-sm font-semibold text-gray-700">New Slab</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Slab Name *
-                  </label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Slab Name *</label>
                   <input
                     name="slabName"
                     value={form.slabName}
@@ -231,9 +398,7 @@ export default function CommissionConfig() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Max Target (₹) *
-                  </label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Max Target (₹) *</label>
                   <input
                     name="maxTarget"
                     type="number"
@@ -246,9 +411,7 @@ export default function CommissionConfig() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                    Commission % *
-                  </label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Commission % *</label>
                   <input
                     name="commissionPct"
                     type="number"
@@ -291,9 +454,7 @@ export default function CommissionConfig() {
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Custom Slabs — sorted by Max Target
-              </p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Custom Slabs — sorted by Max Target</p>
             </div>
 
             {slabs.length === 0 ? (
@@ -302,15 +463,9 @@ export default function CommissionConfig() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">
-                      Slab Name
-                    </th>
-                    <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase">
-                      Max Target
-                    </th>
-                    <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase">
-                      Commission %
-                    </th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase">Slab Name</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase">Max Target</th>
+                    <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase">Commission %</th>
                     <th className="px-5 py-3" />
                   </tr>
                 </thead>
@@ -318,12 +473,8 @@ export default function CommissionConfig() {
                   {slabs.map((slab) => (
                     <tr key={slab.SlabName} className="hover:bg-gray-50">
                       <td className="px-5 py-3.5 font-medium text-gray-800">{slab.SlabName}</td>
-                      <td className="px-5 py-3.5 text-right text-gray-600">
-                        {formatINR(slab.MaxTarget)}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-green-700">
-                        {slab.CommissionPct}%
-                      </td>
+                      <td className="px-5 py-3.5 text-right text-gray-600">{formatINR(slab.MaxTarget)}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold text-green-700">{slab.CommissionPct}%</td>
                       <td className="px-5 py-3.5 text-right">
                         {confirmDelete === slab.SlabName ? (
                           <div className="flex items-center justify-end gap-2">
