@@ -268,6 +268,8 @@ export default function AssignTargets() {
       setSuccess(true)
       setExisting(true)
       clearCache()
+      // Small delay so Apps Script has time to commit the write before we re-read
+      await new Promise(r => setTimeout(r, 1200))
       reloadHistory()
     } catch (err) {
       setFormError(err?.message ?? 'Failed to assign target.')
@@ -282,12 +284,12 @@ export default function AssignTargets() {
     try {
       await deleteTarget(selected.Email, mon)
       clearCache()
-      // If we deleted the currently-shown month, reset form
       if (mon === formMonth) {
         resetFormFields()
         setSuccess(false)
       }
       setConfirmDeleteMonth(null)
+      await new Promise(r => setTimeout(r, 1200))
       reloadHistory()
     } catch {
       setFormError('Failed to delete target.')
@@ -609,6 +611,7 @@ export default function AssignTargets() {
                         realisedSlabs:  toSave(mgrRealSlabs),
                       }, user.email)
                       setMgrSuccess(true)
+                      await new Promise(r => setTimeout(r, 1200))
                       reloadManagerHistory()
                     } catch (err) {
                       setMgrError(err?.message ?? 'Failed to save.')
@@ -678,14 +681,20 @@ export default function AssignTargets() {
                                 {isCurrent && <span className="ml-2 text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold">editing</span>}
                               </td>
                               <td className="px-4 py-3 text-right font-semibold text-gray-800">
-                                {formatINR(Number(t.TargetAmount ?? t.targetAmount ?? 0))}
+                                {(preset?.id === 'ps-basic' || preset?.id === 'ps-warm-up')
+                                  ? <span className="text-teal-700">{t.CommissionStartDate || '40'} calls/mo</span>
+                                  : formatINR(Number(t.TargetAmount ?? t.targetAmount ?? 0))
+                                }
                               </td>
                               <td className="px-4 py-3">
                                 <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                  preset?.id === 'basic'   ? 'bg-blue-50 text-blue-700' :
-                                  preset?.id === 'average' ? 'bg-green-50 text-green-700' :
-                                  preset?.id === 'pro'     ? 'bg-purple-50 text-purple-700' :
-                                                             'bg-gray-100 text-gray-600'
+                                  preset?.id === 'basic'      ? 'bg-blue-50 text-blue-700' :
+                                  preset?.id === 'average'    ? 'bg-green-50 text-green-700' :
+                                  preset?.id === 'pro'        ? 'bg-purple-50 text-purple-700' :
+                                  preset?.id === 'ps-basic'   ? 'bg-teal-50 text-teal-700' :
+                                  preset?.id === 'ps-warm-up' ? 'bg-cyan-50 text-cyan-700' :
+                                  preset?.id === 'ps-mob'     ? 'bg-orange-50 text-orange-700' :
+                                                                'bg-gray-100 text-gray-600'
                                 }`}>{rateLabel}</span>
                               </td>
                               <td className="px-4 py-3 text-center">
