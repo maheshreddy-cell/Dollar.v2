@@ -643,6 +643,69 @@ export const getCommissionConfig = async () => []
 export const addSlab    = async () => ({ success: true })
 export const deleteSlab = async () => ({ success: true })
 
+// ─── PreSales Incentive Slabs (fixed per SOP) ─────────────────────────────────
+export const PS_CALLS_SLABS = [
+  { minCalls: 65, ratePerCall: 45 },
+  { minCalls: 50, ratePerCall: 30 },
+  { minCalls: 40, ratePerCall: 25 },
+]
+
+export const PS_SALES_SLABS = [
+  { minSales: 10, ratePerSale: 1500 },
+  { minSales:  8, ratePerSale: 1000 },
+  { minSales:  6, ratePerSale:  750 },
+  { minSales:  4, ratePerSale:  500 },
+]
+
+export function computePSCallsEarnings(callsCount) {
+  const slab = PS_CALLS_SLABS.find(s => callsCount >= s.minCalls)
+  return slab ? callsCount * slab.ratePerCall : 0
+}
+
+export function computePSSalesEarnings(salesCount) {
+  const slab = PS_SALES_SLABS.find(s => salesCount >= s.minSales)
+  return slab ? salesCount * slab.ratePerSale : 0
+}
+
+// Reads PreSalesCalls + PreSalesSales sheets and computes incentive summary.
+// Gracefully returns 0s if sheets don't exist yet.
+export const getPreSalesSummary = async (email, month) => {
+  const lower = (email || '').trim().toLowerCase()
+  const [callsRaw, salesRaw] = await Promise.all([
+    appsScript.getSheet('PreSalesCalls').catch(() => []),
+    appsScript.getSheet('PreSalesSales').catch(() => []),
+  ])
+
+  const myCalls = (callsRaw || []).filter(r =>
+    (r.PreSalesEmail || '').trim().toLowerCase() === lower &&
+    (!month || r.Month === month)
+  )
+  const mySales = (salesRaw || []).filter(r =>
+    (r.PreSalesEmail || '').trim().toLowerCase() === lower &&
+    (!month || r.Month === month)
+  )
+
+  const callsCount = myCalls.length
+  const salesCount = mySales.length
+
+  const callsEarnings = computePSCallsEarnings(callsCount)
+  const salesEarnings = computePSSalesEarnings(salesCount)
+  const totalEarnings = callsEarnings + salesEarnings
+
+  const currentCallSlab  = PS_CALLS_SLABS.find(s => callsCount >= s.minCalls) || null
+  const nextCallSlab     = PS_CALLS_SLABS.slice().reverse().find(s => callsCount < s.minCalls) || null
+  const currentSalesSlab = PS_SALES_SLABS.find(s => salesCount >= s.minSales) || null
+  const nextSalesSlab    = PS_SALES_SLABS.slice().reverse().find(s => salesCount < s.minSales) || null
+
+  return {
+    callsCount, salesCount,
+    callsEarnings, salesEarnings, kickerEarnings: 0,
+    totalEarnings,
+    currentCallSlab, nextCallSlab,
+    currentSalesSlab, nextSalesSlab,
+  }
+}
+
 // ─── Kicker helpers (shared) ──────────────────────────────────────────────────
 // Note: parseKickerRow is defined later (hoisted) near getKickers()
 

@@ -9,12 +9,12 @@ import { clearCache } from '../services/appsScript'
 import { ROLE_COLORS } from '../utils/roles'
 
 const PRESET_STYLES = {
-  basic:      { card: 'border-blue-300 bg-blue-50 text-blue-800',     table: 'text-blue-700' },
-  average:    { card: 'border-green-300 bg-green-50 text-green-800',   table: 'text-green-700' },
-  pro:        { card: 'border-purple-300 bg-purple-50 text-purple-800', table: 'text-purple-700' },
-  'ps-starter': { card: 'border-teal-300 bg-teal-50 text-teal-800',   table: 'text-teal-700' },
-  'ps-mid':     { card: 'border-cyan-300 bg-cyan-50 text-cyan-800',    table: 'text-cyan-700' },
-  'ps-full':    { card: 'border-indigo-300 bg-indigo-50 text-indigo-800', table: 'text-indigo-700' },
+  basic:        { card: 'border-blue-300 bg-blue-50 text-blue-800',      table: 'text-blue-700' },
+  average:      { card: 'border-green-300 bg-green-50 text-green-800',    table: 'text-green-700' },
+  pro:          { card: 'border-purple-300 bg-purple-50 text-purple-800', table: 'text-purple-700' },
+  'ps-basic':   { card: 'border-teal-300 bg-teal-50 text-teal-800',      table: 'text-teal-700' },
+  'ps-warm-up': { card: 'border-cyan-300 bg-cyan-50 text-cyan-800',      table: 'text-cyan-700' },
+  'ps-mob':     { card: 'border-orange-300 bg-orange-50 text-orange-800', table: 'text-orange-700' },
 }
 
 const EMPTY_SLAB = { targetAmount: '', commissionPct: '' }
@@ -51,6 +51,7 @@ export default function AssignTargets() {
   const [selectedPreset,   setSelectedPreset] = useState(null)
   const [agentTarget,      setAgentTarget]    = useState('')
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
+  const [minCalls,         setMinCalls]       = useState('')
 
   // History / delete state
   const [targetHistory,    setTargetHistory]  = useState([])
@@ -72,9 +73,11 @@ export default function AssignTargets() {
   const [mgrConfirmDel,  setMgrConfirmDel]  = useState(null)
   const [mgrDeleting,    setMgrDeleting]    = useState(null)
 
-  const isManagerMember = ['Manager', 'VH'].includes(selected?.Role)
-  const isAgent   = ['Agent', 'PreSales'].includes(selected?.Role)
-  const presets   = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
+  const isManagerMember     = ['Manager', 'VH'].includes(selected?.Role)
+  const isAgent             = ['Agent', 'PreSales'].includes(selected?.Role)
+  const presets             = selected?.Role === 'PreSales' ? PRESALES_TARGET_PRESETS : AGENT_TARGET_PRESETS
+  const selectedPresetObj   = presets.find(p => p.id === selectedPreset) || null
+  const isPresalesCallsBased = selected?.Role === 'PreSales' && selectedPresetObj?.type === 'presales-calls'
 
   // ── Load team ────────────────────────────────────────────────────────────────
   // Use effectiveUser so ViewAs mode scopes the team to the viewed person,
@@ -156,17 +159,24 @@ export default function AssignTargets() {
     }).catch(() => {})
   }, [selected, formMonth])
 
-  // Auto-fill target amount when preset changes
+  // Auto-fill target amount and minCalls when preset changes
   useEffect(() => {
     if (!selectedPreset) return
     const preset = presets.find(p => p.id === selectedPreset)
-    if (preset && !agentTarget) setAgentTarget(String(preset.slabs[0].targetAmount))
+    if (!preset) return
+    if (preset.type === 'presales-calls') {
+      setAgentTarget('0')
+      setMinCalls(String(preset.defaultMinCalls || 40))
+    } else if (preset.slabs?.length > 0 && !agentTarget) {
+      setAgentTarget(String(preset.slabs[0].targetAmount))
+    }
   }, [selectedPreset])
 
   function resetFormFields() {
     setExisting(false)
     setSelectedPreset(null)
     setAgentTarget('')
+    setMinCalls('')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
   }
 
@@ -227,7 +237,9 @@ export default function AssignTargets() {
 
     if (isAgent) {
       if (!selectedPreset) { setFormError('Please select a commission rate type.'); return }
-      if (!agentTarget || Number(agentTarget) <= 0) { setFormError('Enter a valid target amount.'); return }
+      if (!isPresalesCallsBased && (!agentTarget || Number(agentTarget) <= 0)) {
+        setFormError('Enter a valid target amount.'); return
+      }
     } else {
       const filled = slabs.filter(s => s.targetAmount !== '' || s.commissionPct !== '')
       if (!filled.length) { setFormError('Add at least one slab.'); return }
@@ -243,12 +255,15 @@ export default function AssignTargets() {
       await assignTarget({
         email:               selected.Email,
         month:               formMonth,
-        targetAmount:        isAgent ? Number(agentTarget) : Math.max(...slabs.filter(s => s.targetAmount).map(s => Number(s.targetAmount))),
+        targetAmount:        isPresalesCallsBased ? 0 : (isAgent ? Number(agentTarget) : Math.max(...slabs.filter(s => s.targetAmount).map(s => Number(s.targetAmount)))),
         presetId:            isAgent ? selectedPreset : undefined,
         commissionPct:       isAgent ? undefined : Number(slabs.filter(s => s.targetAmount)[0]?.commissionPct ?? 0),
-        slabs:               isAgent
-          ? preset.slabs.map(s => ({ targetAmount: s.targetAmount, commissionPct: s.commissionPct }))
-          : slabs.filter(s => s.targetAmount).map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) })),
+        commissionStartDate: isPresalesCallsBased ? String(minCalls || preset?.defaultMinCalls || 40) : undefined,
+        slabs:               isPresalesCallsBased
+          ? []
+          : isAgent
+            ? preset.slabs.map(s => ({ targetAmount: s.targetAmount, commissionPct: s.commissionPct }))
+            : slabs.filter(s => s.targetAmount).map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) })),
       }, user.email)
       setSuccess(true)
       setExisting(true)
@@ -758,7 +773,7 @@ export default function AssignTargets() {
                             type="button"
                             onClick={() => {
                               setSelectedPreset(preset.id)
-                              setAgentTarget(String(preset.slabs[0].targetAmount))
+                              if (preset.slabs?.length > 0) setAgentTarget(String(preset.slabs[0].targetAmount))
                             }}
                             className={`rounded-xl border-2 px-4 py-3 text-left transition-all ${
                               selectedPreset === preset.id
@@ -773,7 +788,7 @@ export default function AssignTargets() {
                       </div>
                     </div>
 
-                    {selectedPreset && (
+                    {selectedPreset && !isPresalesCallsBased && (
                       <div className="w-full sm:w-64">
                         <label className="block text-xs font-medium text-gray-600 mb-1.5">Target Amount (₹)</label>
                         <input
@@ -790,7 +805,22 @@ export default function AssignTargets() {
                       </div>
                     )}
 
-                    {previewPreset && (
+                    {isPresalesCallsBased && (
+                      <div className="w-full sm:w-64">
+                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Min. Calls Required (default)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={minCalls}
+                          onChange={e => setMinCalls(e.target.value)}
+                          placeholder="e.g. 40"
+                          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Manager-set minimum call target for this month</p>
+                      </div>
+                    )}
+
+                    {previewPreset && !isPresalesCallsBased && (
                       <div className="rounded-xl border border-gray-200 overflow-hidden">
                         <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -815,6 +845,62 @@ export default function AssignTargets() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+
+                    {isPresalesCallsBased && (
+                      <div className="rounded-xl border border-teal-100 overflow-hidden">
+                        <div className="px-4 py-2.5 bg-teal-50 border-b border-teal-100">
+                          <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">
+                            📞 Calls Incentive Slabs
+                          </p>
+                        </div>
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-teal-50/50">
+                            <tr>
+                              <th className="text-left px-4 py-2 text-xs font-medium text-gray-400">Min. Calls</th>
+                              <th className="text-right px-4 py-2 text-xs font-medium text-gray-400">Rate/Call</th>
+                              <th className="text-right px-4 py-2 text-xs font-medium text-gray-400">Example (50 calls)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-teal-50">
+                            {[{minCalls:40,ratePerCall:25},{minCalls:50,ratePerCall:30},{minCalls:65,ratePerCall:45}].map((s,i) => (
+                              <tr key={i} className="hover:bg-teal-50/30">
+                                <td className="px-4 py-2 font-semibold text-teal-700">{s.minCalls}+ calls</td>
+                                <td className="px-4 py-2 text-right text-gray-700">₹{s.ratePerCall}/call</td>
+                                <td className="px-4 py-2 text-right text-gray-500 text-xs">{formatINR(50 * s.ratePerCall)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="px-4 py-2.5 bg-cyan-50 border-t border-cyan-100">
+                          <p className="text-xs font-semibold text-cyan-700 uppercase tracking-wide">
+                            🎯 Sales Incentive Slabs
+                          </p>
+                        </div>
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-cyan-50/50">
+                            <tr>
+                              <th className="text-left px-4 py-2 text-xs font-medium text-gray-400">Min. Sales</th>
+                              <th className="text-right px-4 py-2 text-xs font-medium text-gray-400">Rate/Sale</th>
+                              <th className="text-right px-4 py-2 text-xs font-medium text-gray-400">Total (at min)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-cyan-50">
+                            {[{minSales:4,ratePerSale:500},{minSales:6,ratePerSale:750},{minSales:8,ratePerSale:1000},{minSales:10,ratePerSale:1500}].map((s,i) => (
+                              <tr key={i} className="hover:bg-cyan-50/30">
+                                <td className="px-4 py-2 font-semibold text-cyan-700">{s.minSales}+ sales</td>
+                                <td className="px-4 py-2 text-right text-gray-700">₹{s.ratePerSale}/sale</td>
+                                <td className="px-4 py-2 text-right text-gray-500 text-xs">{formatINR(s.minSales * s.ratePerSale)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {selectedPreset === 'ps-warm-up' && (
+                          <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-100">
+                            <p className="text-xs text-amber-700">⚡ M2 progression: 8+ sales from calls → eligible for Agent role</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
