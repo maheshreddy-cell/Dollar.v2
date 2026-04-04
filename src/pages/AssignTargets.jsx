@@ -52,6 +52,7 @@ export default function AssignTargets() {
   const [agentTarget,      setAgentTarget]    = useState('')
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
   const [minCalls,         setMinCalls]       = useState('')
+  const [psTeamWeight,     setPsTeamWeight]   = useState('300000') // 3L default contribution to manager's team target
 
   // History / delete state
   const [targetHistory,    setTargetHistory]  = useState([])
@@ -142,7 +143,13 @@ export default function AssignTargets() {
         const savedId = String(t.CommissionPct || '').trim().toLowerCase()
         const matched = presets.find(p => p.id === savedId)
         setSelectedPreset(matched?.id ?? null)
-        setAgentTarget(t.TargetAmount ? String(t.TargetAmount) : '')
+        const isCallsBased = matched?.type === 'presales-calls'
+        if (isCallsBased) {
+          setPsTeamWeight(t.TargetAmount ? String(t.TargetAmount) : '300000')
+          setMinCalls(t.CommissionStartDate ? String(t.CommissionStartDate) : '40')
+        } else {
+          setAgentTarget(t.TargetAmount ? String(t.TargetAmount) : '')
+        }
       } else {
         try {
           const parsed = JSON.parse(t.CommissionEndDate || '[]')
@@ -177,6 +184,7 @@ export default function AssignTargets() {
     setSelectedPreset(null)
     setAgentTarget('')
     setMinCalls('')
+    setPsTeamWeight('300000')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
   }
 
@@ -255,7 +263,7 @@ export default function AssignTargets() {
       await assignTarget({
         email:               selected.Email,
         month:               formMonth,
-        targetAmount:        isPresalesCallsBased ? 0 : (isAgent ? Number(agentTarget) : Math.max(...slabs.filter(s => s.targetAmount).map(s => Number(s.targetAmount)))),
+        targetAmount:        isPresalesCallsBased ? Number(psTeamWeight || 300000) : (isAgent ? Number(agentTarget) : Math.max(...slabs.filter(s => s.targetAmount).map(s => Number(s.targetAmount)))),
         presetId:            isAgent ? selectedPreset : undefined,
         commissionPct:       isAgent ? undefined : Number(slabs.filter(s => s.targetAmount)[0]?.commissionPct ?? 0),
         commissionStartDate: isPresalesCallsBased ? String(minCalls || preset?.defaultMinCalls || 40) : undefined,
@@ -682,7 +690,10 @@ export default function AssignTargets() {
                               </td>
                               <td className="px-4 py-3 text-right font-semibold text-gray-800">
                                 {(preset?.id === 'ps-basic' || preset?.id === 'ps-warm-up')
-                                  ? <span className="text-teal-700">{t.CommissionStartDate || '40'} calls/mo</span>
+                                  ? <span className="text-teal-700 text-xs leading-tight">
+                                      <span className="block">{t.CommissionStartDate || '40'} calls/mo</span>
+                                      <span className="block text-gray-400 font-normal">{formatINR(Number(t.TargetAmount || 300000))} contribution</span>
+                                    </span>
                                   : formatINR(Number(t.TargetAmount ?? t.targetAmount ?? 0))
                                 }
                               </td>
@@ -815,17 +826,31 @@ export default function AssignTargets() {
                     )}
 
                     {isPresalesCallsBased && (
-                      <div className="w-full sm:w-64">
-                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Min. Calls Required (default)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={minCalls}
-                          onChange={e => setMinCalls(e.target.value)}
-                          placeholder="e.g. 40"
-                          className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Manager-set minimum call target for this month</p>
+                      <div className="flex flex-wrap gap-4">
+                        <div className="w-full sm:w-56">
+                          <label className="block text-xs font-medium text-gray-600 mb-1.5">Min. Calls Required (default)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={minCalls}
+                            onChange={e => setMinCalls(e.target.value)}
+                            placeholder="e.g. 40"
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Minimum call target for this month</p>
+                        </div>
+                        <div className="w-full sm:w-56">
+                          <label className="block text-xs font-medium text-gray-600 mb-1.5">Team Target Contribution (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={psTeamWeight}
+                            onChange={e => setPsTeamWeight(e.target.value)}
+                            placeholder="e.g. 300000"
+                            className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          />
+                          {psTeamWeight && <p className="text-xs text-gray-400 mt-1">= {formatINR(Number(psTeamWeight))} added to your team target</p>}
+                        </div>
                       </div>
                     )}
 
