@@ -359,10 +359,10 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function AnnounceKicker() {
-  const { user } = useAuth()
+  const { user, effectiveUser } = useAuth()
   const navigate = useNavigate()
 
-  // Redirect PreSales — they cannot announce kickers
+  // Redirect PreSales/Agent — they cannot announce kickers (check actual login role)
   useEffect(() => {
     if (user?.role === 'PreSales' || user?.role === 'Agent') {
       navigate('/kickers', { replace: true })
@@ -387,7 +387,9 @@ export default function AnnounceKicker() {
   const [error,       setError]       = useState('')
   const [success,     setSuccess]     = useState(false)
 
-  const eligibleRoles = ANNOUNCE_FOR[user?.role] ?? []
+  // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
+  const activeUser    = effectiveUser || user
+  const eligibleRoles = ANNOUNCE_FOR[activeUser?.role] ?? []
   const typeInfo      = KICKER_TYPES.find(t => t.value === form.type)
   const isCombo       = form.type === 'individual_or' || form.type === 'individual_and'
 
@@ -404,35 +406,36 @@ export default function AnnounceKicker() {
   }
 
   const loadData = useCallback(async () => {
-    if (!user?.email) return
+    const rootEmail = activeUser?.email
+    if (!rootEmail) return
     setLoadingList(true)
     try {
       const [ks, tree, deals] = await Promise.all([
         getKickers(),
-        getSubtree(user.email).catch(() => null),
+        getSubtree(rootEmail).catch(() => null),
         getDeals().catch(() => []),
       ])
       setAllKickers(ks)
       setAllDeals(deals)
 
-      const allMembers = flatTree(tree).filter(m => m.Email !== user.email)
+      const allMembers = flatTree(tree).filter(m => (m.Email || '').toLowerCase() !== rootEmail.toLowerCase())
       setSubtreeAll(allMembers)
 
-      // "Which Teams?" form field — show direct team representatives
-      if (user.role === 'Manager') {
-        // For Managers: show their direct agents as targets
-        setManagers(allMembers.filter(m => (m.ManagerEmail || '').toLowerCase() === user.email.toLowerCase()))
+      // "Which Teams?" form field — scope to the effective user's role
+      if (activeUser?.role === 'Manager') {
+        // Manager targets their own direct agents
+        setManagers(allMembers.filter(m => (m.ManagerEmail || '').toLowerCase() === rootEmail.toLowerCase()))
       } else {
-        const managerRoles = user.role === 'VH'
+        const managerRoles = activeUser?.role === 'VH'
           ? ['Manager']
-          : user.role === 'SalesHead'
+          : activeUser?.role === 'SalesHead'
             ? ['VH', 'Manager']
             : ['VH', 'Manager', 'SalesHead'] // Admin
         setManagers(allMembers.filter(m => managerRoles.includes(m.Role)))
       }
     } catch {}
     finally { setLoadingList(false) }
-  }, [user?.email])
+  }, [activeUser?.email, activeUser?.role])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -525,7 +528,7 @@ export default function AnnounceKicker() {
           Pinned:      form.pinned ? 'true' : 'false',
         })
       } else {
-        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0) }, user.email, user.role)
+        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0) }, activeUser.email, activeUser.role)
       }
       setSuccess(true)
       setForm(BLANK_FORM)
@@ -605,7 +608,7 @@ export default function AnnounceKicker() {
               {editingId ? '✏️ Edit Kicker' : 'New Kicker'}
             </p>
             <p className="text-xs text-gray-400 mt-0.5">
-              As <span className="font-semibold text-brand-700">{user?.role}</span> you can announce kickers for: {eligibleRoles.join(', ')}
+              As <span className="font-semibold text-brand-700">{activeUser?.role}</span> you can announce kickers for: {eligibleRoles.join(', ')}
             </p>
           </div>
           {editingId && (
@@ -709,7 +712,7 @@ export default function AnnounceKicker() {
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                     form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}>
-                  {m.Name || m.Email} {user.role === 'Manager' ? '' : `(${m.Role})`}
+                  {m.Name || m.Email} {activeUser?.role === 'Manager' ? '' : `(${m.Role})`}
                 </button>
               ))}
             </div>
