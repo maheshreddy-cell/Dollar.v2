@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap } from 'lucide-react'
+import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getTeam } from '../services/api'
+import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -54,10 +54,207 @@ function canManage(kicker, user) {
   return userIdx > announcerIdx
 }
 
+// ── Kicker progress computation ───────────────────────────────────────────────
+function computeKickerProgress(kicker, allMembers, allDeals) {
+  const from   = new Date(kicker.dateFrom).getTime()
+  const to     = new Date(kicker.dateTo).getTime() + 86399999
+  const minVal = Number(kicker.minSaleValue || 0)
+  const type   = kicker.type || 'individual_sales'
+  const isTeam     = type.startsWith('team_')
+  const isRevType  = type === 'team_revenue' || type === 'individual_revenue'
+  const isComboOr  = type === 'individual_or'
+  const isComboAnd = type === 'individual_and'
+
+  // Filter members targeted by this kicker
+  const targetRoles = new Set(kicker.targetRoles || [])
+  const targetTeams = kicker.targetTeams || ['ALL']
+  const allTeams    = targetTeams.includes('ALL')
+
+  const targetMembers = allMembers.filter(m => {
+    if (!targetRoles.has(m.Role)) return false
+    if (allTeams) return true
+    if (targetTeams.some(t => t.toLowerCase() === (m.Email || '').toLowerCase())) return true
+    if (targetTeams.some(t => t.toLowerCase() === (m.ManagerEmail || '').toLowerCase())) return true
+    return false
+  })
+
+  // Filter deals: date range + min sale value + target agents only
+  const targetEmails = new Set(targetMembers.map(m => (m.Email || '').toLowerCase()))
+  const rangeDeals   = allDeals.filter(d => {
+    if (!targetEmails.has(d.Email)) return false
+    const ts = d.Timestamp || d.PaymentDate
+    if (!ts) return false
+    const t = new Date(ts).getTime()
+    if (isNaN(t) || t < from || t > to) return false
+    if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
+    return true
+  })
+
+  // Build per-agent stats
+  const stats = {}
+  for (const m of targetMembers) {
+    const key = (m.Email || '').toLowerCase()
+    stats[key] = { name: m.Name || m.Email, email: m.Email, role: m.Role, sales: 0, revenue: 0 }
+  }
+  for (const d of rangeDeals) {
+    if (stats[d.Email]) { stats[d.Email].sales++; stats[d.Email].revenue += d.TotalValue || 0 }
+  }
+
+  // Slabs sorted ascending (so we find highest hit via iteration)
+  const slabs = (kicker.slabs || [])
+    .filter(s => Number(s.payout) > 0)
+    .sort((a, b) => {
+      if (isComboOr || isComboAnd) return Number(a.salesThreshold) - Number(b.salesThreshold)
+      return Number(a.threshold) - Number(b.threshold)
+    })
+
+  function getSlabHit(sales, revenue) {
+    let best = null
+    for (const s of slabs) {
+      let hit = false
+      if      (isComboOr)  hit = sales >= Number(s.salesThreshold)   || revenue >= Number(s.revenueThreshold)
+      else if (isComboAnd) hit = sales >= Number(s.salesThreshold)   && revenue >= Number(s.revenueThreshold)
+      else if (isRevType)  hit = revenue >= Number(s.threshold)
+      else                 hit = sales   >= Number(s.threshold)
+      if (hit) best = s
+    }
+    return best
+  }
+
+  const agentList = Object.values(stats)
+
+  if (isTeam) {
+    const totals   = agentList.reduce((acc, a) => { acc.sales += a.sales; acc.revenue += a.revenue; return acc }, { sales: 0, revenue: 0 })
+    const slabHit  = getSlabHit(totals.sales, totals.revenue)
+    return { kind: 'team', totals, slabHit, agents: agentList, payout: slabHit ? Number(slabHit.payout) : 0, slabs }
+  } else {
+    const agents      = agentList.map(a => { const sh = getSlabHit(a.sales, a.revenue); return { ...a, slabHit: sh, payout: sh ? Number(sh.payout) : 0 } })
+    const eligible    = agents.filter(a => a.slabHit)
+    return { kind: 'individual', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
+  }
+}
+
+// ── ProgressPanel ─────────────────────────────────────────────────────────────
+function ProgressPanel({ kicker, progress }) {
+  const type      = kicker.type || 'individual_sales'
+  const isRevType = type === 'team_revenue' || type === 'individual_revenue'
+  const isCombo   = type === 'individual_or' || type === 'individual_and'
+
+  function slabLabel(s, idx) {
+    if (isCombo)    return `S${idx+1}: ${s.salesThreshold} sales ${type === 'individual_or' ? 'OR' : 'AND'} ${formatINR(Number(s.revenueThreshold))}`
+    if (isRevType)  return `S${idx+1}: ${formatINR(Number(s.threshold))}`
+    return `S${idx+1}: ${s.threshold} sales`
+  }
+
+  if (progress.kind === 'team') {
+    const { totals, slabHit, agents, payout, slabs } = progress
+    // Progress bar toward next slab
+    const nextSlab  = slabs.find(s => !slabHit || Number(s.payout) > Number(slabHit.payout))
+    const threshold = nextSlab
+      ? (isRevType ? Number(nextSlab.threshold) : Number(nextSlab.threshold))
+      : (slabHit ? (isRevType ? Number(slabHit.threshold) : Number(slabHit.threshold)) : 1)
+    const current   = isRevType ? totals.revenue : totals.sales
+    const pct       = Math.min(100, Math.round((current / threshold) * 100))
+
+    return (
+      <div className="mt-3 border-t border-gray-100 pt-3 space-y-3">
+        {/* Team total */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 space-y-1">
+            <div className="flex justify-between text-[10px] text-gray-500">
+              <span className="font-semibold">{isRevType ? formatINR(current) : `${current} sales`}</span>
+              <span>{slabHit ? `Slab ${progress.slabs.indexOf(slabHit)+1} hit ✓` : (nextSlab ? `Next: ${slabLabel(nextSlab, slabs.indexOf(nextSlab))}` : 'No threshold set')}</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${slabHit ? 'bg-green-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+          {slabHit && <span className="text-xs font-bold text-green-600">{formatINR(payout)}</span>}
+        </div>
+        {/* Per-agent contribution */}
+        {agents.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100">
+                  <th className="text-left pb-1 font-semibold">Agent</th>
+                  <th className="text-right pb-1 font-semibold">Sales</th>
+                  <th className="text-right pb-1 font-semibold">Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {agents.sort((a,b) => b.sales - a.sales).map(a => (
+                  <tr key={a.email}>
+                    <td className="py-1 text-gray-700 font-medium">{a.name}</td>
+                    <td className="py-1 text-right text-gray-600">{a.sales}</td>
+                    <td className="py-1 text-right text-gray-600">{formatINR(a.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Individual
+  const { agents, eligible, totalPayout } = progress
+  const sorted = [...agents].sort((a, b) => {
+    if (b.payout !== a.payout) return b.payout - a.payout
+    if (isRevType) return b.revenue - a.revenue
+    return b.sales - a.sales
+  })
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+      <div className="flex items-center gap-3 text-[10px]">
+        <span className="font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{eligible} eligible</span>
+        <span className="text-gray-400">{agents.length - eligible} not yet</span>
+        {totalPayout > 0 && <span className="ml-auto font-bold text-gray-700">Total payout: {formatINR(totalPayout)}</span>}
+      </div>
+      {agents.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left pb-1 font-semibold">Agent</th>
+                {!isRevType && <th className="text-right pb-1 font-semibold">Sales</th>}
+                {(isRevType || isCombo) && <th className="text-right pb-1 font-semibold">Revenue</th>}
+                <th className="text-right pb-1 font-semibold">Slab</th>
+                <th className="text-right pb-1 font-semibold">Payout</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {sorted.map(a => (
+                <tr key={a.email} className={a.slabHit ? 'bg-green-50/40' : ''}>
+                  <td className="py-1 text-gray-700 font-medium">{a.name}</td>
+                  {!isRevType && <td className="py-1 text-right text-gray-600">{a.sales}</td>}
+                  {(isRevType || isCombo) && <td className="py-1 text-right text-gray-600">{formatINR(a.revenue)}</td>}
+                  <td className="py-1 text-right">
+                    {a.slabHit
+                      ? <span className="text-green-600 font-bold">S{progress.slabs.indexOf(a.slabHit)+1} ✓</span>
+                      : <span className="text-gray-400">—</span>
+                    }
+                  </td>
+                  <td className="py-1 text-right font-semibold text-green-700">{a.payout > 0 ? formatINR(a.payout) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-[10px] text-gray-400 text-center py-2">No agents match this kicker's targeting yet.</p>
+      )}
+    </div>
+  )
+}
+
 // ── Compact ManageCard ────────────────────────────────────────────────────────
-function ManageCard({ kicker, onEdit, onDelete }) {
-  const [delConfirm, setDelConfirm] = useState(false)
-  const [expanded,   setExpanded]   = useState(false)
+function ManageCard({ kicker, onEdit, onDelete, progress }) {
+  const [delConfirm,    setDelConfirm]    = useState(false)
+  const [expanded,      setExpanded]      = useState(false)
+  const [showProgress,  setShowProgress]  = useState(false)
 
   const active  = kickerIsActive(kicker)
   const past    = kickerIsPast(kicker)
@@ -133,6 +330,28 @@ function ManageCard({ kicker, onEdit, onDelete }) {
             })}
           </div>
         )}
+
+        {/* Progress toggle + panel (active kickers only) */}
+        {active && progress && (
+          <>
+            <button
+              onClick={() => setShowProgress(v => !v)}
+              className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-brand-600 hover:text-brand-800 transition-colors"
+            >
+              {showProgress ? <ChevronUp size={12} /> : <BarChart2 size={12} />}
+              {showProgress ? 'Hide Progress' : 'View Agent Progress'}
+              {progress.kind === 'individual' && progress.eligible > 0 && (
+                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+                  {progress.eligible} eligible
+                </span>
+              )}
+              {progress.kind === 'team' && progress.slabHit && (
+                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">✓ Team hit!</span>
+              )}
+            </button>
+            {showProgress && <ProgressPanel kicker={kicker} progress={progress} />}
+          </>
+        )}
       </div>
     </div>
   )
@@ -161,6 +380,8 @@ export default function AnnounceKicker() {
   const [editingId,   setEditingId]   = useState(null)   // null = new, string = editing existing
   const [managers,    setManagers]    = useState([])
   const [allKickers,  setAllKickers]  = useState([])
+  const [allDeals,    setAllDeals]    = useState([])
+  const [subtreeAll,  setSubtreeAll]  = useState([])
   const [loadingList, setLoadingList] = useState(true)
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
@@ -172,27 +393,42 @@ export default function AnnounceKicker() {
 
   const manageable = allKickers.filter(k => canManage(k, user))
 
+  // Pre-compute progress for each active manageable kicker
+  const progressMap = {}
+  if (allDeals.length > 0 && subtreeAll.length > 0) {
+    for (const k of manageable) {
+      if (kickerIsActive(k)) {
+        progressMap[k.id] = computeKickerProgress(k, subtreeAll, allDeals)
+      }
+    }
+  }
+
   const loadData = useCallback(async () => {
     if (!user?.email) return
     setLoadingList(true)
     try {
-      const ks = await getKickers()
+      const [ks, tree, deals] = await Promise.all([
+        getKickers(),
+        getSubtree(user.email).catch(() => null),
+        getDeals().catch(() => []),
+      ])
       setAllKickers(ks)
-      // Load team targets based on role:
-      // Manager → direct agents only (individual targets)
-      // VH/SalesHead/Admin → managers under them (team representatives)
+      setAllDeals(deals)
+
+      const allMembers = flatTree(tree).filter(m => m.Email !== user.email)
+      setSubtreeAll(allMembers)
+
+      // "Which Teams?" form field — show direct team representatives
       if (user.role === 'Manager') {
-        const agents = await getTeam(user.email).catch(() => [])
-        setManagers(agents || [])
+        // For Managers: show their direct agents as targets
+        setManagers(allMembers.filter(m => (m.ManagerEmail || '').toLowerCase() === user.email.toLowerCase()))
       } else {
-        const tree = await getSubtree(user.email).catch(() => null)
-        const all = flatTree(tree).filter(m => m.Email !== user.email)
         const managerRoles = user.role === 'VH'
           ? ['Manager']
           : user.role === 'SalesHead'
             ? ['VH', 'Manager']
             : ['VH', 'Manager', 'SalesHead'] // Admin
-        setManagers(all.filter(m => managerRoles.includes(m.Role)))
+        setManagers(allMembers.filter(m => managerRoles.includes(m.Role)))
       }
     } catch {}
     finally { setLoadingList(false) }
@@ -354,6 +590,7 @@ export default function AnnounceKicker() {
                 kicker={k}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                progress={progressMap[k.id] ?? null}
               />
             ))}
           </div>
