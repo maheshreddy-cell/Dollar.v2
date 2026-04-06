@@ -8,6 +8,21 @@ import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 export const login = (email, password) =>
   appsScript.login(email, password)
 
+export const logUsage = (user) => {
+  const now = new Date()
+  const date = now.toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+  appsScript.appendRow('Usage_Log', {
+    Timestamp: now.toISOString(),
+    Date: date,
+    Email: user.email,
+    Name: user.name,
+    Role: user.role,
+  }).catch(() => {}) // fire-and-forget, never block login
+}
+
+export const getUsageLog = () =>
+  appsScript.getSheet('Usage_Log').catch(() => [])
+
 export const activateInvite = (token, password) =>
   appsScript.activateInvite(token, password)
 

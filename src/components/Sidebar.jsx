@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap, Megaphone,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap, Megaphone, Activity,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -35,6 +35,7 @@ const NAV_BASE = [
         permAdd: { saleshead_announce_kicker: 'SalesHead', vh_announce_kicker: 'VH', manager_announce_kicker: 'Manager' } },
       { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'],
         permAdd: { saleshead_permissions: 'SalesHead', vh_permissions: 'VH' } },
+      { to: '/usage',             label: 'Usage Analytics',   icon: Activity,        baseRoles: ['Admin'] },
     ],
   },
   {

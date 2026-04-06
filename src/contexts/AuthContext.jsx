@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import { login as apiLogin, activateInvite as apiActivate } from '../services/api'
+import { login as apiLogin, activateInvite as apiActivate, logUsage } from '../services/api'
 import { warmCache } from '../services/appsScript'
 
 const AuthContext = createContext(null)
@@ -31,7 +31,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem(SESSION_KEY, JSON.stringify(userData))
     setUser(userData)
     setViewAs(null)
-    warmCache()   // pre-warm immediately after login
+    warmCache()      // pre-warm immediately after login
+    logUsage(userData) // fire-and-forget usage log
     return userData
   }
 

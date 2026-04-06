@@ -24,6 +24,7 @@ const FAQ              = lazy(() => import('./pages/FAQ'))
 const Permissions      = lazy(() => import('./pages/Permissions'))
 const Kickers          = lazy(() => import('./pages/Kickers'))
 const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
+const Usage            = lazy(() => import('./pages/Usage'))
 
 // Prefetch all page chunks in the background after login so navigation is instant
 const LAZY_CHUNKS = [
@@ -202,6 +203,14 @@ export default function App() {
               element={
                 <RequireRole roles={['Admin','SalesHead','VH']}>
                   <Permissions />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/usage"
+              element={
+                <RequireRole roles={['Admin']}>
+                  <Usage />
                 </RequireRole>
               }
             />
