@@ -262,7 +262,6 @@ export default function ManagerTargets() {
   const [managerTargets, setManagerTargets] = useState([])
   const [allTeamDeals, setAllTeamDeals]     = useState([])
   const [teamData, setTeamData]             = useState(null)
-  const [debugInfo, setDebugInfo]           = useState(null) // temp: remove after fix
   const [kickerEarnings, setKickerEarnings] = useState(0)
   const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
   const [loading, setLoading]             = useState(true)
@@ -285,19 +284,6 @@ export default function ManagerTargets() {
     ])
       .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
         // teamDeals = all deals from every subtree member (any role) for this month
-        // Collect debug info: unique Course values + what GenAI filter actually matches
-        const uniqueCourses = [...new Set(teamDeals.map(d => (d.Course || '').trim() || '(blank)'))]
-        const genaiDeals = teamDeals.filter(d => {
-          const c = (d.Course || '').toLowerCase()
-          return ['genai','gen ai','generative ai','gen-ai'].some(kw => c.includes(kw))
-        })
-        setDebugInfo({
-          total: teamDeals.length,
-          courses: uniqueCourses,
-          genaiCount: genaiDeals.length,
-          genaiValue: genaiDeals.reduce((s, d) => s + (d.TotalValue || 0), 0),
-          teamEmails: [...new Set(teamDeals.map(d => d.Email))],
-        })
         setAllTeamDeals(teamDeals)
 
         // Sort targets: largest highest-projected-slab first (PML before GenAI etc.)
@@ -449,17 +435,7 @@ export default function ManagerTargets() {
         </div>
       </div>
 
-      {/* ── TEMP DEBUG PANEL — shows Course values from team deals ── */}
-      {debugInfo && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 text-xs space-y-1 font-mono">
-          <p className="font-bold text-yellow-800">🔍 Debug: Team Deals for {month}</p>
-          <p className="text-yellow-700">Total deals in pool: <strong>{debugInfo.total}</strong> | Emails: {debugInfo.teamEmails.join(', ')}</p>
-          <p className="text-yellow-700">GenAI matched: <strong>{debugInfo.genaiCount} deals = {formatINR(debugInfo.genaiValue)}</strong></p>
-          <p className="text-yellow-700">Unique Course values: <strong>{debugInfo.courses.join(' | ')}</strong></p>
-        </div>
-      )}
-
-      {/* ── No targets banner ── */}
+{/* ── No targets banner ── */}
       {managerTargets.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
           <AlertCircle size={16} className="text-amber-500 shrink-0" />

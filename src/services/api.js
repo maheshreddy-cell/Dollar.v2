@@ -6,7 +6,7 @@ import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 // ─── Program definitions ──────────────────────────────────────────────────────
 export const MANAGER_TARGET_PROGRAMS = [
   { id: 'all',   label: 'All Programs', short: 'All',   keywords: null },
-  { id: 'genai', label: 'GenAI',        short: 'GenAI', keywords: ['genai', 'gen ai', 'generative ai', 'gen-ai'] },
+  { id: 'genai', label: 'GenAI',        short: 'GenAI', keywords: ['genai', 'gen ai', 'generative ai', 'gen-ai', 'gen_ai'] },
   { id: 'pml',   label: 'PML',          short: 'PML',   keywords: ['pml'] },
   { id: 'bel',   label: 'BEL',          short: 'BEL',   keywords: ['bel'] },
 ]
