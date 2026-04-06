@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals } from '../services/api'
+import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, filterDealsByProgram, MANAGER_TARGET_PROGRAMS } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle, Award } from 'lucide-react'
 
@@ -259,9 +259,10 @@ export default function ManagerTargets() {
   const { month }         = useMonth()
   const tick              = useRefresh()
 
-  const [managerTarget, setManagerTarget] = useState(null)
-  const [projSlabs, setProjSlabs]         = useState([])
-  const [realSlabs, setRealSlabs]         = useState([])
+  const [managerTargets, setManagerTargets] = useState([])
+  const [allTeamDeals, setAllTeamDeals]     = useState([])
+  const [projSlabs, setProjSlabs]           = useState([])
+  const [realSlabs, setRealSlabs]           = useState([])
   const [teamData, setTeamData]           = useState(null)
   const [kickerEarnings, setKickerEarnings] = useState(0)
   const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
@@ -281,13 +282,16 @@ export default function ManagerTargets() {
       getLeaderboard(email, month),
       getKickers().catch(() => []),
       getDeals().catch(() => []),
+      getDeals(null, month).catch(() => []),
     ])
-      .then(([targets, agents, allKickers, allDeals]) => {
-        const latest = targets[0] ?? null
-        setManagerTarget(latest)
+      .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
+        setManagerTargets(targets)
+        setAllTeamDeals(teamDeals)
+        // For backward compat: find 'all' target or first target for the main slab cards
+        const allTarget = targets.find(t => !t.programFilter || t.programFilter === 'all') ?? targets[0] ?? null
         const sortAsc = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-        setProjSlabs(sortAsc(latest?.projectedSlabs))
-        setRealSlabs(sortAsc(latest?.realisedSlabs))
+        setProjSlabs(sortAsc(allTarget?.projectedSlabs))
+        setRealSlabs(sortAsc(allTarget?.realisedSlabs))
         const teamSaleValue = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
         const teamAchieved  = agents.reduce((s, a) => s + (a.achieved || 0), 0)
         setTeamData({ teamSaleValue, teamAchieved, agentCount: agents.length })
@@ -354,7 +358,20 @@ export default function ManagerTargets() {
 
   const projInfo        = calcManagerCommissionInfo(teamSaleValue, projSlabs)
   const realInfo        = calcManagerCommissionInfo(teamAchieved,  realSlabs)
-  const totalCommission = projInfo.commission + realInfo.commission
+
+  // Compute total commission across all program targets
+  const allProgramCommissions = managerTargets.map(t => {
+    const progDeals     = filterDealsByProgram(allTeamDeals, t.programFilter)
+    const progSaleValue = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+    const progAchieved  = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+    const slabsP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const slabsR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const pi = calcManagerCommissionInfo(progSaleValue, slabsP)
+    const ri = calcManagerCommissionInfo(progAchieved,  slabsR)
+    return pi.commission + ri.commission
+  })
+  const totalCommissionAllPrograms = allProgramCommissions.reduce((s, c) => s + c, 0)
+  const totalCommission = totalCommissionAllPrograms || (projInfo.commission + realInfo.commission)
   const totalIsPartial  = projInfo.isPartial || realInfo.isPartial
 
   const hasSlabs = projSlabs.length > 0 || realSlabs.length > 0
@@ -422,7 +439,7 @@ export default function ManagerTargets() {
       </div>
 
       {/* ── No targets banner ── */}
-      {!managerTarget && (
+      {managerTargets.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
           <AlertCircle size={16} className="text-amber-500 shrink-0" />
           <p className="text-sm text-amber-800">No targets assigned for {month} yet. Your VH or SalesHead will assign your Projected and Realised targets.</p>
@@ -543,6 +560,68 @@ export default function ManagerTargets() {
           </div>
         </div>
       </div>
+
+      {/* ── Program-specific targets ── */}
+      {managerTargets.filter(t => t.programFilter && t.programFilter !== 'all').length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Program-Specific Targets</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {managerTargets.filter(t => t.programFilter && t.programFilter !== 'all').map(t => {
+              const prog = MANAGER_TARGET_PROGRAMS.find(p => p.id === t.programFilter) ?? MANAGER_TARGET_PROGRAMS[0]
+              const progTeamDeals  = filterDealsByProgram(allTeamDeals, t.programFilter)
+              const progSaleValue  = progTeamDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+              const progAchieved   = progTeamDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+              const progSlabsSorted = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+              const progRealSorted  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+              const progProjInfo   = calcManagerCommissionInfo(progSaleValue, progSlabsSorted)
+              const progRealInfo   = calcManagerCommissionInfo(progAchieved,  progRealSorted)
+              const progCommission = progProjInfo.commission + progRealInfo.commission
+
+              const colors = {
+                genai: { bg: 'bg-purple-50', border: 'border-purple-100', header: 'bg-purple-50 border-purple-100', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-700' },
+                pml:   { bg: 'bg-blue-50',   border: 'border-blue-100',   header: 'bg-blue-50 border-blue-100',     text: 'text-blue-800',   badge: 'bg-blue-100 text-blue-700' },
+                bel:   { bg: 'bg-green-50',  border: 'border-green-100',  header: 'bg-green-50 border-green-100',   text: 'text-green-800',  badge: 'bg-green-100 text-green-700' },
+              }[t.programFilter] ?? { bg: 'bg-gray-50', border: 'border-gray-100', header: 'bg-gray-50 border-gray-100', text: 'text-gray-800', badge: 'bg-gray-100 text-gray-600' }
+
+              return (
+                <div key={t.programFilter} className={`bg-white border ${colors.border} rounded-xl overflow-hidden`}>
+                  <div className={`px-5 py-3.5 border-b ${colors.header} flex items-center justify-between`}>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${colors.badge}`}>{prog.label}</span>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Commission</p>
+                      <p className={`text-sm font-bold ${progCommission > 0 ? colors.text : 'text-gray-400'}`}>{formatINR(progCommission)}</p>
+                    </div>
+                  </div>
+                  <div className="px-5 py-4 space-y-3">
+                    {progSlabsSorted.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Projected Slabs</p>
+                        {progSlabsSorted.map((s, i) => (
+                          <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0">
+                            <span className="text-gray-500">Target {formatINR(Number(s.targetAmount))}</span>
+                            <span className="font-semibold text-gray-700">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {progRealSorted.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Realised Slabs</p>
+                        {progRealSorted.map((s, i) => (
+                          <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0">
+                            <span className="text-gray-500">Target {formatINR(Number(s.targetAmount))}</span>
+                            <span className="font-semibold text-gray-700">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Kicker Earnings card ── */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

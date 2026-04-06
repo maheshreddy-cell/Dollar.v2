@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs } from '../services/api'
+import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
 import { clearCache } from '../services/appsScript'
@@ -66,6 +66,7 @@ export default function AssignTargets() {
 
   const [mgrProjSlabs,   setMgrProjSlabs]   = useState(INIT_MGR_SLABS)
   const [mgrRealSlabs,   setMgrRealSlabs]   = useState(INIT_MGR_SLABS)
+  const [mgrProgram,     setMgrProgram]     = useState('all')
   const [mgrHistory,     setMgrHistory]     = useState([])
   const [mgrHistoryLoad, setMgrHistoryLoad] = useState(false)
   const [mgrSubmitting,  setMgrSubmitting]  = useState(false)
@@ -211,6 +212,7 @@ export default function AssignTargets() {
         if (current) {
           setMgrProjSlabs(parseMgrSlabs(current.ProjectedSlabs))
           setMgrRealSlabs(parseMgrSlabs(current.RealisedSlabs))
+          setMgrProgram(current.programFilter || 'all')
         }
       })
       .catch(() => {})
@@ -399,6 +401,7 @@ export default function AssignTargets() {
                       <thead>
                         <tr className="text-xs text-gray-400 uppercase bg-gray-50 border-b border-gray-100">
                           <th className="px-4 py-2.5 text-left font-medium">Month</th>
+                          <th className="px-4 py-2.5 text-left font-medium">Program</th>
                           <th className="px-4 py-2.5 text-left font-medium">Projected Slabs</th>
                           <th className="px-4 py-2.5 text-left font-medium">Realised Slabs</th>
                           <th className="px-4 py-2.5 text-center font-medium">Actions</th>
@@ -422,6 +425,14 @@ export default function AssignTargets() {
                                 {isEditing && <span className="ml-2 text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold">editing</span>}
                               </td>
                               <td className="px-4 py-3">
+                                {(() => {
+                                  const prog = t.programFilter || 'all'
+                                  const colors = { all: 'bg-gray-100 text-gray-600', genai: 'bg-purple-100 text-purple-700', pml: 'bg-blue-100 text-blue-700', bel: 'bg-green-100 text-green-700' }
+                                  const label = MANAGER_TARGET_PROGRAMS.find(p => p.id === prog)?.label ?? prog
+                                  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${colors[prog] ?? colors.all}`}>{label}</span>
+                                })()}
+                              </td>
+                              <td className="px-4 py-3">
                                 {pSlabs.length > 0 ? (
                                   <span className="text-xs text-blue-700 font-semibold">
                                     {pSlabs.length} slab{pSlabs.length > 1 ? 's' : ''} · up to {formatINR(pMax)}
@@ -441,7 +452,7 @@ export default function AssignTargets() {
                                     <button
                                       onClick={async () => {
                                         setMgrDeleting(mon)
-                                        try { await deleteManagerTarget(selected.Email, mon); reloadManagerHistory() }
+                                        try { await deleteManagerTarget(selected.Email, mon, t.programFilter || 'all'); reloadManagerHistory() }
                                         catch { setMgrError('Delete failed.') }
                                         finally { setMgrDeleting(null); setMgrConfirmDel(null) }
                                       }}
@@ -457,6 +468,7 @@ export default function AssignTargets() {
                                         setFormMonth(mon)
                                         setMgrProjSlabs(parseMgrSlabs(t.ProjectedSlabs))
                                         setMgrRealSlabs(parseMgrSlabs(t.RealisedSlabs))
+                                        setMgrProgram(t.programFilter || 'all')
                                         setMgrSuccess(false)
                                         setMgrError('')
                                       }}
@@ -491,6 +503,37 @@ export default function AssignTargets() {
                 {mgrError && (
                   <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 mb-4 text-sm text-red-700">{mgrError}</div>
                 )}
+
+                {/* Program selector */}
+                <div className="mb-5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Program</label>
+                  <div className="flex flex-wrap gap-2">
+                    {MANAGER_TARGET_PROGRAMS.map(p => {
+                      const colors = {
+                        all:   { active: 'bg-gray-800 text-white border-gray-800',   idle: 'bg-white text-gray-600 border-gray-200 hover:border-gray-400' },
+                        genai: { active: 'bg-purple-600 text-white border-purple-600', idle: 'bg-white text-purple-700 border-purple-200 hover:border-purple-400' },
+                        pml:   { active: 'bg-blue-600 text-white border-blue-600',   idle: 'bg-white text-blue-700 border-blue-200 hover:border-blue-400' },
+                        bel:   { active: 'bg-green-600 text-white border-green-600', idle: 'bg-white text-green-700 border-green-200 hover:border-green-400' },
+                      }
+                      const c = colors[p.id] ?? colors.all
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setMgrProgram(p.id)}
+                          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${mgrProgram === p.id ? c.active : c.idle}`}
+                        >
+                          {p.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {mgrProgram !== 'all' && (
+                    <p className="text-[11px] text-gray-400 mt-1.5">
+                      Commission will only count deals where Course matches "{MANAGER_TARGET_PROGRAMS.find(p => p.id === mgrProgram)?.label}".
+                    </p>
+                  )}
+                </div>
 
                 <div className="mb-4">
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Month</label>
@@ -617,6 +660,7 @@ export default function AssignTargets() {
                         month: formMonth,
                         projectedSlabs: toSave(mgrProjSlabs),
                         realisedSlabs:  toSave(mgrRealSlabs),
+                        program: mgrProgram,
                       }, user.email)
                       setMgrSuccess(true)
                       await new Promise(r => setTimeout(r, 1200))

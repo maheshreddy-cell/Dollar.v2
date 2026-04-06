@@ -3,6 +3,24 @@ import { appsScript, clearCache } from './appsScript'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 
+// ─── Program definitions ──────────────────────────────────────────────────────
+export const MANAGER_TARGET_PROGRAMS = [
+  { id: 'all',   label: 'All Programs', short: 'All',   keywords: null },
+  { id: 'genai', label: 'GenAI',        short: 'GenAI', keywords: ['genai', 'gen ai', 'generative ai', 'gen-ai'] },
+  { id: 'pml',   label: 'PML',          short: 'PML',   keywords: ['pml'] },
+  { id: 'bel',   label: 'BEL',          short: 'BEL',   keywords: ['bel'] },
+]
+
+export function filterDealsByProgram(deals, programId) {
+  if (!programId || programId === 'all') return deals
+  const prog = MANAGER_TARGET_PROGRAMS.find(p => p.id === programId)
+  if (!prog || !prog.keywords) return deals
+  return deals.filter(d => {
+    const course = (d.Course || '').toLowerCase()
+    return prog.keywords.some(kw => course.includes(kw))
+  })
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export const login = (email, password) =>
@@ -999,39 +1017,52 @@ function toMgrRecord(r) {
     Month:          normalizeMonth(r.Month),
     projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs),
     realisedSlabs:  parseMgrSlabsJson(r.RealisedSlabs),
+    programFilter:  String(r.ProgramFilter || 'all').trim().toLowerCase() || 'all',
   }
 }
 
 export const getManagerTargets = async (managerEmail, month) => {
   const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
-  return rows
+  const filtered = rows
     .filter(r => {
       const em  = String(r.ManagerEmail || '').trim().toLowerCase()
       const mon = normalizeMonth(r.Month)
       return em === lower && (!month || mon === month)
     })
     .sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))
-    .map(toMgrRecord)
+
+  // Deduplicate by program — keep latest per program
+  const byProgram = new Map()
+  for (const r of filtered) {
+    const prog = String(r.ProgramFilter || 'all').trim().toLowerCase() || 'all'
+    if (!byProgram.has(prog)) byProgram.set(prog, toMgrRecord(r))
+  }
+  return [...byProgram.values()]
 }
 
 export const getManagerTargetHistory = async (managerEmail) => {
   const rows = await appsScript.getSheet('CommissionConfig')
   const lower = (managerEmail ?? '').trim().toLowerCase()
   const filtered = rows.filter(r => String(r.ManagerEmail || '').trim().toLowerCase() === lower)
-  const byMonth = new Map()
+  const byKey = new Map()
   for (const r of filtered.sort((a, b) => new Date(b.AssignedAt || 0) - new Date(a.AssignedAt || 0))) {
-    const mon = normalizeMonth(r.Month)
-    if (mon && !byMonth.has(mon)) byMonth.set(mon, toMgrRecord(r))
+    const mon  = normalizeMonth(r.Month)
+    const prog = String(r.ProgramFilter || 'all').trim().toLowerCase() || 'all'
+    const key  = `${mon}___${prog}`
+    if (mon && !byKey.has(key)) byKey.set(key, toMgrRecord(r))
   }
-  return [...byMonth.values()].sort((a, b) => (b.Month || '').localeCompare(a.Month || ''))
+  return [...byKey.values()].sort((a, b) => {
+    const mc = (b.Month || '').localeCompare(a.Month || '')
+    if (mc !== 0) return mc
+    return (a.programFilter || 'all').localeCompare(b.programFilter || 'all')
+  })
 }
 
 export const assignManagerTarget = async (data, assignerEmail) => {
-  // data: { email, month, projectedSlabs: [{targetAmount, commissionPct}], realisedSlabs: [...] }
-  const key = `mgr_${data.email.trim().toLowerCase()}_${data.month}`
-  // Row order matches sheet columns: Key | ManagerEmail | Month | ProjectedSlabs | RealisedSlabs | AssignedBy | AssignedAt
-  const row = [
+  const prog = (data.program && data.program !== 'all') ? `_${data.program}` : ''
+  const key  = `mgr_${data.email.trim().toLowerCase()}_${data.month}${prog}`
+  const row  = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
@@ -1039,14 +1070,16 @@ export const assignManagerTarget = async (data, assignerEmail) => {
     JSON.stringify(data.realisedSlabs  ?? []),
     assignerEmail,
     new Date().toISOString(),
+    data.program ?? 'all',
   ]
   const result = await appsScript.appendRow('CommissionConfig', row)
   clearCache()
   return result
 }
 
-export const deleteManagerTarget = async (email, month) => {
-  const key = `mgr_${email.trim().toLowerCase()}_${month}`
+export const deleteManagerTarget = async (email, month, program = 'all') => {
+  const prog = (program && program !== 'all') ? `_${program}` : ''
+  const key  = `mgr_${email.trim().toLowerCase()}_${month}${prog}`
   let deleted = true
   while (deleted) {
     try { await appsScript.deleteRow('CommissionConfig', 'Key', key) }
