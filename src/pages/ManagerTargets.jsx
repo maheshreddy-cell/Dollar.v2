@@ -261,9 +261,7 @@ export default function ManagerTargets() {
 
   const [managerTargets, setManagerTargets] = useState([])
   const [allTeamDeals, setAllTeamDeals]     = useState([])
-  const [projSlabs, setProjSlabs]           = useState([])
-  const [realSlabs, setRealSlabs]           = useState([])
-  const [teamData, setTeamData]           = useState(null)
+  const [teamData, setTeamData]             = useState(null)
   const [kickerEarnings, setKickerEarnings] = useState(0)
   const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
   const [loading, setLoading]             = useState(true)
@@ -284,14 +282,20 @@ export default function ManagerTargets() {
       getDeals().catch(() => []),
       getDeals(null, month).catch(() => []),
     ])
-      .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
-        setManagerTargets(targets)
+      .then(([targets, agents, allKickers, allDeals, allMonthDeals]) => {
+        // ── Only keep this month's deals that belong to THIS manager's team agents ──
+        const teamEmails = new Set(agents.map(a => (a.email || '').trim().toLowerCase()))
+        const teamDeals  = allMonthDeals.filter(d => teamEmails.has((d.Email || '').trim().toLowerCase()))
         setAllTeamDeals(teamDeals)
-        // For backward compat: find 'all' target or first target for the main slab cards
-        const allTarget = targets.find(t => !t.programFilter || t.programFilter === 'all') ?? targets[0] ?? null
-        const sortAsc = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-        setProjSlabs(sortAsc(allTarget?.projectedSlabs))
-        setRealSlabs(sortAsc(allTarget?.realisedSlabs))
+
+        // Sort targets: largest highest-projected-slab first (PML before GenAI etc.)
+        const sortedTargets = [...targets].sort((a, b) => {
+          const aTop = (a.projectedSlabs || []).reduce((m, s) => Math.max(m, Number(s.targetAmount)), 0)
+          const bTop = (b.projectedSlabs || []).reduce((m, s) => Math.max(m, Number(s.targetAmount)), 0)
+          return bTop - aTop
+        })
+        setManagerTargets(sortedTargets)
+
         const teamSaleValue = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
         const teamAchieved  = agents.reduce((s, a) => s + (a.achieved || 0), 0)
         setTeamData({ teamSaleValue, teamAchieved, agentCount: agents.length })
