@@ -564,10 +564,15 @@ export default function ManagerTargets() {
       {/* ── Program-specific targets ── */}
       {managerTargets.filter(t => t.programFilter && t.programFilter !== 'all').length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Program-Specific Targets</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Program-Specific Incentives</p>
+            <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">
+              {managerTargets.filter(t => t.programFilter && t.programFilter !== 'all').length} active
+            </span>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {managerTargets.filter(t => t.programFilter && t.programFilter !== 'all').map(t => {
-              const prog = MANAGER_TARGET_PROGRAMS.find(p => p.id === t.programFilter) ?? MANAGER_TARGET_PROGRAMS[0]
+              const prog           = MANAGER_TARGET_PROGRAMS.find(p => p.id === t.programFilter) ?? MANAGER_TARGET_PROGRAMS[0]
               const progTeamDeals  = filterDealsByProgram(allTeamDeals, t.programFilter)
               const progSaleValue  = progTeamDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
               const progAchieved   = progTeamDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
@@ -576,49 +581,106 @@ export default function ManagerTargets() {
               const progProjInfo   = calcManagerCommissionInfo(progSaleValue, progSlabsSorted)
               const progRealInfo   = calcManagerCommissionInfo(progAchieved,  progRealSorted)
               const progCommission = progProjInfo.commission + progRealInfo.commission
+              const projTop        = progSlabsSorted.length ? Math.max(...progSlabsSorted.map(s => Number(s.targetAmount))) : 0
+              const realTop        = progRealSorted.length  ? Math.max(...progRealSorted.map(s => Number(s.targetAmount)))  : 0
+              const projPct        = projTop > 0 ? Math.min((progSaleValue / projTop) * 100, 100) : 0
+              const realPct        = realTop > 0 ? Math.min((progAchieved  / realTop) * 100, 100) : 0
 
-              const colors = {
-                genai: { bg: 'bg-purple-50', border: 'border-purple-100', header: 'bg-purple-50 border-purple-100', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-700' },
-                pml:   { bg: 'bg-blue-50',   border: 'border-blue-100',   header: 'bg-blue-50 border-blue-100',     text: 'text-blue-800',   badge: 'bg-blue-100 text-blue-700' },
-                bel:   { bg: 'bg-green-50',  border: 'border-green-100',  header: 'bg-green-50 border-green-100',   text: 'text-green-800',  badge: 'bg-green-100 text-green-700' },
-              }[t.programFilter] ?? { bg: 'bg-gray-50', border: 'border-gray-100', header: 'bg-gray-50 border-gray-100', text: 'text-gray-800', badge: 'bg-gray-100 text-gray-600' }
+              const C = {
+                genai: { border: 'border-purple-200', hdr: 'bg-purple-50 border-purple-100', badge: 'bg-purple-100 text-purple-700', earn: 'text-purple-700', bar: 'bg-purple-500', sub: 'text-purple-500' },
+                pml:   { border: 'border-blue-200',   hdr: 'bg-blue-50 border-blue-100',     badge: 'bg-blue-100 text-blue-700',     earn: 'text-blue-700',   bar: 'bg-blue-500',   sub: 'text-blue-500'   },
+                bel:   { border: 'border-green-200',  hdr: 'bg-green-50 border-green-100',   badge: 'bg-green-100 text-green-700',   earn: 'text-green-700',  bar: 'bg-green-500',  sub: 'text-green-500'  },
+              }[t.programFilter] ?? { border: 'border-gray-200', hdr: 'bg-gray-50 border-gray-100', badge: 'bg-gray-100 text-gray-600', earn: 'text-gray-700', bar: 'bg-gray-400', sub: 'text-gray-500' }
 
               return (
-                <div key={t.programFilter} className={`bg-white border ${colors.border} rounded-xl overflow-hidden`}>
-                  <div className={`px-5 py-3.5 border-b ${colors.header} flex items-center justify-between`}>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${colors.badge}`}>{prog.label}</span>
+                <div key={t.programFilter} className={`bg-white border ${C.border} rounded-xl overflow-hidden`}>
+                  {/* Header */}
+                  <div className={`px-5 py-3.5 border-b ${C.hdr} flex items-center justify-between`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${C.badge}`}>{prog.label}</span>
+                      <span className="text-xs text-gray-400">{progTeamDeals.length} deals</span>
+                    </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-400">Commission</p>
-                      <p className={`text-sm font-bold ${progCommission > 0 ? colors.text : 'text-gray-400'}`}>{formatINR(progCommission)}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wide">Commission Earned</p>
+                      <p className={`text-base font-bold ${progCommission > 0 ? C.earn : 'text-gray-400'}`}>{formatINR(progCommission)}</p>
                     </div>
                   </div>
-                  <div className="px-5 py-4 space-y-3">
+
+                  <div className="px-5 py-4 space-y-4">
+                    {/* Live metrics */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-400 mb-0.5">Program Sale Value</p>
+                        <p className={`text-sm font-bold ${C.earn}`}>{formatINR(progSaleValue)}</p>
+                        {projTop > 0 && (
+                          <div className="mt-1.5">
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${C.bar}`} style={{ width: `${projPct}%` }} />
+                            </div>
+                            <p className={`text-[10px] mt-0.5 font-semibold ${C.sub}`}>{projPct.toFixed(0)}% of top slab</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-[10px] text-gray-400 mb-0.5">Program Achieved</p>
+                        <p className="text-sm font-bold text-green-700">{formatINR(progAchieved)}</p>
+                        {realTop > 0 && (
+                          <div className="mt-1.5">
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full bg-green-500`} style={{ width: `${realPct}%` }} />
+                            </div>
+                            <p className="text-[10px] mt-0.5 font-semibold text-green-500">{realPct.toFixed(0)}% of top slab</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Projected slabs */}
                     {progSlabsSorted.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Projected Slabs</p>
-                        {progSlabsSorted.map((s, i) => (
-                          <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0">
-                            <span className="text-gray-500">Target {formatINR(Number(s.targetAmount))}</span>
-                            <span className="font-semibold text-gray-700">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
-                          </div>
-                        ))}
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">📊 Projected Slabs</p>
+                        <SlabTable slabs={progSlabsSorted} teamMetric={progSaleValue} accentColor="blue" />
                       </div>
                     )}
+
+                    {/* Realised slabs */}
                     {progRealSorted.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Realised Slabs</p>
-                        {progRealSorted.map((s, i) => (
-                          <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-50 last:border-0">
-                            <span className="text-gray-500">Target {formatINR(Number(s.targetAmount))}</span>
-                            <span className="font-semibold text-gray-700">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
-                          </div>
-                        ))}
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">✅ Realised Slabs</p>
+                        <SlabTable slabs={progRealSorted} teamMetric={progAchieved} accentColor="green" />
                       </div>
                     )}
                   </div>
                 </div>
               )
             })}
+          </div>
+
+          {/* Program earnings summary strip */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-3 flex flex-wrap items-center gap-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide shrink-0">Incentive Breakdown</p>
+            {managerTargets.map(t => {
+              const progDeals = filterDealsByProgram(allTeamDeals, t.programFilter)
+              const sv = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+              const ac = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+              const slP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+              const slR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+              const comm = calcManagerCommissionInfo(sv, slP).commission + calcManagerCommissionInfo(ac, slR).commission
+              const pid  = t.programFilter || 'all'
+              const lbl  = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid)?.label ?? pid
+              const dotC = { all: 'bg-gray-500', genai: 'bg-purple-500', pml: 'bg-blue-500', bel: 'bg-green-500' }
+              return (
+                <div key={pid} className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotC[pid] ?? 'bg-gray-400'}`} />
+                  <span className="text-xs text-gray-500">{lbl}</span>
+                  <span className="text-xs font-bold text-gray-800">{formatINR(comm)}</span>
+                </div>
+              )
+            })}
+            <div className="ml-auto flex items-center gap-2 border-l border-gray-200 pl-4">
+              <span className="text-xs text-gray-500 font-semibold">Total Commission</span>
+              <span className="text-sm font-black text-gray-900">{formatINR(totalCommission)}</span>
+            </div>
           </div>
         </div>
       )}

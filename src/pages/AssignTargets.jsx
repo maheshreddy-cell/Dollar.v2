@@ -207,16 +207,26 @@ export default function AssignTargets() {
       .then(res => {
         const history = res ?? []
         setMgrHistory(history)
-        // Pre-fill form with current month's data if exists
-        const current = history.find(t => String(t.Month || '').trim() === formMonth)
-        if (current) {
-          setMgrProjSlabs(parseMgrSlabs(current.ProjectedSlabs))
-          setMgrRealSlabs(parseMgrSlabs(current.RealisedSlabs))
-          setMgrProgram(current.programFilter || 'all')
-        }
+        // Pre-fill form with current month + current program's data
+        loadSlabsForProgram(history, formMonth, mgrProgram)
       })
       .catch(() => {})
       .finally(() => setMgrHistoryLoad(false))
+  }
+
+  // Load slabs from history for a specific month+program combo
+  function loadSlabsForProgram(history, month, program) {
+    const match = history.find(t =>
+      String(t.Month || '').trim() === month &&
+      (t.programFilter || 'all') === (program || 'all')
+    )
+    if (match) {
+      setMgrProjSlabs(parseMgrSlabs(match.ProjectedSlabs))
+      setMgrRealSlabs(parseMgrSlabs(match.RealisedSlabs))
+    } else {
+      setMgrProjSlabs(INIT_MGR_SLABS())
+      setMgrRealSlabs(INIT_MGR_SLABS())
+    }
   }
 
   function reloadHistory() {
@@ -506,32 +516,63 @@ export default function AssignTargets() {
 
                 {/* Program selector */}
                 <div className="mb-5">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Program</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Program</label>
+                    <span className="text-[10px] text-gray-400">Select a program to configure its slabs independently</span>
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {MANAGER_TARGET_PROGRAMS.map(p => {
+                      const isSaved = mgrHistory.some(t =>
+                        String(t.Month || '').trim() === formMonth &&
+                        (t.programFilter || 'all') === p.id
+                      )
                       const colors = {
-                        all:   { active: 'bg-gray-800 text-white border-gray-800',   idle: 'bg-white text-gray-600 border-gray-200 hover:border-gray-400' },
+                        all:   { active: 'bg-gray-800 text-white border-gray-800',     idle: 'bg-white text-gray-600 border-gray-200 hover:border-gray-400' },
                         genai: { active: 'bg-purple-600 text-white border-purple-600', idle: 'bg-white text-purple-700 border-purple-200 hover:border-purple-400' },
-                        pml:   { active: 'bg-blue-600 text-white border-blue-600',   idle: 'bg-white text-blue-700 border-blue-200 hover:border-blue-400' },
-                        bel:   { active: 'bg-green-600 text-white border-green-600', idle: 'bg-white text-green-700 border-green-200 hover:border-green-400' },
+                        pml:   { active: 'bg-blue-600 text-white border-blue-600',     idle: 'bg-white text-blue-700 border-blue-200 hover:border-blue-400' },
+                        bel:   { active: 'bg-green-600 text-white border-green-600',   idle: 'bg-white text-green-700 border-green-200 hover:border-green-400' },
                       }
                       const c = colors[p.id] ?? colors.all
                       return (
                         <button
                           key={p.id}
                           type="button"
-                          onClick={() => setMgrProgram(p.id)}
-                          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${mgrProgram === p.id ? c.active : c.idle}`}
+                          onClick={() => {
+                            setMgrProgram(p.id)
+                            loadSlabsForProgram(mgrHistory, formMonth, p.id)
+                            setMgrSuccess(false)
+                            setMgrError('')
+                          }}
+                          className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${mgrProgram === p.id ? c.active : c.idle}`}
                         >
+                          {isSaved && mgrProgram !== p.id && <span className="text-[10px]">✓</span>}
                           {p.label}
+                          {isSaved && mgrProgram !== p.id && <span className="text-[9px] opacity-70">saved</span>}
                         </button>
                       )
                     })}
                   </div>
-                  {mgrProgram !== 'all' && (
-                    <p className="text-[11px] text-gray-400 mt-1.5">
-                      Commission will only count deals where Course matches "{MANAGER_TARGET_PROGRAMS.find(p => p.id === mgrProgram)?.label}".
-                    </p>
+                  <p className="text-[11px] text-gray-400 mt-2">
+                    {mgrProgram === 'all'
+                      ? 'Counts all deals regardless of program.'
+                      : `Only counts deals where Course matches "${MANAGER_TARGET_PROGRAMS.find(p => p.id === mgrProgram)?.label}". Other programs are tracked separately.`}
+                  </p>
+                  {/* Active program summary */}
+                  {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="text-[10px] text-gray-400">Active targets for {formMonth}:</span>
+                      {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).map(t => {
+                        const pid = t.programFilter || 'all'
+                        const progLabel = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid)?.label ?? pid
+                        const dotColors = { all: 'bg-gray-500', genai: 'bg-purple-500', pml: 'bg-blue-500', bel: 'bg-green-500' }
+                        return (
+                          <span key={pid} className="flex items-center gap-1 text-[10px] font-semibold bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotColors[pid] ?? 'bg-gray-400'}`} />
+                            {progLabel}
+                          </span>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
 
