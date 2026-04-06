@@ -294,8 +294,10 @@ export default function ManagerTargets() {
         })
         setManagerTargets(sortedTargets)
 
-        const teamSaleValue = agents.reduce((s, a) => s + (a.totalSaleValue || 0), 0)
-        const teamAchieved  = agents.reduce((s, a) => s + (a.achieved || 0), 0)
+        // Use teamDeals (same source as program cards) so header totals are consistent
+        // with what each program card shows — no mismatch from role/commission-period filters
+        const teamSaleValue = teamDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+        const teamAchieved  = teamDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
         setTeamData({ teamSaleValue, teamAchieved, agentCount: agents.length })
 
         // Compute kicker earnings for this manager from active/past kickers

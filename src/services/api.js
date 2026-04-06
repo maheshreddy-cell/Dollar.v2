@@ -244,9 +244,9 @@ export const getTeamDealsForMonth = async (rootEmail, month) => {
 
 export const getDealsForSubtree = async (emails, month) => {
   const deals = await appsScript.getSalesSheet()
-  const lower = emails.map(e => e.trim().toLowerCase())
+  const lower = new Set(emails.map(e => (e || '').trim().toLowerCase()))
   return deals.filter(d =>
-    lower.includes(d.Email) &&
+    lower.has((d.Email || '').trim().toLowerCase()) &&
     (!month || d.Month === month)
   )
 }
@@ -327,9 +327,10 @@ export const assignTarget = async (data, assignerEmail) => {
 export const getAllUsers = () => appsScript.getSheet('Users')
 
 export const getTeam = async (managerEmail) => {
-  const users = await appsScript.getSheet('Users')
+  const users  = await appsScript.getSheet('Users')
+  const lowerM = (managerEmail || '').trim().toLowerCase()
   return users
-    .filter(u => u.ManagerEmail === managerEmail)
+    .filter(u => (u.ManagerEmail || '').trim().toLowerCase() === lowerM)
     .map(stripSensitive)
 }
 
@@ -830,12 +831,13 @@ function collectEmails(users, rootEmail) {
 }
 
 function buildSubtree(users, rootEmail) {
-  const root = users.find(u => u.Email === rootEmail)
+  const lower = (rootEmail || '').trim().toLowerCase()
+  const root  = users.find(u => (u.Email || '').trim().toLowerCase() === lower)
   if (!root) return null
   return {
     ...root,
     children: users
-      .filter(u => u.ManagerEmail === rootEmail)
+      .filter(u => (u.ManagerEmail || '').trim().toLowerCase() === lower)
       .map(u => buildSubtree(users, u.Email))
       .filter(Boolean),
   }
