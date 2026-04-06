@@ -64,16 +64,30 @@ export default function AssignTargets() {
   const EMPTY_MGR_SLAB = { targetAmount: '', commissionPct: '' }
   const INIT_MGR_SLABS = () => [EMPTY_MGR_SLAB, EMPTY_MGR_SLAB, EMPTY_MGR_SLAB, EMPTY_MGR_SLAB]
 
-  const [mgrProjSlabs,   setMgrProjSlabs]   = useState(INIT_MGR_SLABS)
-  const [mgrRealSlabs,   setMgrRealSlabs]   = useState(INIT_MGR_SLABS)
-  const [mgrProgram,     setMgrProgram]     = useState('all')
-  const [mgrHistory,     setMgrHistory]     = useState([])
-  const [mgrHistoryLoad, setMgrHistoryLoad] = useState(false)
-  const [mgrSubmitting,  setMgrSubmitting]  = useState(false)
-  const [mgrSuccess,     setMgrSuccess]     = useState(false)
-  const [mgrError,       setMgrError]       = useState('')
-  const [mgrConfirmDel,  setMgrConfirmDel]  = useState(null)
-  const [mgrDeleting,    setMgrDeleting]    = useState(null)
+  // Per-program slabs: { [programId]: { proj: [...], real: [...] } }
+  const initAllProgramSlabs = () =>
+    Object.fromEntries(MANAGER_TARGET_PROGRAMS.map(p => [p.id, { proj: INIT_MGR_SLABS(), real: INIT_MGR_SLABS() }]))
+
+  const [mgrProjSlabs,    setMgrProjSlabs]   = useState(INIT_MGR_SLABS)
+  const [mgrRealSlabs,    setMgrRealSlabs]   = useState(INIT_MGR_SLABS)
+  const [mgrProgram,      setMgrProgram]     = useState('all')
+  const [programSlabs,    setProgramSlabs]   = useState(initAllProgramSlabs)   // multi-program state
+  const [mgrHistory,      setMgrHistory]     = useState([])
+  const [mgrHistoryLoad,  setMgrHistoryLoad] = useState(false)
+  const [mgrSubmitting,   setMgrSubmitting]  = useState(false)
+  const [mgrSuccess,      setMgrSuccess]     = useState(false)
+  const [mgrError,        setMgrError]       = useState('')
+  const [mgrConfirmDel,   setMgrConfirmDel]  = useState(null)
+  const [mgrDeleting,     setMgrDeleting]    = useState(null)
+  // Per-program save state: { [programId]: { submitting, success, error } }
+  const [progSaveState,   setProgSaveState]  = useState({})
+
+  function getProgState(pid) {
+    return progSaveState[pid] || { submitting: false, success: false, error: '' }
+  }
+  function setProgState(pid, patch) {
+    setProgSaveState(prev => ({ ...prev, [pid]: { ...getProgState(pid), ...patch } }))
+  }
 
   const isManagerMember     = ['Manager', 'VH'].includes(selected?.Role)
   const isAgent             = ['Agent', 'PreSales'].includes(selected?.Role)
@@ -207,14 +221,30 @@ export default function AssignTargets() {
       .then(res => {
         const history = res ?? []
         setMgrHistory(history)
-        // Pre-fill form with current month + current program's data
+        // Pre-fill single-program form (legacy)
         loadSlabsForProgram(history, formMonth, mgrProgram)
+        // Pre-fill ALL program slabs for multi-program view
+        const newSlabs = initAllProgramSlabs()
+        for (const p of MANAGER_TARGET_PROGRAMS) {
+          const match = history.find(t =>
+            String(t.Month || '').trim() === formMonth &&
+            (t.programFilter || 'all') === p.id
+          )
+          if (match) {
+            newSlabs[p.id] = {
+              proj: parseMgrSlabs(match.ProjectedSlabs),
+              real: parseMgrSlabs(match.RealisedSlabs),
+            }
+          }
+        }
+        setProgramSlabs(newSlabs)
+        setProgSaveState({})
       })
       .catch(() => {})
       .finally(() => setMgrHistoryLoad(false))
   }
 
-  // Load slabs from history for a specific month+program combo
+  // Load slabs from history for a specific month+program combo (used by single-prog form)
   function loadSlabsForProgram(history, month, program) {
     const match = history.find(t =>
       String(t.Month || '').trim() === month &&
@@ -227,6 +257,17 @@ export default function AssignTargets() {
       setMgrProjSlabs(INIT_MGR_SLABS())
       setMgrRealSlabs(INIT_MGR_SLABS())
     }
+    // Also refresh multi-program slabs for the new month
+    const newSlabs = initAllProgramSlabs()
+    for (const p of MANAGER_TARGET_PROGRAMS) {
+      const m = history.find(t =>
+        String(t.Month || '').trim() === month &&
+        (t.programFilter || 'all') === p.id
+      )
+      if (m) newSlabs[p.id] = { proj: parseMgrSlabs(m.ProjectedSlabs), real: parseMgrSlabs(m.RealisedSlabs) }
+    }
+    setProgramSlabs(newSlabs)
+    setProgSaveState({})
   }
 
   function reloadHistory() {
@@ -501,223 +542,172 @@ export default function AssignTargets() {
                 )}
               </div>
 
-              {/* Assignment form */}
-              <div className="bg-white rounded-xl border border-gray-200 px-5 py-5">
-                <p className="text-sm font-semibold text-gray-800 mb-4">Assign Targets for {formMonth}</p>
-                {mgrSuccess && (
-                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 mb-4">
-                    <CheckCircle size={15} className="text-green-600" />
-                    <p className="text-sm text-green-700 font-medium">Targets saved successfully.</p>
-                  </div>
-                )}
-                {mgrError && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 mb-4 text-sm text-red-700">{mgrError}</div>
-                )}
-
-                {/* Program selector */}
-                <div className="mb-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Program</label>
-                    <span className="text-[10px] text-gray-400">Select a program to configure its slabs independently</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {MANAGER_TARGET_PROGRAMS.map(p => {
-                      const isSaved = mgrHistory.some(t =>
-                        String(t.Month || '').trim() === formMonth &&
-                        (t.programFilter || 'all') === p.id
-                      )
-                      const colors = {
-                        all:   { active: 'bg-gray-800 text-white border-gray-800',     idle: 'bg-white text-gray-600 border-gray-200 hover:border-gray-400' },
-                        genai: { active: 'bg-purple-600 text-white border-purple-600', idle: 'bg-white text-purple-700 border-purple-200 hover:border-purple-400' },
-                        pml:   { active: 'bg-blue-600 text-white border-blue-600',     idle: 'bg-white text-blue-700 border-blue-200 hover:border-blue-400' },
-                        bel:   { active: 'bg-green-600 text-white border-green-600',   idle: 'bg-white text-green-700 border-green-200 hover:border-green-400' },
-                      }
-                      const c = colors[p.id] ?? colors.all
+              {/* ── Month selector ── */}
+              <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center gap-4">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide shrink-0">Month</label>
+                <input
+                  type="month"
+                  value={formMonth}
+                  onChange={e => {
+                    setFormMonth(e.target.value)
+                    loadSlabsForProgram(mgrHistory, e.target.value, mgrProgram)
+                  }}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap ml-2">
+                    <span className="text-[10px] text-gray-400">Active:</span>
+                    {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).map(t => {
+                      const pid = t.programFilter || 'all'
+                      const lbl = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid)?.label ?? pid
+                      const dotC = { all: 'bg-gray-500', genai: 'bg-purple-500', pml: 'bg-blue-500', bel: 'bg-teal-500' }
                       return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setMgrProgram(p.id)
-                            loadSlabsForProgram(mgrHistory, formMonth, p.id)
-                            setMgrSuccess(false)
-                            setMgrError('')
-                          }}
-                          className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${mgrProgram === p.id ? c.active : c.idle}`}
-                        >
-                          {isSaved && mgrProgram !== p.id && <span className="text-[10px]">✓</span>}
-                          {p.label}
-                          {isSaved && mgrProgram !== p.id && <span className="text-[9px] opacity-70">saved</span>}
-                        </button>
+                        <span key={pid} className="flex items-center gap-1 text-[10px] font-semibold bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">
+                          <span className={`w-1.5 h-1.5 rounded-full ${dotC[pid] ?? 'bg-gray-400'}`} />
+                          {lbl}
+                        </span>
                       )
                     })}
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-2">
-                    {mgrProgram === 'all'
-                      ? 'Counts all deals regardless of program.'
-                      : `Only counts deals where Course matches "${MANAGER_TARGET_PROGRAMS.find(p => p.id === mgrProgram)?.label}". Other programs are tracked separately.`}
-                  </p>
-                  {/* Active program summary */}
-                  {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="text-[10px] text-gray-400">Active targets for {formMonth}:</span>
-                      {mgrHistory.filter(t => String(t.Month || '').trim() === formMonth).map(t => {
-                        const pid = t.programFilter || 'all'
-                        const progLabel = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid)?.label ?? pid
-                        const dotColors = { all: 'bg-gray-500', genai: 'bg-purple-500', pml: 'bg-blue-500', bel: 'bg-green-500' }
-                        return (
-                          <span key={pid} className="flex items-center gap-1 text-[10px] font-semibold bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">
-                            <span className={`w-1.5 h-1.5 rounded-full ${dotColors[pid] ?? 'bg-gray-400'}`} />
-                            {progLabel}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-4">
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Month</label>
-                  <input
-                    type="month"
-                    value={formMonth}
-                    onChange={e => setFormMonth(e.target.value)}
-                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-
-                {/* ── Projected slabs ── */}
-                <div className="mb-5">
-                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">📊 Projected Slabs</p>
-                  <div className="border border-blue-100 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-blue-50 text-[10px] font-semibold uppercase text-blue-600">
-                          <th className="px-3 py-2 text-left w-12">Slab</th>
-                          <th className="px-3 py-2 text-left">Target Amount (₹)</th>
-                          <th className="px-3 py-2 text-left">Commission Rate (%)</th>
-                          <th className="px-3 py-2 text-right text-blue-400">Payout preview</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-blue-50">
-                        {mgrProjSlabs.map((s, i) => (
-                          <tr key={i}>
-                            <td className="px-3 py-2 text-xs font-bold text-blue-400">S{i + 1}</td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                value={s.targetAmount}
-                                onChange={e => setMgrProjSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, targetAmount: e.target.value } : r))}
-                                placeholder="e.g. 7200000"
-                                className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
-                              />
-                              {s.targetAmount && <p className="text-[10px] text-blue-500 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={s.commissionPct}
-                                onChange={e => setMgrProjSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, commissionPct: e.target.value } : r))}
-                                placeholder="e.g. 0.1"
-                                className="w-full border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
-                              />
-                            </td>
-                            <td className="px-3 py-2 text-right text-xs text-blue-500 font-semibold">
-                              {s.targetAmount && s.commissionPct
-                                ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)
-                                : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* ── Realised slabs ── */}
-                <div className="mb-5">
-                  <p className="text-xs font-bold text-green-700 uppercase tracking-wide mb-2">✅ Realised Slabs</p>
-                  <div className="border border-green-100 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-green-50 text-[10px] font-semibold uppercase text-green-600">
-                          <th className="px-3 py-2 text-left w-12">Slab</th>
-                          <th className="px-3 py-2 text-left">Target Amount (₹)</th>
-                          <th className="px-3 py-2 text-left">Commission Rate (%)</th>
-                          <th className="px-3 py-2 text-right text-green-400">Payout preview</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-green-50">
-                        {mgrRealSlabs.map((s, i) => (
-                          <tr key={i}>
-                            <td className="px-3 py-2 text-xs font-bold text-green-400">S{i + 1}</td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                value={s.targetAmount}
-                                onChange={e => setMgrRealSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, targetAmount: e.target.value } : r))}
-                                placeholder="e.g. 5700000"
-                                className="w-full border border-green-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
-                              />
-                              {s.targetAmount && <p className="text-[10px] text-green-500 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={s.commissionPct}
-                                onChange={e => setMgrRealSlabs(prev => prev.map((r, idx) => idx === i ? { ...r, commissionPct: e.target.value } : r))}
-                                placeholder="e.g. 0.2"
-                                className="w-full border border-green-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-300"
-                              />
-                            </td>
-                            <td className="px-3 py-2 text-right text-xs text-green-500 font-semibold">
-                              {s.targetAmount && s.commissionPct
-                                ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)
-                                : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <button
-                  onClick={async () => {
-                    setMgrError('')
-                    setMgrSuccess(false)
-                    const projFilled = mgrProjSlabs.filter(s => s.targetAmount || s.commissionPct)
-                    const realFilled = mgrRealSlabs.filter(s => s.targetAmount || s.commissionPct)
-                    if (!projFilled.length && !realFilled.length) { setMgrError('Enter at least one slab.'); return }
-                    const toSave = arr => arr
-                      .filter(s => s.targetAmount && s.commissionPct)
-                      .map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) }))
-                    setMgrSubmitting(true)
-                    try {
-                      await assignManagerTarget({
-                        email: selected.Email,
-                        month: formMonth,
-                        projectedSlabs: toSave(mgrProjSlabs),
-                        realisedSlabs:  toSave(mgrRealSlabs),
-                        program: mgrProgram,
-                      }, user.email)
-                      setMgrSuccess(true)
-                      await new Promise(r => setTimeout(r, 1200))
-                      reloadManagerHistory()
-                    } catch (err) {
-                      setMgrError(err?.message ?? 'Failed to save.')
-                    } finally {
-                      setMgrSubmitting(false)
-                    }
-                  }}
-                  disabled={mgrSubmitting}
-                  className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors"
-                >
-                  {mgrSubmitting ? 'Saving…' : 'Save Manager Targets'}
-                </button>
+                )}
               </div>
+
+              {/* ── Per-program assignment cards (all visible at once) ── */}
+              {MANAGER_TARGET_PROGRAMS.map(prog => {
+                const pid     = prog.id
+                const ps      = programSlabs[pid] || { proj: INIT_MGR_SLABS(), real: INIT_MGR_SLABS() }
+                const pState  = getProgState(pid)
+                const isSaved = mgrHistory.some(t =>
+                  String(t.Month || '').trim() === formMonth && (t.programFilter || 'all') === pid
+                )
+
+                const COLORS = {
+                  all:   { border: 'border-gray-200',   hdr: 'bg-gray-50 border-gray-100',     badge: 'bg-gray-100 text-gray-700',       btn: 'bg-gray-800 hover:bg-gray-900',   projHdr: 'bg-blue-50',  realHdr: 'bg-green-50'  },
+                  genai: { border: 'border-purple-200', hdr: 'bg-purple-50 border-purple-100', badge: 'bg-purple-100 text-purple-700',   btn: 'bg-purple-600 hover:bg-purple-700', projHdr: 'bg-purple-50', realHdr: 'bg-purple-50/50' },
+                  pml:   { border: 'border-blue-200',   hdr: 'bg-blue-50 border-blue-100',     badge: 'bg-blue-100 text-blue-700',       btn: 'bg-blue-600 hover:bg-blue-700',   projHdr: 'bg-blue-50',  realHdr: 'bg-blue-50/50' },
+                  bel:   { border: 'border-teal-200',   hdr: 'bg-teal-50 border-teal-100',     badge: 'bg-teal-100 text-teal-700',       btn: 'bg-teal-600 hover:bg-teal-700',   projHdr: 'bg-teal-50',  realHdr: 'bg-teal-50/50' },
+                }[pid] ?? { border: 'border-gray-200', hdr: 'bg-gray-50 border-gray-100', badge: 'bg-gray-100 text-gray-600', btn: 'bg-gray-700 hover:bg-gray-800', projHdr: 'bg-blue-50', realHdr: 'bg-green-50' }
+
+                const updateProjSlab = (i, field, val) =>
+                  setProgramSlabs(prev => ({ ...prev, [pid]: { ...prev[pid], proj: prev[pid].proj.map((r, idx) => idx === i ? { ...r, [field]: val } : r) } }))
+                const updateRealSlab = (i, field, val) =>
+                  setProgramSlabs(prev => ({ ...prev, [pid]: { ...prev[pid], real: prev[pid].real.map((r, idx) => idx === i ? { ...r, [field]: val } : r) } }))
+
+                const handleSave = async () => {
+                  setProgState(pid, { error: '', success: false, submitting: true })
+                  const toSave = arr => arr.filter(s => s.targetAmount && s.commissionPct)
+                    .map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) }))
+                  const proj = toSave(ps.proj)
+                  const real = toSave(ps.real)
+                  if (!proj.length && !real.length) {
+                    setProgState(pid, { error: 'Enter at least one slab.', submitting: false }); return
+                  }
+                  try {
+                    await assignManagerTarget({
+                      email: selected.Email,
+                      month: formMonth,
+                      projectedSlabs: proj,
+                      realisedSlabs:  real,
+                      program: pid,
+                    }, user.email)
+                    setProgState(pid, { success: true, submitting: false })
+                    clearCache()
+                    await new Promise(r => setTimeout(r, 1200))
+                    reloadManagerHistory()
+                  } catch (err) {
+                    setProgState(pid, { error: err?.message ?? 'Failed to save.', submitting: false })
+                  }
+                }
+
+                const SlabInputTable = ({ slabs, onUpdate, accentClass }) => (
+                  <div className={`border rounded-xl overflow-hidden ${accentClass}`}>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className={`text-[10px] font-semibold uppercase ${accentClass} border-b`}>
+                          <th className="px-3 py-2 text-left w-10 text-gray-400">S#</th>
+                          <th className="px-3 py-2 text-left text-gray-500">Target Amount (₹)</th>
+                          <th className="px-3 py-2 text-left text-gray-500">Commission %</th>
+                          <th className="px-3 py-2 text-right text-gray-400">Payout</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {slabs.map((s, i) => (
+                          <tr key={i} className="bg-white">
+                            <td className="px-3 py-1.5 text-xs font-bold text-gray-300">S{i+1}</td>
+                            <td className="px-3 py-1.5">
+                              <input type="number" value={s.targetAmount}
+                                onChange={e => onUpdate(i, 'targetAmount', e.target.value)}
+                                placeholder="e.g. 7200000"
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                              {s.targetAmount && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input type="number" step="0.01" value={s.commissionPct}
+                                onChange={e => onUpdate(i, 'commissionPct', e.target.value)}
+                                placeholder="e.g. 0.1"
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                            </td>
+                            <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-500">
+                              {s.targetAmount && s.commissionPct ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+
+                return (
+                  <div key={pid} className={`bg-white rounded-xl border ${COLORS.border} overflow-hidden`}>
+                    {/* Card header */}
+                    <div className={`px-5 py-3.5 border-b ${COLORS.hdr} flex items-center justify-between`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${COLORS.badge}`}>{prog.label}</span>
+                        {isSaved && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-green-600">
+                            <CheckCircle size={11} /> saved
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-400">
+                          {pid === 'all' ? 'All deals regardless of Course' : `Deals where Course contains "${prog.label}" keywords`}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="px-5 py-4 space-y-4">
+                      {/* Projected + Realised side by side */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-1.5">📊 Projected Slabs <span className="font-normal text-gray-400 normal-case">(Team Sale Value)</span></p>
+                          <SlabInputTable slabs={ps.proj} onUpdate={updateProjSlab} accentClass="border-blue-100" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-green-600 uppercase tracking-wide mb-1.5">✅ Realised Slabs <span className="font-normal text-gray-400 normal-case">(Collected Revenue)</span></p>
+                          <SlabInputTable slabs={ps.real} onUpdate={updateRealSlab} accentClass="border-green-100" />
+                        </div>
+                      </div>
+
+                      {/* Feedback + Save */}
+                      {pState.success && (
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2">
+                          <CheckCircle size={14} className="text-green-600" />
+                          <p className="text-xs text-green-700 font-medium">{prog.label} targets saved for {formMonth}.</p>
+                        </div>
+                      )}
+                      {pState.error && (
+                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2">{pState.error}</p>
+                      )}
+                      <button
+                        onClick={handleSave}
+                        disabled={pState.submitting}
+                        className={`w-full ${COLORS.btn} disabled:opacity-50 text-white font-semibold text-sm rounded-xl px-4 py-2.5 transition-colors`}
+                      >
+                        {pState.submitting ? `Saving ${prog.label}…` : `Save ${prog.label} Targets`}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <>

@@ -228,18 +228,37 @@ export const getDealsGroupedForTeam = async (emails, month) => {
   }
 }
 
-// All deals for every member in the manager's org subtree (any role, no commission-period filter)
+// All deals for every member in the manager's org subtree (any role, no commission-period filter).
+// Includes the manager's own deals, and also catches deals tagged by Team column name.
 export const getTeamDealsForMonth = async (rootEmail, month) => {
   const [users, deals] = await Promise.all([
     appsScript.getSheet('Users'),
     appsScript.getSalesSheet(),
   ])
-  const allEmails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
-  const lower     = new Set(allEmails.map(e => (e || '').trim().toLowerCase()))
-  return deals.filter(d =>
-    lower.has((d.Email || '').trim().toLowerCase()) &&
-    (!month || d.Month === month)
+  const rootLower = (rootEmail || '').trim().toLowerCase()
+
+  // Include rootEmail itself + all subtree members
+  const allEmails = collectEmails(users, rootEmail)   // no exclusion of rootEmail
+  const emailSet  = new Set(allEmails.map(e => (e || '').trim().toLowerCase()))
+
+  // Also find the manager's Team name(s) from the Users sheet — handles deals
+  // that are tagged by team name in the Team column rather than exact agent email.
+  // Collect team names from all subtree members (including manager themselves).
+  const subtreeTeamNames = new Set(
+    allEmails
+      .map(e => {
+        const u = users.find(u2 => (u2.Email || '').trim().toLowerCase() === (e || '').trim().toLowerCase())
+        return (u?.Team || '').trim().toLowerCase()
+      })
+      .filter(Boolean)
   )
+
+  return deals.filter(d => {
+    const emailMatch = emailSet.has((d.Email || '').trim().toLowerCase())
+    const teamMatch  = subtreeTeamNames.size > 0 && subtreeTeamNames.has((d.Team || '').trim().toLowerCase())
+    const monthMatch = !month || d.Month === month
+    return (emailMatch || teamMatch) && monthMatch
+  })
 }
 
 export const getDealsForSubtree = async (emails, month) => {
