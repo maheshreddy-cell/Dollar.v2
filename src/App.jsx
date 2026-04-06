@@ -25,6 +25,7 @@ const Permissions      = lazy(() => import('./pages/Permissions'))
 const Kickers          = lazy(() => import('./pages/Kickers'))
 const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
 const Usage            = lazy(() => import('./pages/Usage'))
+const AIHelp           = lazy(() => import('./pages/AIHelp'))
 
 // Prefetch all page chunks in the background after login so navigation is instant
 const LAZY_CHUNKS = [
@@ -40,6 +41,7 @@ const LAZY_CHUNKS = [
   () => import('./pages/Permissions'),
   () => import('./pages/Kickers'),
   () => import('./pages/AnnounceKicker'),
+  () => import('./pages/AIHelp'),
 ]
 
 function PrefetchChunks() {
@@ -182,6 +184,7 @@ export default function App() {
               }
             />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/ai-help" element={<AIHelp />} />
             <Route
               path="/kickers"
               element={

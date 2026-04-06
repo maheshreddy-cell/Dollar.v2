@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap, Megaphone, Activity,
+  BarChart2, GitBranch, Settings, DollarSign, MessageCircle, Star, Shield, Zap, Megaphone, Activity, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -41,6 +41,7 @@ const NAV_BASE = [
   {
     label: 'Support',
     items: [
+      { to: '/ai-help', label: 'AI Help', icon: Sparkles, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
       { to: '/faq', label: 'FAQ', icon: MessageCircle, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
     ],
   },
