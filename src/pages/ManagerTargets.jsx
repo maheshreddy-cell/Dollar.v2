@@ -284,6 +284,15 @@ export default function ManagerTargets() {
     ])
       .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
         // teamDeals = all deals from every subtree member (any role) for this month
+        // DEBUG: log unique Course values so we can verify keyword matching
+        if (process.env.NODE_ENV !== 'production') {
+          const courses = [...new Set(teamDeals.map(d => d.Course || '(empty)'))]
+          console.log('[ManagerTargets] teamDeals count:', teamDeals.length, '| unique Course values:', courses)
+          console.log('[ManagerTargets] GenAI deals:', teamDeals.filter(d => {
+            const c = (d.Course || '').toLowerCase()
+            return ['genai','gen ai','generative ai','gen-ai'].some(kw => c.includes(kw))
+          }).map(d => ({ email: d.Email, course: d.Course, value: d.TotalValue })))
+        }
         setAllTeamDeals(teamDeals)
 
         // Sort targets: largest highest-projected-slab first (PML before GenAI etc.)
