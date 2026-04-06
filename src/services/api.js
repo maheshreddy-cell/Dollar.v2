@@ -228,6 +228,20 @@ export const getDealsGroupedForTeam = async (emails, month) => {
   }
 }
 
+// All deals for every member in the manager's org subtree (any role, no commission-period filter)
+export const getTeamDealsForMonth = async (rootEmail, month) => {
+  const [users, deals] = await Promise.all([
+    appsScript.getSheet('Users'),
+    appsScript.getSalesSheet(),
+  ])
+  const allEmails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
+  const lower     = new Set(allEmails.map(e => (e || '').trim().toLowerCase()))
+  return deals.filter(d =>
+    lower.has((d.Email || '').trim().toLowerCase()) &&
+    (!month || d.Month === month)
+  )
+}
+
 export const getDealsForSubtree = async (emails, month) => {
   const deals = await appsScript.getSalesSheet()
   const lower = emails.map(e => e.trim().toLowerCase())

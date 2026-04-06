@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, filterDealsByProgram, MANAGER_TARGET_PROGRAMS } from '../services/api'
+import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, getTeamDealsForMonth, filterDealsByProgram, MANAGER_TARGET_PROGRAMS } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle, Award } from 'lucide-react'
 
@@ -280,12 +280,10 @@ export default function ManagerTargets() {
       getLeaderboard(email, month),
       getKickers().catch(() => []),
       getDeals().catch(() => []),
-      getDeals(null, month).catch(() => []),
+      getTeamDealsForMonth(email, month).catch(() => []),
     ])
-      .then(([targets, agents, allKickers, allDeals, allMonthDeals]) => {
-        // ── Only keep this month's deals that belong to THIS manager's team agents ──
-        const teamEmails = new Set(agents.map(a => (a.email || '').trim().toLowerCase()))
-        const teamDeals  = allMonthDeals.filter(d => teamEmails.has((d.Email || '').trim().toLowerCase()))
+      .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
+        // teamDeals = all deals from every subtree member (any role) for this month
         setAllTeamDeals(teamDeals)
 
         // Sort targets: largest highest-projected-slab first (PML before GenAI etc.)

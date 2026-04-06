@@ -136,11 +136,11 @@ async function callPost(params, body = {}) {
 
 // ─── Real sheet column mapper ─────────────────────────────────────────────────
 
-// Flexible column getter — handles trailing/leading spaces in header names
+// Flexible column getter — handles trailing/leading spaces AND case differences in header names
 function col(raw, name) {
   if (raw[name] !== undefined) return raw[name]
-  const trimmed = name.trim()
-  const key = Object.keys(raw).find(k => k.trim() === trimmed)
+  const low = name.trim().toLowerCase()
+  const key = Object.keys(raw).find(k => k.trim().toLowerCase() === low)
   return key !== undefined ? raw[key] : undefined
 }
 
