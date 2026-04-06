@@ -262,6 +262,7 @@ export default function ManagerTargets() {
   const [managerTargets, setManagerTargets] = useState([])
   const [allTeamDeals, setAllTeamDeals]     = useState([])
   const [teamData, setTeamData]             = useState(null)
+  const [debugInfo, setDebugInfo]           = useState(null) // temp: remove after fix
   const [kickerEarnings, setKickerEarnings] = useState(0)
   const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
   const [loading, setLoading]             = useState(true)
@@ -284,15 +285,19 @@ export default function ManagerTargets() {
     ])
       .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
         // teamDeals = all deals from every subtree member (any role) for this month
-        // DEBUG: log unique Course values so we can verify keyword matching
-        if (process.env.NODE_ENV !== 'production') {
-          const courses = [...new Set(teamDeals.map(d => d.Course || '(empty)'))]
-          console.log('[ManagerTargets] teamDeals count:', teamDeals.length, '| unique Course values:', courses)
-          console.log('[ManagerTargets] GenAI deals:', teamDeals.filter(d => {
-            const c = (d.Course || '').toLowerCase()
-            return ['genai','gen ai','generative ai','gen-ai'].some(kw => c.includes(kw))
-          }).map(d => ({ email: d.Email, course: d.Course, value: d.TotalValue })))
-        }
+        // Collect debug info: unique Course values + what GenAI filter actually matches
+        const uniqueCourses = [...new Set(teamDeals.map(d => (d.Course || '').trim() || '(blank)'))]
+        const genaiDeals = teamDeals.filter(d => {
+          const c = (d.Course || '').toLowerCase()
+          return ['genai','gen ai','generative ai','gen-ai'].some(kw => c.includes(kw))
+        })
+        setDebugInfo({
+          total: teamDeals.length,
+          courses: uniqueCourses,
+          genaiCount: genaiDeals.length,
+          genaiValue: genaiDeals.reduce((s, d) => s + (d.TotalValue || 0), 0),
+          teamEmails: [...new Set(teamDeals.map(d => d.Email))],
+        })
         setAllTeamDeals(teamDeals)
 
         // Sort targets: largest highest-projected-slab first (PML before GenAI etc.)
@@ -443,6 +448,16 @@ export default function ManagerTargets() {
           </div>
         </div>
       </div>
+
+      {/* ── TEMP DEBUG PANEL — shows Course values from team deals ── */}
+      {debugInfo && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-3 text-xs space-y-1 font-mono">
+          <p className="font-bold text-yellow-800">🔍 Debug: Team Deals for {month}</p>
+          <p className="text-yellow-700">Total deals in pool: <strong>{debugInfo.total}</strong> | Emails: {debugInfo.teamEmails.join(', ')}</p>
+          <p className="text-yellow-700">GenAI matched: <strong>{debugInfo.genaiCount} deals = {formatINR(debugInfo.genaiValue)}</strong></p>
+          <p className="text-yellow-700">Unique Course values: <strong>{debugInfo.courses.join(' | ')}</strong></p>
+        </div>
+      )}
 
       {/* ── No targets banner ── */}
       {managerTargets.length === 0 && (
