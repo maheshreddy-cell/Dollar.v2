@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, MANAGER_TARGET_PROGRAMS, calcManagerCommissionInfo } from '../services/api'
 import MetricsCard   from '../components/MetricsCard'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
@@ -80,6 +80,7 @@ export default function Dashboard() {
   const [drillLoading, setDrillLoading] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all') // 'all'|'Manager'|'Agent'|'PreSales'
   const [psSummary,  setPsSummary]  = useState(null)   // PreSales calls+sales summary
+  const [assignedTargets, setAssignedTargets] = useState([])  // Manager's own targets from seniors
 
   const isManager   = MANAGER_ROLES.includes(effectiveUser?.role)
   const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
@@ -106,6 +107,11 @@ export default function Dashboard() {
     }
 
     if (isManager) {
+      // Load the manager's own assigned targets (from their seniors)
+      getManagerTargets(effectiveUser?.email, month)
+        .then(setAssignedTargets)
+        .catch(() => setAssignedTargets([]))
+
       Promise.all([
         getLeaderboard(effectiveUser?.email, month),
         getTeamSalesAnalytics(effectiveUser?.email, month, effectiveUser?.role === 'Admin'),
@@ -204,11 +210,6 @@ export default function Dashboard() {
 
   const managerCards = [
     {
-      title: 'Team Target',
-      value: formatINR(summary?.totalTarget ?? 0),
-      icon: Target, color: 'blue',
-    },
-    {
       title: 'Team Sale Value',
       value: formatINR(summary?.totalSaleValue ?? 0),
       sub:   'Pipeline (all deals)',
@@ -220,12 +221,6 @@ export default function Dashboard() {
       icon: TrendingUp, color: 'green',
     },
     {
-      title: 'Total Money Made',
-      value: formatINR(summary?.totalMoneyMade ?? 0),
-      sub:   `Commission ${formatINR(summary?.totalCommission ?? 0)} · T+2 ${formatINR(summary?.totalT2Amount ?? 0)}`,
-      icon: DollarSign, color: 'purple', highlight: false,
-    },
-    {
       title: 'Achievement %',
       value: `${achievedPct.toFixed(1)}%`,
       sub:   gap > 0 ? `${formatINR(gap)} to go` : 'Target hit! 🎉',
@@ -235,7 +230,6 @@ export default function Dashboard() {
     {
       title: 'Projected %',
       value: `${projectedPct.toFixed(1)}%`,
-      sub:   'If full pipeline pays',
       icon: BarChart2,
       color: projectedPct >= 100 ? 'green' : projectedPct >= 75 ? 'orange' : 'blue',
     },
@@ -757,8 +751,100 @@ export default function Dashboard() {
             </div>
           </FadeIn>
 
+          {/* ── Assigned Targets (from seniors) ── */}
+          {assignedTargets.length > 0 && (
+            <FadeIn delay={40}>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">🎯 Your Assigned Targets</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Set by your senior — {month}</p>
+                  </div>
+                  <a href="/manager-targets" className="text-xs font-semibold text-brand-600 hover:underline">
+                    Full view →
+                  </a>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {assignedTargets.map(t => {
+                    const pid    = t.programFilter || 'all'
+                    const prog   = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid)
+                    const pSlabs = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+                    const rSlabs = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+                    const pTop   = pSlabs.length ? Math.max(...pSlabs.map(s => Number(s.targetAmount))) : 0
+                    const rTop   = rSlabs.length ? Math.max(...rSlabs.map(s => Number(s.targetAmount))) : 0
+                    const sv     = summary?.totalSaleValue ?? 0
+                    const ac     = summary?.totalAchieved  ?? 0
+                    const pPct   = pTop > 0 ? Math.min((sv / pTop) * 100, 100) : 0
+                    const rPct   = rTop > 0 ? Math.min((ac / rTop) * 100, 100) : 0
+                    const pComm  = calcManagerCommissionInfo(sv, pSlabs).commission
+                    const rComm  = calcManagerCommissionInfo(ac, rSlabs).commission
+                    const BADGE  = { all: 'bg-gray-100 text-gray-600', genai: 'bg-purple-100 text-purple-700', pml: 'bg-blue-100 text-blue-700', bel: 'bg-teal-100 text-teal-700' }[pid] ?? 'bg-gray-100 text-gray-600'
+                    return (
+                      <div key={pid} className="px-5 py-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${BADGE}`}>{prog?.label ?? pid}</span>
+                          {(pComm > 0 || rComm > 0) && (
+                            <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-100 px-2 py-0.5 rounded-full">
+                              Commission: {formatINR(pComm + rComm)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Projected */}
+                          {pSlabs.length > 0 && (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[11px] text-gray-400">
+                                <span className="font-semibold text-blue-600 uppercase tracking-wide">Projected</span>
+                                <span>Top slab {formatINR(pTop)}</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pPct}%` }} />
+                              </div>
+                              <div className="flex justify-between text-[11px]">
+                                <span className="text-gray-500">{formatINR(sv)} pipeline</span>
+                                <span className={`font-bold ${pPct >= 100 ? 'text-green-600' : 'text-blue-600'}`}>{pPct.toFixed(1)}%</span>
+                              </div>
+                              {pSlabs.map((s, i) => (
+                                <div key={i} className="flex justify-between text-[10px] text-gray-400 bg-gray-50 rounded px-2 py-1">
+                                  <span>Slab {i+1}: {formatINR(Number(s.targetAmount))}</span>
+                                  <span className="font-semibold">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Realised */}
+                          {rSlabs.length > 0 && (
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[11px] text-gray-400">
+                                <span className="font-semibold text-green-600 uppercase tracking-wide">Realised</span>
+                                <span>Top slab {formatINR(rTop)}</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${rPct}%` }} />
+                              </div>
+                              <div className="flex justify-between text-[11px]">
+                                <span className="text-gray-500">{formatINR(ac)} achieved</span>
+                                <span className={`font-bold ${rPct >= 100 ? 'text-green-600' : 'text-green-600'}`}>{rPct.toFixed(1)}%</span>
+                              </div>
+                              {rSlabs.map((s, i) => (
+                                <div key={i} className="flex justify-between text-[10px] text-gray-400 bg-gray-50 rounded px-2 py-1">
+                                  <span>Slab {i+1}: {formatINR(Number(s.targetAmount))}</span>
+                                  <span className="font-semibold">{s.commissionPct}% → {formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </FadeIn>
+          )}
+
           {/* ── KPI cards — staggered fade-in ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {managerCards.map((card, i) => (
               <FadeIn key={card.title} delay={i * 40}>
                 <MetricsCard {...card} />
