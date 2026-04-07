@@ -1081,18 +1081,28 @@ function editDistance(a, b) {
 
 function parseMgrSlabsJson(json) {
   try {
-    const arr = JSON.parse(json || '[]')
-    return Array.isArray(arr) ? arr : []
+    const parsed = JSON.parse(json || '[]')
+    if (Array.isArray(parsed)) return parsed
+    return Array.isArray(parsed.slabs) ? parsed.slabs : []
   } catch { return [] }
+}
+
+function parseMgrPersonalContrib(json) {
+  try {
+    const parsed = JSON.parse(json || '[]')
+    if (Array.isArray(parsed)) return 0
+    return Number(parsed.personalContribution ?? 0)
+  } catch { return 0 }
 }
 
 function toMgrRecord(r) {
   return {
     ...r,
-    Month:          normalizeMonth(r.Month),
-    projectedSlabs: parseMgrSlabsJson(r.ProjectedSlabs),
-    realisedSlabs:  parseMgrSlabsJson(r.RealisedSlabs),
-    programFilter:  String(r.ProgramFilter || 'all').trim().toLowerCase() || 'all',
+    Month:               normalizeMonth(r.Month),
+    projectedSlabs:      parseMgrSlabsJson(r.ProjectedSlabs),
+    realisedSlabs:       parseMgrSlabsJson(r.RealisedSlabs),
+    personalContribution: parseMgrPersonalContrib(r.ProjectedSlabs),
+    programFilter:       String(r.ProgramFilter || 'all').trim().toLowerCase() || 'all',
   }
 }
 
@@ -1137,12 +1147,13 @@ export const getManagerTargetHistory = async (managerEmail) => {
 export const assignManagerTarget = async (data, assignerEmail) => {
   const prog = (data.program && data.program !== 'all') ? `_${data.program}` : ''
   const key  = `mgr_${data.email.trim().toLowerCase()}_${data.month}${prog}`
+  const pc = Number(data.personalContribution ?? 0)
   const row  = [
     key,
     data.email.trim().toLowerCase(),
     data.month,
-    JSON.stringify(data.projectedSlabs ?? []),
-    JSON.stringify(data.realisedSlabs  ?? []),
+    JSON.stringify({ slabs: data.projectedSlabs ?? [], personalContribution: pc }),
+    JSON.stringify(data.realisedSlabs ?? []),
     assignerEmail,
     new Date().toISOString(),
     data.program ?? 'all',

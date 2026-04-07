@@ -116,6 +116,8 @@ export default function AssignTargets() {
   const [mgrRealSlabs,    setMgrRealSlabs]   = useState(INIT_MGR_SLABS)
   const [mgrProgram,      setMgrProgram]     = useState('all')
   const [programSlabs,    setProgramSlabs]   = useState(initAllProgramSlabs)   // multi-program state
+  // Personal contribution per program: { [programId]: string }
+  const [progContrib,     setProgContrib]    = useState(() => Object.fromEntries(MANAGER_TARGET_PROGRAMS.map(p => [p.id, ''])))
   const [mgrHistory,      setMgrHistory]     = useState([])
   const [mgrHistoryLoad,  setMgrHistoryLoad] = useState(false)
   const [mgrSubmitting,   setMgrSubmitting]  = useState(false)
@@ -284,6 +286,7 @@ export default function AssignTargets() {
         loadSlabsForProgram(history, formMonth, mgrProgram)
         // Pre-fill ALL program slabs for multi-program view
         const newSlabs = initAllProgramSlabs()
+        const newContrib = Object.fromEntries(MANAGER_TARGET_PROGRAMS.map(p => [p.id, '']))
         for (const p of MANAGER_TARGET_PROGRAMS) {
           const match = history.find(t =>
             String(t.Month || '').trim() === formMonth &&
@@ -294,9 +297,17 @@ export default function AssignTargets() {
               proj: parseMgrSlabs(match.ProjectedSlabs),
               real: parseMgrSlabs(match.RealisedSlabs),
             }
+            // Read back personalContribution from ProjectedSlabs wrapper
+            try {
+              const parsed = JSON.parse(match.ProjectedSlabs || '[]')
+              if (!Array.isArray(parsed) && parsed.personalContribution) {
+                newContrib[p.id] = String(parsed.personalContribution)
+              }
+            } catch { /* ignore */ }
           }
         }
         setProgramSlabs(newSlabs)
+        setProgContrib(newContrib)
         setProgSaveState({})
       })
       .catch(() => {})
@@ -778,9 +789,10 @@ export default function AssignTargets() {
                     await assignManagerTarget({
                       email: selected.Email,
                       month: formMonth,
-                      projectedSlabs: proj,
-                      realisedSlabs:  real,
-                      program: pid,
+                      projectedSlabs:      proj,
+                      realisedSlabs:       real,
+                      program:             pid,
+                      personalContribution: Number(progContrib[pid] || 0),
                     }, user.email)
                     setProgState(pid, { success: true, submitting: false })
                     clearCache()
@@ -809,6 +821,33 @@ export default function AssignTargets() {
                     </div>
 
                     <div className="px-5 py-4 space-y-4">
+
+                      {/* ── Personal Contribution ── */}
+                      <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-indigo-800">👤 Personal Contribution (₹)</p>
+                          <p className="text-[11px] text-indigo-500 mt-0.5">Manager's own sales added on top of team deals</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-indigo-400 font-semibold">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={progContrib[pid] || ''}
+                              onChange={e => setProgContrib(prev => ({ ...prev, [pid]: e.target.value }))}
+                              placeholder="0"
+                              className="w-36 pl-6 pr-3 py-2 border border-indigo-200 bg-white rounded-lg text-sm font-semibold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            />
+                          </div>
+                          {progContrib[pid] > 0 && (
+                            <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg whitespace-nowrap">
+                              {formatINR(Number(progContrib[pid]))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Projected + Realised side by side */}
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div>

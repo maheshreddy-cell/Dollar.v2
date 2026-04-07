@@ -377,19 +377,21 @@ export default function ManagerTargets() {
 
   // Compute total commission + isPartial across ALL active program targets
   const totalCommission = managerTargets.reduce((sum, t) => {
-    const d  = filterDealsByProgram(allTeamDeals, t.programFilter)
-    const sv = d.reduce((s, x) => s + (x.TotalValue || 0), 0)
-    const ac = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0)
-    const sP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-    const sR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
+    const pc  = Number(t.personalContribution ?? 0)
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) + pc
+    const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return sum + calcManagerCommissionInfo(sv, sP).commission + calcManagerCommissionInfo(ac, sR).commission
   }, 0) + indivInfo.commission
   const totalIsPartial = managerTargets.some(t => {
-    const d  = filterDealsByProgram(allTeamDeals, t.programFilter)
-    const sv = d.reduce((s, x) => s + (x.TotalValue || 0), 0)
-    const ac = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0)
-    const sP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-    const sR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
+    const pc  = Number(t.personalContribution ?? 0)
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) + pc
+    const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return calcManagerCommissionInfo(sv, sP).isPartial || calcManagerCommissionInfo(ac, sR).isPartial
   })
 
@@ -512,8 +514,9 @@ export default function ManagerTargets() {
         const pid        = t.programFilter || 'all'
         const prog       = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid) ?? MANAGER_TARGET_PROGRAMS[0]
         const progDeals  = filterDealsByProgram(allTeamDeals, pid)
-        const progSV     = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
-        const progAch    = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+        const pc         = Number(t.personalContribution ?? 0)
+        const progSV     = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
+        const progAch    = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0) + pc
         const sortAsc    = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
         const pSlabs     = sortAsc(t.projectedSlabs)
         const rSlabs     = sortAsc(t.realisedSlabs)
@@ -541,6 +544,11 @@ export default function ManagerTargets() {
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${BADGE}`}>
                 {progDeals.length} deal{progDeals.length !== 1 ? 's' : ''}
               </span>
+              {pc > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                  👤 +{formatINR(pc)} personal
+                </span>
+              )}
               {tComm > 0 && (
                 <span className="ml-auto text-xs font-bold text-gray-700">
                   Commission: {formatINR(tComm)}
@@ -672,8 +680,9 @@ export default function ManagerTargets() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide shrink-0">Total Incentive Breakdown</p>
           {managerTargets.map(t => {
             const progDeals = filterDealsByProgram(allTeamDeals, t.programFilter)
-            const sv = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
-            const ac = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+            const pc  = Number(t.personalContribution ?? 0)
+            const sv  = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
+            const ac  = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0) + pc
             const slP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
             const slR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
             const comm = calcManagerCommissionInfo(sv, slP).commission + calcManagerCommissionInfo(ac, slR).commission
