@@ -379,8 +379,8 @@ export default function ManagerTargets() {
   const totalCommission = managerTargets.reduce((sum, t) => {
     const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
     const pc  = Number(t.personalContribution ?? 0)
-    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc
-    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) + pc
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc   // projected: add contribution
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) // realised: actual only
     const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return sum + calcManagerCommissionInfo(sv, sP).commission + calcManagerCommissionInfo(ac, sR).commission
@@ -389,7 +389,7 @@ export default function ManagerTargets() {
     const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
     const pc  = Number(t.personalContribution ?? 0)
     const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc
-    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) + pc
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0)
     const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return calcManagerCommissionInfo(sv, sP).isPartial || calcManagerCommissionInfo(ac, sR).isPartial
@@ -515,8 +515,9 @@ export default function ManagerTargets() {
         const prog       = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid) ?? MANAGER_TARGET_PROGRAMS[0]
         const progDeals  = filterDealsByProgram(allTeamDeals, pid)
         const pc         = Number(t.personalContribution ?? 0)
+        // Personal contribution adds to projected pipeline only — realised must be actual paid deals
         const progSV     = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
-        const progAch    = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0) + pc
+        const progAch    = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
         const sortAsc    = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
         const pSlabs     = sortAsc(t.projectedSlabs)
         const rSlabs     = sortAsc(t.realisedSlabs)
@@ -682,7 +683,7 @@ export default function ManagerTargets() {
             const progDeals = filterDealsByProgram(allTeamDeals, t.programFilter)
             const pc  = Number(t.personalContribution ?? 0)
             const sv  = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
-            const ac  = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0) + pc
+            const ac  = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
             const slP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
             const slR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
             const comm = calcManagerCommissionInfo(sv, slP).commission + calcManagerCommissionInfo(ac, slR).commission
