@@ -379,8 +379,8 @@ export default function ManagerTargets() {
   const totalCommission = managerTargets.reduce((sum, t) => {
     const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
     const pc  = Number(t.personalContribution ?? 0)
-    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc   // projected: add contribution
-    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) // realised: actual only
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc  // adjSV for proj commission
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) // rawAch for real commission
     const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return sum + calcManagerCommissionInfo(sv, sP).commission + calcManagerCommissionInfo(ac, sR).commission
@@ -515,18 +515,20 @@ export default function ManagerTargets() {
         const prog       = MANAGER_TARGET_PROGRAMS.find(p => p.id === pid) ?? MANAGER_TARGET_PROGRAMS[0]
         const progDeals  = filterDealsByProgram(allTeamDeals, pid)
         const pc         = Number(t.personalContribution ?? 0)
-        // Personal contribution adds to projected pipeline only — realised must be actual paid deals
-        const progSV     = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
-        const progAch    = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+        // rawSV / rawAch = real team numbers shown in stats & "X of Y" display
+        // adjSV          = rawSV + personal contribution, used for slab commission calc only
+        const rawSV      = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+        const adjSV      = rawSV + pc
+        const rawAch     = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
         const sortAsc    = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
         const pSlabs     = sortAsc(t.projectedSlabs)
         const rSlabs     = sortAsc(t.realisedSlabs)
-        const pInfo      = calcManagerCommissionInfo(progSV,  pSlabs)
-        const rInfo      = calcManagerCommissionInfo(progAch, rSlabs)
+        const pInfo      = calcManagerCommissionInfo(adjSV,  pSlabs)   // commission uses adjusted
+        const rInfo      = calcManagerCommissionInfo(rawAch, rSlabs)
         const pTop       = pSlabs.length ? Math.max(...pSlabs.map(s => Number(s.targetAmount))) : 0
         const rTop       = rSlabs.length ? Math.max(...rSlabs.map(s => Number(s.targetAmount))) : 0
-        const pPct       = pTop > 0 ? Math.min((progSV  / pTop) * 100, 999) : 0
-        const rPct       = rTop > 0 ? Math.min((progAch / rTop) * 100, 999) : 0
+        const pPct       = pTop > 0 ? Math.min((adjSV  / pTop) * 100, 999) : 0  // % uses adjusted so bar reflects contribution
+        const rPct       = rTop > 0 ? Math.min((rawAch / rTop) * 100, 999) : 0
         const tComm      = pInfo.commission + rInfo.commission
         const tPartial   = pInfo.isPartial || rInfo.isPartial
         const hasSlabsHere = pSlabs.length > 0 || rSlabs.length > 0
@@ -563,8 +565,8 @@ export default function ManagerTargets() {
               <IntelligenceRow
                 projSlabs={pSlabs}
                 realSlabs={rSlabs}
-                teamSaleValue={progSV}
-                teamAchieved={progAch}
+                teamSaleValue={adjSV}
+                teamAchieved={rawAch}
                 wdInfo={wdInfo}
                 projInfo={pInfo}
                 realInfo={rInfo}
@@ -594,13 +596,16 @@ export default function ManagerTargets() {
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">Team Sale Value</p>
-                      <p className="text-base font-bold text-blue-700">{formatINR(progSV)}</p>
+                      <p className="text-base font-bold text-blue-700">{formatINR(rawSV)}</p>
+                      {pc > 0 && (
+                        <p className="text-[11px] text-indigo-600 mt-0.5 font-medium">+{formatINR(pc)} personal</p>
+                      )}
                     </div>
                   </div>
                   {pTop > 0 && (
                     <div>
                       <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                        <span>Overall achievement</span>
+                        <span>Overall achievement {pc > 0 && <span className="text-indigo-500">(incl. personal)</span>}</span>
                         <span className={`font-bold ${pPct >= 100 ? 'text-green-600' : pPct >= 75 ? 'text-orange-500' : 'text-blue-600'}`}>
                           {pPct.toFixed(1)}%
                         </span>
@@ -611,14 +616,14 @@ export default function ManagerTargets() {
                           style={{ width: `${Math.min(pPct, 100)}%` }}
                         />
                       </div>
-                      {pTop > progSV && (
-                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(pTop - progSV)} more pipeline to hit top slab</p>
+                      {pTop > adjSV && (
+                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(pTop - adjSV)} more pipeline to hit top slab</p>
                       )}
                     </div>
                   )}
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Commission Slabs</p>
-                    <SlabTable slabs={pSlabs} teamMetric={progSV} accentColor="blue" />
+                    <SlabTable slabs={pSlabs} teamMetric={adjSV} accentColor="blue" />
                   </div>
                 </div>
               </div>
@@ -642,7 +647,7 @@ export default function ManagerTargets() {
                     </div>
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">Team Achieved</p>
-                      <p className="text-base font-bold text-green-700">{formatINR(progAch)}</p>
+                      <p className="text-base font-bold text-green-700">{formatINR(rawAch)}</p>
                     </div>
                   </div>
                   {rTop > 0 && (
@@ -659,14 +664,14 @@ export default function ManagerTargets() {
                           style={{ width: `${Math.min(rPct, 100)}%` }}
                         />
                       </div>
-                      {rTop > progAch && (
-                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(rTop - progAch)} more to hit top slab</p>
+                      {rTop > rawAch && (
+                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(rTop - rawAch)} more to hit top slab</p>
                       )}
                     </div>
                   )}
                   <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Commission Slabs</p>
-                    <SlabTable slabs={rSlabs} teamMetric={progAch} accentColor="green" />
+                    <SlabTable slabs={rSlabs} teamMetric={rawAch} accentColor="green" />
                   </div>
                 </div>
               </div>
