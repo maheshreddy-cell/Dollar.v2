@@ -5,8 +5,9 @@ import { getSummary, getManagerTargets, getTeamDealsForMonth, calcManagerCommiss
 import { formatINR } from '../utils/commission'
 import { Send, Bot, User, Zap, TrendingUp, MessageCircle, RefreshCw, Sparkles } from 'lucide-react'
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY
+const GEMINI_MODEL = `gemini-2.0-flash-lite`
+const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const GEMINI_KEY   = import.meta.env.VITE_GEMINI_KEY
 
 // ── Quick prompt chips ────────────────────────────────────────────────────────
 const AGENT_CHIPS = [
@@ -193,22 +194,35 @@ export default function AIHelp() {
         parts: [{ text: m.text }],
       }))
 
-      const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: buildSystemPrompt(effectiveUser?.role, context) }] },
-          contents: history,
-          generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
-        }),
-      })
+      const payload = {
+        system_instruction: { parts: [{ text: buildSystemPrompt(effectiveUser?.role, context) }] },
+        contents: history,
+        generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
+      }
 
-      if (!res.ok) throw new Error(`Gemini error ${res.status}`)
+      // Retry up to 2 times on rate-limit (429)
+      let res, attempts = 0
+      while (attempts < 3) {
+        res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (res.status !== 429) break
+        attempts++
+        if (attempts < 3) await new Promise(r => setTimeout(r, attempts * 2000)) // 2s, 4s
+      }
+
+      if (!res.ok) {
+        if (res.status === 429) throw new Error('Rate limit hit — please wait a moment and try again')
+        if (res.status === 403) throw new Error('API key invalid or quota exceeded')
+        throw new Error(`Gemini error ${res.status}`)
+      }
       const data = await res.json()
       const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I couldn\'t generate a response.'
       setMessages(prev => [...prev, { role: 'model', text: reply }])
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${err.message}. Check your Gemini API key in settings.`, error: true }])
+      setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${err.message}`, error: true }])
     } finally {
       setSending(false)
     }
@@ -395,7 +409,7 @@ export default function AIHelp() {
             <Send size={14} className="text-white" />
           </button>
         </form>
-        <p className="text-[10px] text-gray-400 text-center mt-1.5">Gemini 2.0 Flash · Free · Your data stays in browser</p>
+        <p className="text-[10px] text-gray-400 text-center mt-1.5">Gemini 2.0 Flash Lite · Free · Your data stays in browser</p>
       </div>
 
     </div>
