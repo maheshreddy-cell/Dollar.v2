@@ -35,12 +35,68 @@ const MANAGER_CHIPS = [
   { label: '⚡ Coaching tip',       prompt: 'What should I focus on coaching my team on this week based on their performance?' },
 ]
 
+// ── Simple markdown → JSX renderer ───────────────────────────────────────────
+function renderMarkdown(text) {
+  const lines = text.split('\n')
+  const elements = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (!line.trim()) { elements.push(<br key={i} />); i++; continue }
+    // Heading (## or ###)
+    if (/^#{1,3}\s/.test(line)) {
+      const content = line.replace(/^#{1,3}\s+/, '')
+      elements.push(<p key={i} className="font-semibold text-gray-800 mt-2 mb-0.5">{inlineFormat(content)}</p>)
+      i++; continue
+    }
+    // Bullet (- or * or +)
+    if (/^[\-\*\+]\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^[\-\*\+]\s/.test(lines[i])) {
+        items.push(<li key={i} className="ml-3">{inlineFormat(lines[i].replace(/^[\-\*\+]\s+/, ''))}</li>)
+        i++
+      }
+      elements.push(<ul key={`ul-${i}`} className="list-disc list-inside space-y-0.5 my-1">{items}</ul>)
+      continue
+    }
+    // Numbered list
+    if (/^\d+\.\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(<li key={i} className="ml-3">{inlineFormat(lines[i].replace(/^\d+\.\s+/, ''))}</li>)
+        i++
+      }
+      elements.push(<ol key={`ol-${i}`} className="list-decimal list-inside space-y-0.5 my-1">{items}</ol>)
+      continue
+    }
+    // Normal paragraph
+    elements.push(<p key={i} className="leading-relaxed">{inlineFormat(line)}</p>)
+    i++
+  }
+  return <div className="space-y-1">{elements}</div>
+}
+
+function inlineFormat(text) {
+  // Split on **bold** patterns and render inline
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((part, i) =>
+    /^\*\*[^*]+\*\*$/.test(part)
+      ? <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>
+      : part
+  )
+}
+
 // ── Build system prompt with live user context ────────────────────────────────
 function buildSystemPrompt(role, context) {
   const base = `You are an intelligent sales coach assistant inside Dollar.v2, an EdTech sales commission platform.
 You help sales professionals understand their targets, commissions, and performance.
-Be concise, specific, and use Indian Rupee formatting (₹). Use bullet points. Max 250 words per response.
-Always refer to actual numbers from the context provided. Be encouraging but honest.
+FORMATTING RULES — follow strictly:
+- Use plain text only. No markdown symbols like **, *, #, __, or backticks.
+- Use emoji bullets (→ or •) for lists instead of * or -.
+- Use CAPS for emphasis instead of **bold**.
+- Keep responses under 200 words. Be direct and specific.
+- Always use ₹ for Indian Rupees.
+- Be encouraging but honest.
 Today's date: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.`
 
   if (!context) return base
@@ -267,14 +323,14 @@ export default function AIHelp() {
             <Bot size={14} className="text-brand-600" />
           </div>
         )}
-        <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+        <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isUser
-            ? 'bg-brand-600 text-white rounded-tr-sm'
+            ? 'bg-brand-600 text-white rounded-tr-sm whitespace-pre-wrap'
             : msg.error
               ? 'bg-red-50 border border-red-200 text-red-700 rounded-tl-sm'
               : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'
         }`}>
-          {msg.text}
+          {isUser || msg.error ? msg.text : renderMarkdown(msg.text)}
         </div>
         {isUser && (
           <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center shrink-0 mt-0.5">
