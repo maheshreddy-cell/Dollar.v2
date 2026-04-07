@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus } from 'lucide-react'
+import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS } from '../services/api'
@@ -39,6 +39,8 @@ export default function AssignTargets() {
   const [selected,     setSelected]     = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState('')
+  const [roleFilter,   setRoleFilter]   = useState('All')
+  const [search,       setSearch]       = useState('')
 
   // Form month — independent of navbar so manager can set April while viewing March
   const [formMonth,    setFormMonth]    = useState(contextMonth)
@@ -459,36 +461,84 @@ export default function AssignTargets() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* ── Team list ── */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+
+          {/* Header */}
+          <div className="px-4 pt-3 pb-2 border-b border-gray-100 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Team ({team.length})
             </p>
+
+            {/* Search */}
+            <div className="relative">
+              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or email…"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-ios-gray6 border-0 rounded-ios focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            {/* Role filter pills */}
+            <div className="flex flex-wrap gap-1">
+              {['All', 'Agent', 'PreSales', 'Manager', 'VH'].map(role => {
+                const count = role === 'All'
+                  ? team.length
+                  : team.filter(m => m.Role === role).length
+                if (count === 0 && role !== 'All') return null
+                return (
+                  <button
+                    key={role}
+                    onClick={() => setRoleFilter(role)}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                      roleFilter === role
+                        ? 'bg-brand-500 text-white'
+                        : 'bg-ios-gray6 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {role} {count > 0 && <span className="opacity-70">({count})</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+
+          {/* List */}
           {team.length === 0 ? (
             <p className="text-sm text-gray-400 py-8 text-center">No team members found.</p>
-          ) : (
-            <div className="divide-y divide-gray-50 overflow-y-auto max-h-[75vh]">
-              {team.map(member => (
-                <button
-                  key={member.Email}
-                  onClick={() => { setSelected(member); setFormMonth(contextMonth) }}
-                  className={`w-full text-left px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                    selected?.Email === member.Email ? 'bg-brand-50' : ''
-                  }`}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{member.Name}</p>
-                    <p className="text-xs text-gray-400">{member.Email}</p>
-                    <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {member.Role}
-                    </span>
-                  </div>
-                  <ChevronRight size={16} className={selected?.Email === member.Email ? 'text-brand-600' : 'text-gray-300'} />
-                </button>
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            const filtered = team.filter(m => {
+              const matchRole = roleFilter === 'All' || m.Role === roleFilter
+              const q = search.trim().toLowerCase()
+              const matchSearch = !q || m.Name?.toLowerCase().includes(q) || m.Email?.toLowerCase().includes(q)
+              return matchRole && matchSearch
+            })
+            return filtered.length === 0 ? (
+              <p className="text-sm text-gray-400 py-8 text-center">No results for "{search || roleFilter}"</p>
+            ) : (
+              <div className="divide-y divide-gray-50 overflow-y-auto max-h-[65vh]">
+                {filtered.map(member => (
+                  <button
+                    key={member.Email}
+                    onClick={() => { setSelected(member); setFormMonth(contextMonth) }}
+                    className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors ${
+                      selected?.Email === member.Email ? 'bg-brand-50' : ''
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{member.Name}</p>
+                      <p className="text-xs text-gray-400 truncate">{member.Email}</p>
+                      <span className={`inline-block mt-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[member.Role] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {member.Role}
+                      </span>
+                    </div>
+                    <ChevronRight size={15} className={`shrink-0 ml-2 ${selected?.Email === member.Email ? 'text-brand-500' : 'text-gray-300'}`} />
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── Right pane ── */}
