@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets } from '../services/api'
 import MetricsCard   from '../components/MetricsCard'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
@@ -109,9 +109,11 @@ export default function Dashboard() {
       Promise.all([
         getLeaderboard(effectiveUser?.email, month),
         getTeamSalesAnalytics(effectiveUser?.email, month, effectiveUser?.role === 'Admin'),
+        getManagerTargets(effectiveUser?.email, month),
       ])
-        .then(([rows, anal]) => {
-          const totalTarget     = rows.reduce((s, r) => s + r.target,             0)
+        .then(([rows, anal, mgrTargets]) => {
+          const mgrPersonalContrib = (mgrTargets ?? []).reduce((s, t) => s + Number(t.personalContribution ?? 0), 0)
+          const totalTarget     = rows.reduce((s, r) => s + r.target, 0) + mgrPersonalContrib
           const totalCommission = rows.reduce((s, r) => s + (r.commission  ?? 0), 0)
           const totalAchieved   = anal?.totalAchieved  ?? rows.reduce((s, r) => s + r.achieved, 0)
           const totalSaleValue  = anal?.totalSaleValue ?? rows.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
