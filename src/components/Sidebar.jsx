@@ -7,8 +7,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { ROLE_COLORS } from '../utils/roles'
 
-// Base nav definition — roles arrays are the minimum always-visible set.
-// PermissionsContext can expand them at runtime.
 const NAV_BASE = [
   {
     label: null,
@@ -51,7 +49,6 @@ export default function Sidebar() {
   const { can } = usePermissions()
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
 
-  // Compute effective roles for a nav item (base + any unlocked by permissions)
   function effectiveRoles(item) {
     const roles = [...item.baseRoles]
     if (item.permAdd) {
@@ -63,14 +60,19 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 min-h-screen flex flex-col border-r border-gray-200 bg-white">
+    <aside className="w-60 min-h-screen flex flex-col bg-white border-r border-ios-separator">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-gray-100">
-        <span className="text-xl font-bold text-brand-600 tracking-tight">Dollar.v2</span>
+      <div className="px-5 pt-6 pb-5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-[10px] bg-brand-500 flex items-center justify-center shadow-ios-sm">
+            <DollarSign size={16} className="text-white" strokeWidth={2.5} />
+          </div>
+          <span className="text-[17px] font-semibold text-gray-900 tracking-ios-tight">Dollar.v2</span>
+        </div>
       </div>
 
-      {/* Nav groups */}
-      <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+      {/* Nav */}
+      <nav className="flex-1 px-3 pb-4 space-y-5 overflow-y-auto">
         {NAV_BASE.map((group, gi) => {
           const visible = group.items.filter(item => {
             const roles = effectiveRoles(item)
@@ -81,7 +83,7 @@ export default function Sidebar() {
           return (
             <div key={gi}>
               {group.label && (
-                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-ios-wide text-ios-gray1">
                   {group.label}
                 </p>
               )}
@@ -91,15 +93,23 @@ export default function Sidebar() {
                     key={to}
                     to={to}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      `flex items-center gap-3 px-3 py-2.5 rounded-ios text-[14px] font-medium transition-all duration-150 ${
                         isActive
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-brand-50 text-brand-500'
+                          : 'text-gray-600 hover:bg-ios-gray6 hover:text-gray-900'
                       }`
                     }
                   >
-                    <Icon size={17} className="flex-shrink-0" />
-                    {label}
+                    {({ isActive }) => (
+                      <>
+                        <span className={`w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0 transition-all duration-150 ${
+                          isActive ? 'bg-brand-500 shadow-ios-sm' : 'bg-transparent'
+                        }`}>
+                          <Icon size={15} className={isActive ? 'text-white' : 'text-ios-gray1'} strokeWidth={isActive ? 2 : 1.8} />
+                        </span>
+                        <span className={isActive ? 'text-brand-600 font-semibold' : ''}>{label}</span>
+                      </>
+                    )}
                   </NavLink>
                 ))}
               </div>
@@ -110,12 +120,23 @@ export default function Sidebar() {
 
       {/* User profile footer */}
       {user && (
-        <div className="px-4 py-4 border-t border-gray-100">
-          <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-          <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
-          <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
-            {user.role}
-          </span>
+        <div className="px-4 py-4 border-t border-ios-separator">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center shrink-0 shadow-ios-sm">
+              <span className="text-white text-xs font-semibold">
+                {user.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-gray-900 truncate tracking-ios-tight">{user.name}</p>
+              <p className="text-[11px] text-ios-gray1 truncate">{user.email}</p>
+            </div>
+          </div>
+          <div className="mt-2.5">
+            <span className={`inline-block text-[11px] font-medium px-2.5 py-1 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
+              {user.role}
+            </span>
+          </div>
         </div>
       )}
     </aside>
