@@ -183,7 +183,7 @@ export default function App() {
                 </RequireRole>
               }
             />
-            <Route path="/faq" element={<FAQ />} />
+            <Route path="/faq" element={<Navigate to="/ai-help" replace />} />
             <Route path="/ai-help" element={<AIHelp />} />
             <Route
               path="/kickers"
