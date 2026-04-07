@@ -281,6 +281,10 @@ export default function Team() {
   // Member panel
   const [selectedMember, setSelectedMember] = useState(null)
 
+  // Filter + search
+  const [roleFilter, setRoleFilter] = useState('All')
+  const [teamSearch, setTeamSearch] = useState('')
+
   const roleReassignKey = { SalesHead: 'saleshead_reassign', VH: 'vh_reassign' }
   const canReassign   = CAN_REASSIGN_ROLES.includes(user?.role) && can('enable_reassignment') &&
     (user?.role === 'Admin' || can(roleReassignKey[user?.role] ?? 'enable_reassignment'))
@@ -332,7 +336,13 @@ export default function Team() {
     }
   }
 
-  const displayed = tab === 'direct' ? directTeam : allMembers
+  const baseList = tab === 'direct' ? directTeam : allMembers
+  const displayed = baseList.filter(m => {
+    const matchRole   = roleFilter === 'All' || m.Role === roleFilter
+    const q           = teamSearch.toLowerCase()
+    const matchSearch = !q || m.Name?.toLowerCase().includes(q) || m.Email?.toLowerCase().includes(q)
+    return matchRole && matchSearch
+  })
 
   if (loading) {
     return (
@@ -407,11 +417,11 @@ export default function Team() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        <button onClick={() => setTab('direct')}
+        <button onClick={() => { setTab('direct'); setRoleFilter('All'); setTeamSearch('') }}
           className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'direct' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Users size={14} /> Direct Reports ({directTeam.length})
         </button>
-        <button onClick={() => setTab('all')}
+        <button onClick={() => { setTab('all'); setRoleFilter('All'); setTeamSearch('') }}
           className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <GitBranch size={14} /> All Members ({allMembers.length})
         </button>
@@ -419,19 +429,55 @@ export default function Team() {
 
       {/* Member list */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            {tab === 'direct' ? `Direct Reports (${directTeam.length})` : `All Members in Subtree (${allMembers.length})`}
-          </p>
-          {canOpenPanel && (
-            <p className="text-[10px] text-gray-400 flex items-center gap-1">
-              Click a member to view &amp; edit
+        <div className="px-4 py-3 border-b border-gray-100 space-y-2.5">
+          {/* Title row */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {tab === 'direct' ? `Direct Reports` : `All Members in Subtree`}
+              <span className="ml-1.5 font-normal opacity-60">({displayed.length}{displayed.length !== baseList.length ? ` of ${baseList.length}` : ''})</span>
             </p>
-          )}
+            {canOpenPanel && (
+              <p className="text-[10px] text-gray-400">Click a member to view &amp; edit</p>
+            )}
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={teamSearch}
+              onChange={e => setTeamSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+
+          {/* Role filter pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {['All', 'Agent', 'PreSales', 'Manager', 'VH'].map(role => {
+              const count = role === 'All' ? baseList.length : baseList.filter(m => m.Role === role).length
+              if (count === 0 && role !== 'All') return null
+              return (
+                <button
+                  key={role}
+                  onClick={() => setRoleFilter(role)}
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                    roleFilter === role
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-ios-gray6 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  {role} <span className="opacity-70">({count})</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {displayed.length === 0 ? (
-          <p className="text-sm text-gray-400 py-10 text-center">No members yet.</p>
+          <p className="text-sm text-gray-400 py-10 text-center">
+            {baseList.length === 0 ? 'No members yet.' : 'No members match your filter.'}
+          </p>
         ) : (
           <div className="divide-y divide-gray-50">
             {displayed.map(member => (
