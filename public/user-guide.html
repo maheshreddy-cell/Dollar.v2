@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dollar V2 – User Guide</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+
+    /* ── Cover ── */
+    .cover {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #7c3aed 100%);
+      color: white;
+      padding: 80px 40px 60px;
+      text-align: center;
+    }
+    .cover h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.5px; }
+    .cover .subtitle { font-size: 1.2rem; opacity: 0.85; margin-top: 12px; }
+    .cover .tagline {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 999px;
+      padding: 6px 20px;
+      font-size: 0.9rem;
+      margin-top: 24px;
+    }
+
+    /* ── TOC ── */
+    .toc {
+      max-width: 860px;
+      margin: 40px auto;
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      padding: 32px 40px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .toc h2 { font-size: 1rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+    .toc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .toc-item {
+      display: flex; align-items: center; gap: 10px;
+      background: #f1f5f9; border-radius: 10px; padding: 10px 14px;
+      text-decoration: none; color: #1e293b; font-weight: 500; font-size: 0.9rem;
+      transition: background 0.15s;
+    }
+    .toc-item:hover { background: #e0e7ff; color: #4f46e5; }
+    .toc-icon { font-size: 1.2rem; }
+
+    /* ── Sections ── */
+    .section {
+      max-width: 860px;
+      margin: 0 auto 40px;
+      background: white;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .section-header {
+      padding: 24px 32px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .section-header .emoji { font-size: 1.8rem; }
+    .section-header h2 { font-size: 1.4rem; font-weight: 700; }
+    .section-header p { font-size: 0.88rem; color: #64748b; margin-top: 2px; }
+    .section-body { padding: 8px 32px 32px; }
+
+    /* colour themes */
+    .blue  .section-header { background: linear-gradient(90deg,#eff6ff,#dbeafe); }
+    .blue  .section-header h2 { color: #1d4ed8; }
+    .purple .section-header { background: linear-gradient(90deg,#f5f3ff,#ede9fe); }
+    .purple .section-header h2 { color: #6d28d9; }
+    .green  .section-header { background: linear-gradient(90deg,#f0fdf4,#dcfce7); }
+    .green  .section-header h2 { color: #15803d; }
+    .orange .section-header { background: linear-gradient(90deg,#fff7ed,#fed7aa); }
+    .orange .section-header h2 { color: #c2410c; }
+    .teal   .section-header { background: linear-gradient(90deg,#f0fdfa,#ccfbf1); }
+    .teal   .section-header h2 { color: #0f766e; }
+
+    /* Steps */
+    .steps { list-style: none; margin-top: 16px; }
+    .steps li {
+      display: flex; gap: 14px; margin-bottom: 18px; align-items: flex-start;
+    }
+    .step-num {
+      min-width: 28px; height: 28px;
+      background: #1d4ed8; color: white;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.78rem; font-weight: 700; margin-top: 2px;
+    }
+    .purple .step-num { background: #6d28d9; }
+    .green  .step-num { background: #15803d; }
+    .orange .step-num { background: #c2410c; }
+    .teal   .step-num { background: #0f766e; }
+    .step-content strong { display: block; font-size: 0.95rem; margin-bottom: 2px; }
+    .step-content span { font-size: 0.87rem; color: #475569; }
+
+    /* Cards grid */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .card {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 12px; padding: 14px 16px;
+    }
+    .card .card-icon { font-size: 1.4rem; margin-bottom: 6px; }
+    .card .card-title { font-size: 0.85rem; font-weight: 700; color: #1e293b; }
+    .card .card-desc { font-size: 0.8rem; color: #64748b; margin-top: 3px; }
+
+    /* Tip box */
+    .tip {
+      background: #fffbeb; border: 1px solid #fcd34d;
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 0.85rem; color: #92400e;
+      margin-top: 18px; display: flex; gap: 8px; align-items: flex-start;
+    }
+    .note {
+      background: #eff6ff; border: 1px solid #bfdbfe;
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 0.85rem; color: #1e40af;
+      margin-top: 18px; display: flex; gap: 8px; align-items: flex-start;
+    }
+
+    /* Role badge */
+    .role-badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 12px; font-size: 0.75rem; font-weight: 700;
+      margin-right: 6px; margin-bottom: 6px;
+    }
+    .badge-agent   { background:#dcfce7; color:#15803d; }
+    .badge-manager { background:#ede9fe; color:#6d28d9; }
+    .badge-vh      { background:#dbeafe; color:#1d4ed8; }
+    .badge-sh      { background:#fee2e2; color:#b91c1c; }
+    .badge-admin   { background:#fef3c7; color:#b45309; }
+    .badge-pre     { background:#ccfbf1; color:#0f766e; }
+
+    /* Sub-heading */
+    .sub { font-size: 0.82rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin: 22px 0 10px; }
+
+    /* Divider */
+    hr { border: none; border-top: 1px solid #f1f5f9; margin: 20px 0; }
+
+    /* Page summary row */
+    .page-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .page-pill {
+      background: #f1f5f9; border-radius: 8px;
+      padding: 5px 12px; font-size: 0.82rem; font-weight: 500; color: #374151;
+    }
+
+    /* footer */
+    footer {
+      text-align: center; padding: 40px 20px;
+      font-size: 0.82rem; color: #94a3b8;
+    }
+    footer strong { color: #64748b; }
+
+    @media print {
+      body { background: white; }
+      .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── COVER ── -->
+<div class="cover">
+  <div style="font-size:3rem; margin-bottom:16px;">💰</div>
+  <h1>Dollar V2</h1>
+  <p class="subtitle">Sales Commission & Target Tracking Platform</p>
+  <span class="tagline">User Guide — All Roles</span>
+</div>
+
+<!-- ── TABLE OF CONTENTS ── -->
+<div class="toc">
+  <h2>Contents</h2>
+  <div class="toc-grid">
+    <a class="toc-item" href="#roles"><span class="toc-icon">🏷️</span> Role Overview</a>
+    <a class="toc-item" href="#login"><span class="toc-icon">🔐</span> Logging In</a>
+    <a class="toc-item" href="#agent"><span class="toc-icon">👤</span> Agent Guide</a>
+    <a class="toc-item" href="#manager"><span class="toc-icon">🧑‍💼</span> Manager Guide</a>
+    <a class="toc-item" href="#vh"><span class="toc-icon">🏢</span> VH / Sales Head</a>
+    <a class="toc-item" href="#months"><span class="toc-icon">📅</span> Month Switching</a>
+    <a class="toc-item" href="#faq"><span class="toc-icon">❓</span> FAQ</a>
+  </div>
+</div>
+
+<!-- ── ROLES ── -->
+<div class="section blue" id="roles">
+  <div class="section-header">
+    <span class="emoji">🏷️</span>
+    <div>
+      <h2>Role Overview</h2>
+      <p>Who sees what on Dollar V2</p>
+    </div>
+  </div>
+  <div class="section-body">
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">👤</div>
+        <div class="card-title"><span class="role-badge badge-agent">Agent</span></div>
+        <div class="card-desc">Sees own target, pipeline, achieved amount & commission. No team data.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🧑‍💼</div>
+        <div class="card-title"><span class="role-badge badge-manager">Manager</span></div>
+        <div class="card-desc">Assigns targets to agents & self, views team leaderboard & team commissions.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏢</div>
+        <div class="card-title"><span class="role-badge badge-vh">VH</span></div>
+        <div class="card-desc">Assigns targets to managers, sees all managers leaderboard, drills into teams.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🎯</div>
+        <div class="card-title"><span class="role-badge badge-sh">Sales Head</span></div>
+        <div class="card-desc">Full visibility across all VHs, managers and agents. Same views as VH.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📞</div>
+        <div class="card-title"><span class="role-badge badge-pre">PreSales</span></div>
+        <div class="card-desc">Sees own calls & sales summary. Separate dashboard without revenue targets.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">⚙️</div>
+        <div class="card-title"><span class="role-badge badge-admin">Admin</span></div>
+        <div class="card-desc">Full access. Can impersonate any user to see their exact view.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOGIN ── -->
+<div class="section teal" id="login">
+  <div class="section-header">
+    <span class="emoji">🔐</span>
+    <div>
+      <h2>Logging In</h2>
+      <p>Accessing the platform</p>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Open the app in your browser</strong>
+          <span>Use the link shared by your admin. Works on mobile and desktop.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Click "Sign in with Google"</strong>
+          <span>Use your company Google account (the email your admin registered you with).</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>You land on your Dashboard</strong>
+          <span>The view is personalised to your role automatically — no extra setup needed.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="tip">⚠️ <span>If you see "No data found", make sure you're logged in with the exact email your admin used when adding you. Contact your admin if you're unsure.</span></div>
+  </div>
+</div>
+
+<!-- ── AGENT ── -->
+<div class="section green" id="agent">
+  <div class="section-header">
+    <span class="emoji">👤</span>
+    <div>
+      <h2>Agent Guide</h2>
+      <p>Everything you need to track your own performance</p>
+    </div>
+  </div>
+  <div class="section-body">
+
+    <p class="sub">Pages you have access to</p>
+    <div class="page-row">
+      <span class="page-pill">🏠 Dashboard</span>
+      <span class="page-pill">📊 My Deals</span>
+    </div>
+
+    <hr />
+
+    <p class="sub">Dashboard — What you'll see</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">🎯</div>
+        <div class="card-title">Monthly Target</div>
+        <div class="card-desc">Your revenue target for the month set by your manager.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">✅</div>
+        <div class="card-title">Achieved</div>
+        <div class="card-desc">Total realised (paid) revenue from your deals this month.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📈</div>
+        <div class="card-title">Sale Value (Pipeline)</div>
+        <div class="card-desc">All deals in pipeline — includes unpaid deals too.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">💵</div>
+        <div class="card-title">Commission</div>
+        <div class="card-desc">Money you've earned so far based on slab rules.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Achievement %</div>
+        <div class="card-desc">How close you are to hitting your target.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔮</div>
+        <div class="card-title">Projected %</div>
+        <div class="card-desc">If all pipeline deals close, what % you'll achieve.</div>
+      </div>
+    </div>
+
+    <hr />
+
+    <p class="sub">How to read your commission</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Commission is slab-based</strong>
+          <span>You earn a % based on how much of the target you've achieved. Higher slabs = higher %.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Look at the "Performance Snapshot" section</strong>
+          <span>Shows Target, Achieved, Gap remaining, and Projected — all in one place.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Check "₹X to go"</strong>
+          <span>This tells you exactly how much more revenue you need to close the gap.</span>
+        </div>
+      </li>
+    </ul>
+
+    <div class="note">💡 <span>Your deals are synced from your CRM. You don't need to enter anything manually — just focus on closing deals and the numbers update automatically.</span></div>
+  </div>
+</div>
+
+<!-- ── MANAGER ── -->
+<div class="section purple" id="manager">
+  <div class="section-header">
+    <span class="emoji">🧑‍💼</span>
+    <div>
+      <h2>Manager Guide</h2>
+      <p>Assigning targets, tracking your team & managing commissions</p>
+    </div>
+  </div>
+  <div class="section-body">
+
+    <p class="sub">Pages you have access to</p>
+    <div class="page-row">
+      <span class="page-pill">🏠 Dashboard</span>
+      <span class="page-pill">🎯 Assign Targets</span>
+      <span class="page-pill">📋 My Targets</span>
+      <span class="page-pill">👥 My Team</span>
+    </div>
+
+    <hr />
+
+    <!-- STEP 1: Assign Targets -->
+    <p class="sub">Step 1 — Assign targets to your agents</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Go to "Assign Targets" from the menu</strong>
+          <span>You'll see a list of your team members (agents) on the left side.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Click on an agent's name</strong>
+          <span>Their target form opens. You'll see one card per program (e.g. Dollar Gold, Dollar Plus).</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Set the Revenue Target</strong>
+          <span>Enter the monthly revenue target for that agent in the "Revenue Target" field.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Set the commission slabs</strong>
+          <span>Add slab rows: each row has an "Up to ₹X" threshold and a "% commission" rate. Example: Up to ₹5,00,000 → 3%, Up to ₹10,00,000 → 5%.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <strong>Click "Assign Target"</strong>
+          <span>A green confirmation appears. The agent will see their target on their dashboard immediately.</span>
+        </div>
+      </li>
+    </ul>
+
+    <div class="tip">⚠️ <span>You need to assign targets separately for each program. If an agent works across two programs, set targets for both.</span></div>
+
+    <hr />
+
+    <!-- STEP 2: Personal Contribution -->
+    <p class="sub">Step 2 — Add your own Personal Contribution (optional)</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Scroll to the Program section (same Assign Targets page)</strong>
+          <span>At the top you'll see your own program target cards — separate from your agents.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Enter "Team Contribution" amount</strong>
+          <span>This is your own personal revenue target that adds to the team total. For example, if you personally carry ₹8L, enter 800000.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Click "Assign Target"</strong>
+          <span>Your personal contribution is saved and will now appear in your Dashboard's Team Target.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="note">💡 <span>Your own commission is based on <em>team</em> goals — not personal targets. The "Team Contribution" field just ensures the team target number on the Dashboard is accurate.</span></div>
+
+    <hr />
+
+    <!-- Dashboard -->
+    <p class="sub">Step 3 — Reading your Dashboard</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">🎯</div>
+        <div class="card-title">Team Target</div>
+        <div class="card-desc">Sum of all agent targets + your personal contribution.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📈</div>
+        <div class="card-title">Team Sale Value</div>
+        <div class="card-desc">All deals in your team's pipeline this month.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">✅</div>
+        <div class="card-title">Team Achieved</div>
+        <div class="card-desc">Realised (paid) revenue across your whole team.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">💵</div>
+        <div class="card-title">Total Money Made</div>
+        <div class="card-desc">Your commission + any T2 bonus earned.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Achievement %</div>
+        <div class="card-desc">Team Achieved ÷ Team Target × 100.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔮</div>
+        <div class="card-title">Projected %</div>
+        <div class="card-desc">If all pipeline deals close, what % you'd achieve.</div>
+      </div>
+    </div>
+
+    <hr />
+
+    <!-- My Targets -->
+    <p class="sub">Step 4 — View your own assigned targets (My Targets)</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Go to "My Targets" from the menu</strong>
+          <span>This shows the program targets your VH / Sales Head has assigned to you.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Check each program card</strong>
+          <span>See the slab structure, your Team Sale Value, Team Achieved, and commission earned per program.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Check the "partial" badge</strong>
+          <span>A yellow "partial" badge means your team hasn't reached the threshold for that slab yet — you're earning a lower rate.</span>
+        </div>
+      </li>
+    </ul>
+
+    <hr />
+
+    <!-- My Team -->
+    <p class="sub">Step 5 — View and filter your team (My Team)</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Go to "My Team" from the menu</strong>
+          <span>See all your direct reports and their details in one place.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Use "Direct Reports" or "Full Team" tabs</strong>
+          <span>"Direct Reports" shows only your immediate team. "Full Team" shows nested team members too.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Filter by role or search by name</strong>
+          <span>Use the role pills (All / Manager / Agent / Pre-Sales) or the search bar to find specific members.</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<!-- ── VH / SALES HEAD ── -->
+<div class="section blue" id="vh">
+  <div class="section-header">
+    <span class="emoji">🏢</span>
+    <div>
+      <h2>VH &amp; Sales Head Guide</h2>
+      <p>Managing managers, targets and org-wide visibility</p>
+    </div>
+  </div>
+  <div class="section-body">
+
+    <p class="sub">Pages you have access to</p>
+    <div class="page-row">
+      <span class="page-pill">🏠 Dashboard</span>
+      <span class="page-pill">🎯 Assign Targets</span>
+      <span class="page-pill">📋 My Targets</span>
+      <span class="page-pill">👥 My Team</span>
+    </div>
+
+    <hr />
+
+    <p class="sub">Assigning targets to managers</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Go to "Assign Targets"</strong>
+          <span>You'll see a list of managers under you. Click a manager's name to open their target form.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Set slabs per program</strong>
+          <span>Each program card has a slab table. The manager's commission is calculated against their team's total performance on that program.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Save — the manager sees it under "My Targets"</strong>
+          <span>The assigned target shows up on the manager's "My Targets" page instantly.</span>
+        </div>
+      </li>
+    </ul>
+
+    <hr />
+
+    <p class="sub">Dashboard — Managers leaderboard</p>
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Your Dashboard shows a Managers Leaderboard</strong>
+          <span>Each row = one manager with their Team Target, Sale Value, Achieved, and commission.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Click "Drill In" on any manager row</strong>
+          <span>You drop into that manager's team and see their agents' leaderboard — same as the manager sees it.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Use the breadcrumb to go back</strong>
+          <span>Click the back arrow or breadcrumb at the top to return to the top-level managers view.</span>
+        </div>
+      </li>
+    </ul>
+
+    <div class="note">💡 <span>Sales Heads can see all VHs and drill all the way down to individual agents — full org visibility in a few clicks.</span></div>
+  </div>
+</div>
+
+<!-- ── MONTH SWITCHING ── -->
+<div class="section orange" id="months">
+  <div class="section-header">
+    <span class="emoji">📅</span>
+    <div>
+      <h2>Switching Months</h2>
+      <p>How to view past or future months</p>
+    </div>
+  </div>
+  <div class="section-body">
+    <ul class="steps">
+      <li>
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Find the month selector at the top of any page</strong>
+          <span>It shows the current month (e.g. "Apr 2026") by default.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Click the left / right arrows to navigate</strong>
+          <span>Move backward to see last month's performance or targets, or forward to plan ahead.</span>
+        </div>
+      </li>
+      <li>
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>All pages reflect the selected month</strong>
+          <span>Dashboard, leaderboard, My Targets — everything updates to show data for the selected month.</span>
+        </div>
+      </li>
+    </ul>
+    <div class="tip">⚠️ <span>If you assign targets for a future month, switch to that month first before clicking "Assign Target".</span></div>
+  </div>
+</div>
+
+<!-- ── FAQ ── -->
+<div class="section teal" id="faq">
+  <div class="section-header">
+    <span class="emoji">❓</span>
+    <div>
+      <h2>Frequently Asked Questions</h2>
+      <p>Quick answers to common questions</p>
+    </div>
+  </div>
+  <div class="section-body">
+
+    <div style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">My dashboard shows ₹0 — what's wrong?</div>
+        <div class="card-desc" style="margin-top:6px;">Either your manager hasn't assigned a target yet, or your login email doesn't match the email in the system. Contact your manager or admin.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">Why is my commission showing as partial?</div>
+        <div class="card-desc" style="margin-top:6px;">A "partial" commission means your achieved amount is within a slab range but the full slab unlock threshold hasn't been crossed yet. Close more deals to jump to the next slab.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">I assigned a target but the agent can't see it</div>
+        <div class="card-desc" style="margin-top:6px;">Ask the agent to refresh their browser. Data syncs in real-time but a hard refresh (Ctrl+Shift+R) clears the cache.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">Can I assign targets for next month already?</div>
+        <div class="card-desc" style="margin-top:6px;">Yes — switch to next month using the month selector at the top, then assign targets normally. They'll go live when that month begins.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">Team Target on my Dashboard looks lower than expected</div>
+        <div class="card-desc" style="margin-top:6px;">Make sure you've filled in your own "Team Contribution" in Assign Targets (your personal quota). Agent targets alone don't include your own contribution.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">How often does data refresh?</div>
+        <div class="card-desc" style="margin-top:6px;">Deal data syncs from the CRM automatically. Dashboard data refreshes every time you load the page or switch months. You can also force a refresh using the 🔄 icon.</div>
+      </div>
+
+      <div class="card" style="background:#f0fdfa; border-color:#99f6e4;">
+        <div class="card-title">I made a mistake in the slabs — can I re-assign?</div>
+        <div class="card-desc" style="margin-top:6px;">Yes. Go to Assign Targets, select the same agent and month, update the slabs, and click "Assign Target" again. It overwrites the previous assignment.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <strong>Dollar V2</strong> · Internal Use Only · Questions? Contact your Admin
+  <br/><br/>
+  <span style="font-size:0.75rem;">Tip: To save as PDF — press Ctrl+P (or Cmd+P on Mac) → Save as PDF</span>
+</footer>
+
+</body>
+</html>
