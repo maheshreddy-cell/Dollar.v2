@@ -836,8 +836,8 @@ export default function AssignTargets() {
                 )
               })}
 
-              {/* ══ INDIVIDUAL PERSONAL TARGET (for Manager) ══ */}
-              <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
+              {/* ══ INDIVIDUAL PERSONAL TARGET (for Manager) ══ — REMOVED */}
+              {false && <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
                 <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold text-indigo-900">👤 Individual Personal Target</p>
@@ -1020,7 +1020,7 @@ export default function AssignTargets() {
                     {indivSubmit ? 'Saving…' : `Save Individual Target for ${formMonth}`}
                   </button>
                 </div>
-              </div>
+              </div>}
 
             </div>
           ) : (
