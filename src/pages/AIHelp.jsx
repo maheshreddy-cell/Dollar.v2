@@ -5,7 +5,7 @@ import { getSummary, getManagerTargets, getTeamDealsForMonth, calcManagerCommiss
 import { formatINR } from '../utils/commission'
 import { Send, Bot, User, Zap, TrendingUp, MessageCircle, RefreshCw, Sparkles } from 'lucide-react'
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY
 
 // ── Quick prompt chips ────────────────────────────────────────────────────────
@@ -187,8 +187,8 @@ export default function AIHelp() {
     setMessages(newMessages)
 
     try {
-      // Build Gemini request — include conversation history
-      const history = newMessages.slice(-8).map(m => ({
+      // Build Gemini request — include full conversation history (last 20 turns)
+      const history = newMessages.slice(-20).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }],
       }))
@@ -395,7 +395,7 @@ export default function AIHelp() {
             <Send size={14} className="text-white" />
           </button>
         </form>
-        <p className="text-[10px] text-gray-400 text-center mt-1.5">Gemini 1.5 Flash · Free · Your data stays in browser</p>
+        <p className="text-[10px] text-gray-400 text-center mt-1.5">Gemini 2.0 Flash · Free · Your data stays in browser</p>
       </div>
 
     </div>
