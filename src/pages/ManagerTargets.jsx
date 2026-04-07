@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, getTeamDealsForMonth, filterDealsByProgram, MANAGER_TARGET_PROGRAMS } from '../services/api'
+import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, getTeamDealsForMonth, filterDealsByProgram, MANAGER_TARGET_PROGRAMS, getTargets } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle, Award } from 'lucide-react'
 
@@ -263,9 +263,11 @@ export default function ManagerTargets() {
   const [allTeamDeals, setAllTeamDeals]     = useState([])
   const [teamData, setTeamData]             = useState(null)
   const [kickerEarnings, setKickerEarnings] = useState(0)
-  const [kickerDetails, setKickerDetails]   = useState([]) // [{title, payout}]
-  const [loading, setLoading]             = useState(true)
-  const [error, setError]                 = useState('')
+  const [kickerDetails, setKickerDetails]   = useState([])
+  const [individualTarget, setIndivTarget]  = useState(null)  // personal target for this manager
+  const [personalDeals, setPersonalDeals]   = useState([])
+  const [loading, setLoading]               = useState(true)
+  const [error, setError]                   = useState('')
 
   useEffect(() => {
     if (!effectiveUser?.email) return
@@ -281,8 +283,17 @@ export default function ManagerTargets() {
       getKickers().catch(() => []),
       getDeals().catch(() => []),
       getTeamDealsForMonth(email, month).catch(() => []),
+      getTargets(email, month).catch(() => []),
     ])
-      .then(([targets, agents, allKickers, allDeals, teamDeals]) => {
+      .then(([targets, agents, allKickers, allDeals, teamDeals, indivTargets]) => {
+        // Personal deals = manager's own deals this month
+        const lowerE = email.trim().toLowerCase()
+        const pDeals = (allDeals || []).filter(d =>
+          (d.Email || '').trim().toLowerCase() === lowerE &&
+          (!month || d.Month === month)
+        )
+        setPersonalDeals(pDeals)
+        setIndivTarget(indivTargets?.[0] ?? null)
         // teamDeals = all deals from every subtree member (any role) for this month
         setAllTeamDeals(teamDeals)
 
@@ -355,6 +366,15 @@ export default function ManagerTargets() {
   const agentCount      = teamData?.agentCount    ?? 0
   const wdInfo          = workingDaysInfo(month)
 
+  // Individual target commission
+  const indivSlabs = (() => {
+    if (!individualTarget) return []
+    try { return JSON.parse(individualTarget.SlabsJson || '[]') } catch { return [] }
+  })()
+  const personalAchieved  = personalDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
+  const personalPipeline  = personalDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+  const indivInfo         = calcManagerCommissionInfo(personalAchieved, indivSlabs)
+
   // Compute total commission + isPartial across ALL active program targets
   const totalCommission = managerTargets.reduce((sum, t) => {
     const d  = filterDealsByProgram(allTeamDeals, t.programFilter)
@@ -363,7 +383,7 @@ export default function ManagerTargets() {
     const sP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return sum + calcManagerCommissionInfo(sv, sP).commission + calcManagerCommissionInfo(ac, sR).commission
-  }, 0)
+  }, 0) + indivInfo.commission
   const totalIsPartial = managerTargets.some(t => {
     const d  = filterDealsByProgram(allTeamDeals, t.programFilter)
     const sv = d.reduce((s, x) => s + (x.TotalValue || 0), 0)
@@ -440,6 +460,50 @@ export default function ManagerTargets() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
           <AlertCircle size={16} className="text-amber-500 shrink-0" />
           <p className="text-sm text-amber-800">No targets assigned for {month} yet. Your VH or SalesHead will assign your Projected and Realised targets.</p>
+        </div>
+      )}
+
+      {/* ── Individual Personal Target card ── */}
+      {individualTarget && (
+        <div className="bg-white border border-indigo-200 rounded-xl overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+          <div className="px-5 py-4 space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">👤 Personal Target</span>
+                  <span className="text-[10px] text-gray-400">Your own deals · {month}</span>
+                </div>
+                <h3 className="text-base font-bold text-gray-900">Individual Sales Target</h3>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-indigo-700">{formatINR(indivInfo.commission)}</p>
+                <p className="text-[10px] text-indigo-400 font-semibold">Personal commission</p>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-indigo-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-indigo-700">{formatINR(personalPipeline)}</p>
+                <p className="text-[10px] text-indigo-500 font-semibold">Pipeline</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-green-700">{formatINR(personalAchieved)}</p>
+                <p className="text-[10px] text-green-500 font-semibold">Achieved</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 text-center">
+                <p className="text-lg font-bold text-gray-700">{formatINR(Number(individualTarget.TargetAmount || 0))}</p>
+                <p className="text-[10px] text-gray-500 font-semibold">Target</p>
+              </div>
+            </div>
+
+            {/* Slabs */}
+            {indivSlabs.length > 0 && (
+              <SlabTable slabs={indivSlabs} teamMetric={personalAchieved} accentColor="blue" />
+            )}
+          </div>
         </div>
       )}
 

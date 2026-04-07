@@ -82,6 +82,18 @@ export default function AssignTargets() {
   // Per-program save state: { [programId]: { submitting, success, error } }
   const [progSaveState,   setProgSaveState]  = useState({})
 
+  // ── Individual target state (for Managers — personal sales target) ────────────
+  const INIT_INDIV_SLABS = () => [EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB]
+  const [indivTarget,     setIndivTarget]    = useState('')
+  const [indivSlabs,      setIndivSlabs]     = useState(INIT_INDIV_SLABS)
+  const [indivHistory,    setIndivHistory]   = useState([])
+  const [indivHistLoad,   setIndivHistLoad]  = useState(false)
+  const [indivSubmit,     setIndivSubmit]    = useState(false)
+  const [indivSuccess,    setIndivSuccess]   = useState(false)
+  const [indivError,      setIndivError]     = useState('')
+  const [indivConfirmDel, setIndivConfirmDel]= useState(null)
+  const [indivDeleting,   setIndivDeleting]  = useState(null)
+
   function getProgState(pid) {
     return progSaveState[pid] || { submitting: false, success: false, error: '' }
   }
@@ -132,6 +144,7 @@ export default function AssignTargets() {
     setMgrRealSlabs(INIT_MGR_SLABS())
     if (selected.Role === 'Manager') {
       reloadManagerHistory()
+      reloadIndivHistory()
       // Load slabs for reference
       Promise.all([getManagerSlabs('Projected'), getManagerSlabs('Realised')])
         .then(([ps, rs]) => { setMgrProjSlabs(ps); setMgrRealSlabs(rs) })
@@ -288,6 +301,70 @@ export default function AssignTargets() {
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
+  }
+
+  function reloadIndivHistory() {
+    if (!selected?.Email) return
+    setIndivHistLoad(true)
+    getTargets(selected.Email, null)
+      .then(res => {
+        const byMonth = new Map()
+        for (const t of (res ?? [])) {
+          const m = normalizeMonth(t.Month ?? t.month)
+          if (!byMonth.has(m)) byMonth.set(m, t)
+        }
+        const sorted = [...byMonth.values()].sort((a, b) => {
+          const ma = normalizeMonth(a.Month ?? a.month)
+          const mb = normalizeMonth(b.Month ?? b.month)
+          return mb.localeCompare(ma)
+        })
+        setIndivHistory(sorted)
+        // Pre-fill form from current month if exists
+        const current = sorted.find(t => normalizeMonth(t.Month ?? t.month) === formMonth)
+        if (current) {
+          setIndivTarget(String(current.TargetAmount || ''))
+          try {
+            const parsed = JSON.parse(current.SlabsJson || '[]')
+            if (Array.isArray(parsed) && parsed.length) {
+              const padded = parsed.map(s => ({ targetAmount: String(s.targetAmount ?? ''), commissionPct: String(s.commissionPct ?? '') }))
+              while (padded.length < 4) padded.push(EMPTY_SLAB)
+              setIndivSlabs(padded); return
+            }
+          } catch { /* ignore */ }
+          setIndivSlabs(INIT_INDIV_SLABS())
+        } else {
+          setIndivTarget('')
+          setIndivSlabs(INIT_INDIV_SLABS())
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIndivHistLoad(false))
+  }
+
+  async function handleSaveIndivTarget() {
+    const filledSlabs = indivSlabs.filter(s => s.targetAmount && s.commissionPct)
+    if (!indivTarget || filledSlabs.length === 0) {
+      setIndivError('Enter a target amount and at least one commission slab.')
+      return
+    }
+    setIndivSubmit(true)
+    setIndivError('')
+    setIndivSuccess(false)
+    try {
+      await assignTarget({
+        email: selected.Email,
+        month: formMonth,
+        targetAmount: Number(indivTarget),
+        slabs: filledSlabs,
+      }, user.email)
+      setIndivSuccess(true)
+      await reloadIndivHistory()
+      setTimeout(() => setIndivSuccess(false), 3000)
+    } catch {
+      setIndivError('Failed to save individual target.')
+    } finally {
+      setIndivSubmit(false)
+    }
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
@@ -708,6 +785,114 @@ export default function AssignTargets() {
                   </div>
                 )
               })}
+
+              {/* ══ INDIVIDUAL PERSONAL TARGET (for Manager) ══ */}
+              <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-indigo-900">👤 Individual Personal Target</p>
+                    <p className="text-xs text-indigo-600 mt-0.5">Set {selected.Name}'s own sales target — tracked against their personal deals only</p>
+                  </div>
+                  <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 rounded-full">Personal · {formMonth}</span>
+                </div>
+
+                <div className="px-5 py-4 space-y-4">
+                  {/* History */}
+                  {indivHistory.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-2">Assignment History</p>
+                      <div className="space-y-1">
+                        {indivHistory.map((t, i) => {
+                          const m = normalizeMonth(t.Month ?? t.month)
+                          let slabCount = 0
+                          try { slabCount = JSON.parse(t.SlabsJson || '[]').filter(s => s.targetAmount).length } catch {}
+                          return (
+                            <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
+                              <span className="font-semibold text-gray-700">{m}</span>
+                              <span className="text-gray-500">Target {t.TargetAmount ? `₹${Number(t.TargetAmount).toLocaleString('en-IN')}` : '—'} · {slabCount} slab{slabCount !== 1 ? 's' : ''}</span>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => { setFormMonth(m); reloadIndivHistory() }} className="text-brand-500 hover:underline font-medium text-[10px]">Edit</button>
+                                {indivConfirmDel === m ? (
+                                  <div className="flex items-center gap-1">
+                                    <button onClick={async () => {
+                                      setIndivDeleting(m)
+                                      await deleteTarget(selected.Email, m).catch(() => {})
+                                      setIndivConfirmDel(null); setIndivDeleting(null)
+                                      reloadIndivHistory()
+                                    }} disabled={indivDeleting === m} className="text-red-600 font-semibold text-[10px] hover:underline">
+                                      {indivDeleting === m ? 'Deleting…' : 'Confirm'}
+                                    </button>
+                                    <button onClick={() => setIndivConfirmDel(null)} className="text-gray-400 text-[10px]">Cancel</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => setIndivConfirmDel(m)} className="text-red-400 hover:text-red-600 text-[10px]">Delete</button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Target amount */}
+                  <div>
+                    <label className="ios-label mb-1.5 block">Personal Revenue Target (₹)</label>
+                    <input
+                      type="number"
+                      value={indivTarget}
+                      onChange={e => setIndivTarget(e.target.value)}
+                      placeholder="e.g. 500000"
+                      className="ios-input"
+                    />
+                  </div>
+
+                  {/* Commission slabs */}
+                  <div>
+                    <label className="ios-label mb-2 block">Commission Slabs</label>
+                    <div className="space-y-2">
+                      {indivSlabs.map((slab, i) => (
+                        <div key={i} className="grid grid-cols-2 gap-2">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
+                            <input
+                              type="number"
+                              placeholder={`Target ${i + 1}`}
+                              value={slab.targetAmount}
+                              onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, targetAmount: e.target.value } : s))}
+                              className="ios-input pl-7 text-sm"
+                            />
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              placeholder="Commission %"
+                              value={slab.commissionPct}
+                              onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, commissionPct: e.target.value } : s))}
+                              className="ios-input text-sm"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Errors / success */}
+                  {indivError   && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{indivError}</p>}
+                  {indivSuccess && <p className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 font-semibold">✓ Individual target saved!</p>}
+
+                  {/* Save */}
+                  <button
+                    onClick={handleSaveIndivTarget}
+                    disabled={indivSubmit}
+                    className="ios-btn w-full bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {indivSubmit ? 'Saving…' : `Save Individual Target for ${formMonth}`}
+                  </button>
+                </div>
+              </div>
+
             </div>
           ) : (
             <>
