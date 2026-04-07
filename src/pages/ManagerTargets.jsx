@@ -378,17 +378,15 @@ export default function ManagerTargets() {
   // Compute total commission + isPartial across ALL active program targets
   const totalCommission = managerTargets.reduce((sum, t) => {
     const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
-    const pc  = Number(t.personalContribution ?? 0)
-    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc  // adjSV for proj commission
-    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0) // rawAch for real commission
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0)
+    const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0)
     const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     return sum + calcManagerCommissionInfo(sv, sP).commission + calcManagerCommissionInfo(ac, sR).commission
   }, 0) + indivInfo.commission
   const totalIsPartial = managerTargets.some(t => {
     const d   = filterDealsByProgram(allTeamDeals, t.programFilter)
-    const pc  = Number(t.personalContribution ?? 0)
-    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0) + pc
+    const sv  = d.reduce((s, x) => s + (x.TotalValue || 0), 0)
     const ac  = d.filter(x => x.PaidActual > 0).reduce((s, x) => s + x.PaidActual, 0)
     const sP  = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
     const sR  = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
@@ -518,16 +516,16 @@ export default function ManagerTargets() {
         // rawSV / rawAch = real team numbers shown in stats & "X of Y" display
         // adjSV          = rawSV + personal contribution, used for slab commission calc only
         const rawSV      = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
-        const adjSV      = rawSV + pc
+        const adjSV      = rawSV   // contribution is informational only — not added to calculations
         const rawAch     = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
         const sortAsc    = arr => [...(arr || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
         const pSlabs     = sortAsc(t.projectedSlabs)
         const rSlabs     = sortAsc(t.realisedSlabs)
-        const pInfo      = calcManagerCommissionInfo(adjSV,  pSlabs)   // commission uses adjusted
+        const pInfo      = calcManagerCommissionInfo(rawSV,  pSlabs)
         const rInfo      = calcManagerCommissionInfo(rawAch, rSlabs)
         const pTop       = pSlabs.length ? Math.max(...pSlabs.map(s => Number(s.targetAmount))) : 0
         const rTop       = rSlabs.length ? Math.max(...rSlabs.map(s => Number(s.targetAmount))) : 0
-        const pPct       = pTop > 0 ? Math.min((adjSV  / pTop) * 100, 999) : 0  // % uses adjusted so bar reflects contribution
+        const pPct       = pTop > 0 ? Math.min((rawSV  / pTop) * 100, 999) : 0
         const rPct       = rTop > 0 ? Math.min((rawAch / rTop) * 100, 999) : 0
         const tComm      = pInfo.commission + rInfo.commission
         const tPartial   = pInfo.isPartial || rInfo.isPartial
@@ -597,15 +595,12 @@ export default function ManagerTargets() {
                     <div className="bg-gray-50 rounded-xl p-3">
                       <p className="text-xs text-gray-400 mb-1">Team Sale Value</p>
                       <p className="text-base font-bold text-blue-700">{formatINR(rawSV)}</p>
-                      {pc > 0 && (
-                        <p className="text-[11px] text-indigo-600 mt-0.5 font-medium">+{formatINR(pc)} personal</p>
-                      )}
                     </div>
                   </div>
                   {pTop > 0 && (
                     <div>
                       <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                        <span>Overall achievement {pc > 0 && <span className="text-indigo-500">(incl. personal)</span>}</span>
+                        <span>Overall achievement</span>
                         <span className={`font-bold ${pPct >= 100 ? 'text-green-600' : pPct >= 75 ? 'text-orange-500' : 'text-blue-600'}`}>
                           {pPct.toFixed(1)}%
                         </span>
@@ -616,8 +611,8 @@ export default function ManagerTargets() {
                           style={{ width: `${Math.min(pPct, 100)}%` }}
                         />
                       </div>
-                      {pTop > adjSV && (
-                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(pTop - adjSV)} more pipeline to hit top slab</p>
+                      {pTop > rawSV && (
+                        <p className="text-xs text-gray-400 mt-1.5">{formatINR(pTop - rawSV)} more pipeline to hit top slab</p>
                       )}
                     </div>
                   )}
@@ -686,8 +681,7 @@ export default function ManagerTargets() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide shrink-0">Total Incentive Breakdown</p>
           {managerTargets.map(t => {
             const progDeals = filterDealsByProgram(allTeamDeals, t.programFilter)
-            const pc  = Number(t.personalContribution ?? 0)
-            const sv  = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0) + pc
+            const sv  = progDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
             const ac  = progDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
             const slP = [...(t.projectedSlabs || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
             const slR = [...(t.realisedSlabs  || [])].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
