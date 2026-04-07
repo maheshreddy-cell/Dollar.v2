@@ -899,32 +899,111 @@ export default function AssignTargets() {
 
                   {/* Commission slabs */}
                   <div>
-                    <label className="ios-label mb-2 block">Commission Slabs</label>
-                    <div className="space-y-2">
-                      {indivSlabs.map((slab, i) => (
-                        <div key={i} className="grid grid-cols-2 gap-2">
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
-                            <input
-                              type="number"
-                              placeholder={`Target ${i + 1}`}
-                              value={slab.targetAmount}
-                              onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, targetAmount: e.target.value } : s))}
-                              className="ios-input pl-7 text-sm"
-                            />
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              placeholder="Commission %"
-                              value={slab.commissionPct}
-                              onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, commissionPct: e.target.value } : s))}
-                              className="ios-input text-sm"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
-                          </div>
-                        </div>
-                      ))}
+                    {/* Label + suggest buttons */}
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="ios-label">Commission Slabs</label>
+                      {/* Suggest buttons — one per program that has slabs saved for this month */}
+                      <div className="flex flex-wrap gap-1.5 justify-end">
+                        {MANAGER_TARGET_PROGRAMS.map(prog => {
+                          const pid = prog.id
+                          const ps  = programSlabs[pid]
+                          const projFilled = (ps?.proj || []).filter(s => s.targetAmount && s.commissionPct)
+                          const realFilled = (ps?.real || []).filter(s => s.targetAmount && s.commissionPct)
+                          if (!projFilled.length && !realFilled.length) return null
+                          const BADGE = {
+                            all:   'bg-gray-100 text-gray-600 border-gray-200',
+                            genai: 'bg-purple-50 text-purple-700 border-purple-200',
+                            pml:   'bg-blue-50 text-blue-700 border-blue-200',
+                            bel:   'bg-teal-50 text-teal-700 border-teal-200',
+                          }[pid] ?? 'bg-gray-100 text-gray-600 border-gray-200'
+                          const applySlabs = (filled) => {
+                            const padded = [...filled.map(s => ({ targetAmount: String(s.targetAmount), commissionPct: String(s.commissionPct) }))]
+                            while (padded.length < 4) padded.push(EMPTY_SLAB)
+                            setIndivSlabs(padded.slice(0, 4))
+                            const maxT = Math.max(...filled.map(s => Number(s.targetAmount)))
+                            if (!indivTarget) setIndivTarget(String(maxT))
+                          }
+                          return (
+                            <div key={pid} className="flex items-center gap-0.5">
+                              {projFilled.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => applySlabs(projFilled)}
+                                  title={`Copy ${prog.label} projected slabs`}
+                                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors hover:opacity-80 ${BADGE}`}
+                                >
+                                  💡 {pid === 'all' ? 'Projected' : `${prog.label} Proj`}
+                                </button>
+                              )}
+                              {realFilled.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => applySlabs(realFilled)}
+                                  title={`Copy ${prog.label} realised slabs`}
+                                  className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors hover:opacity-80 bg-green-50 text-green-700 border-green-200`}
+                                >
+                                  💡 {pid === 'all' ? 'Realised' : `${prog.label} Real`}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                        {/* Clear button if any slab is filled */}
+                        {indivSlabs.some(s => s.targetAmount || s.commissionPct) && (
+                          <button
+                            type="button"
+                            onClick={() => setIndivSlabs(INIT_INDIV_SLABS())}
+                            className="text-[10px] text-gray-400 hover:text-red-500 px-1.5 py-1 rounded-lg transition-colors"
+                            title="Clear slabs"
+                          >✕ Clear</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Slab rows */}
+                    <div className="border border-indigo-100 rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] font-semibold uppercase text-gray-400 bg-indigo-50 border-b border-indigo-100">
+                            <th className="px-3 py-2 text-left w-8">#</th>
+                            <th className="px-3 py-2 text-left">Target (₹)</th>
+                            <th className="px-3 py-2 text-left">Commission %</th>
+                            <th className="px-3 py-2 text-right">Payout</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {indivSlabs.map((slab, i) => (
+                            <tr key={i} className="bg-white">
+                              <td className="px-3 py-1.5 text-xs font-bold text-gray-300">S{i+1}</td>
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="number"
+                                  placeholder="e.g. 500000"
+                                  value={slab.targetAmount}
+                                  onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, targetAmount: e.target.value } : s))}
+                                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                />
+                                {slab.targetAmount && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(slab.targetAmount))}</p>}
+                              </td>
+                              <td className="px-3 py-1.5">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="e.g. 5"
+                                  value={slab.commissionPct}
+                                  onChange={e => setIndivSlabs(prev => prev.map((s, j) => j === i ? { ...s, commissionPct: e.target.value } : s))}
+                                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                />
+                              </td>
+                              <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-500">
+                                {slab.targetAmount && slab.commissionPct
+                                  ? formatINR(Number(slab.targetAmount) * Number(slab.commissionPct) / 100)
+                                  : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
