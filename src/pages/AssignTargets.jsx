@@ -8,6 +8,47 @@ import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } fro
 import { clearCache } from '../services/appsScript'
 import { ROLE_COLORS } from '../utils/roles'
 
+// Defined outside AssignTargets so React never remounts it on re-render
+function SlabInputTable({ slabs, onUpdate, accentClass }) {
+  return (
+    <div className={`border rounded-xl overflow-hidden ${accentClass}`}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className={`text-[10px] font-semibold uppercase ${accentClass} border-b`}>
+            <th className="px-3 py-2 text-left w-10 text-gray-400">S#</th>
+            <th className="px-3 py-2 text-left text-gray-500">Target Amount (₹)</th>
+            <th className="px-3 py-2 text-left text-gray-500">Commission %</th>
+            <th className="px-3 py-2 text-right text-gray-400">Payout</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {slabs.map((s, i) => (
+            <tr key={i} className="bg-white">
+              <td className="px-3 py-1.5 text-xs font-bold text-gray-300">S{i+1}</td>
+              <td className="px-3 py-1.5">
+                <input type="number" value={s.targetAmount}
+                  onChange={e => onUpdate(i, 'targetAmount', e.target.value)}
+                  placeholder="e.g. 7200000"
+                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                {s.targetAmount && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
+              </td>
+              <td className="px-3 py-1.5">
+                <input type="number" step="0.01" value={s.commissionPct}
+                  onChange={e => onUpdate(i, 'commissionPct', e.target.value)}
+                  placeholder="e.g. 0.1"
+                  className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
+              </td>
+              <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-500">
+                {s.targetAmount && s.commissionPct ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 const PRESET_STYLES = {
   basic:        { card: 'border-blue-300 bg-blue-50 text-blue-800',      table: 'text-blue-700' },
   average:      { card: 'border-green-300 bg-green-50 text-green-800',    table: 'text-green-700' },
@@ -745,44 +786,6 @@ export default function AssignTargets() {
                     setProgState(pid, { error: err?.message ?? 'Failed to save.', submitting: false })
                   }
                 }
-
-                const SlabInputTable = ({ slabs, onUpdate, accentClass }) => (
-                  <div className={`border rounded-xl overflow-hidden ${accentClass}`}>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className={`text-[10px] font-semibold uppercase ${accentClass} border-b`}>
-                          <th className="px-3 py-2 text-left w-10 text-gray-400">S#</th>
-                          <th className="px-3 py-2 text-left text-gray-500">Target Amount (₹)</th>
-                          <th className="px-3 py-2 text-left text-gray-500">Commission %</th>
-                          <th className="px-3 py-2 text-right text-gray-400">Payout</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {slabs.map((s, i) => (
-                          <tr key={i} className="bg-white">
-                            <td className="px-3 py-1.5 text-xs font-bold text-gray-300">S{i+1}</td>
-                            <td className="px-3 py-1.5">
-                              <input type="number" value={s.targetAmount}
-                                onChange={e => onUpdate(i, 'targetAmount', e.target.value)}
-                                placeholder="e.g. 7200000"
-                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
-                              {s.targetAmount && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.targetAmount))}</p>}
-                            </td>
-                            <td className="px-3 py-1.5">
-                              <input type="number" step="0.01" value={s.commissionPct}
-                                onChange={e => onUpdate(i, 'commissionPct', e.target.value)}
-                                placeholder="e.g. 0.1"
-                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-300" />
-                            </td>
-                            <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-500">
-                              {s.targetAmount && s.commissionPct ? formatINR(Number(s.targetAmount) * Number(s.commissionPct) / 100) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )
 
                 return (
                   <div key={pid} className={`bg-white rounded-xl border ${COLORS.border} overflow-hidden`}>
