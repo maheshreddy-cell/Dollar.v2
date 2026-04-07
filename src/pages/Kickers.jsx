@@ -2,8 +2,101 @@ import { useState, useEffect, useCallback } from 'react'
 import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals } from '../services/api'
+import { getKickers, getDeals, computeHatTrickEarnings } from '../services/api'
 import { formatINR } from '../utils/commission'
+
+// ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
+function HatTrickCard({ deals }) {
+  // All hat trick data for the loaded deals (month-scoped)
+  const { amount, days, byDate } = computeHatTrickEarnings(deals)
+
+  // Today's paid deal count
+  const now = new Date()
+  const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
+  const todayKey = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
+  const todayCount = byDate[todayKey] || 0
+  const todayPct   = Math.min((todayCount / 3) * 100, 100)
+  const todayGap   = Math.max(3 - todayCount, 0)
+
+  return (
+    <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden ring-2 ring-orange-100">
+      {/* Gradient accent */}
+      <div className="h-1.5 bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400" />
+
+      <div className="px-5 py-4 space-y-3">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">🏏 Always Active</span>
+              <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
+              <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">👤 Individual Sales</span>
+              <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">All Programs</span>
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">🏏 Hat Trick Kicker</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Close 3 paid deals in a single day — earn ₹1,000 bonus. Every time. No limit.</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-black text-orange-500">{formatINR(amount)}</p>
+            <p className="text-[10px] text-orange-400 font-semibold">{days} hat trick{days !== 1 ? 's' : ''} this month</p>
+          </div>
+        </div>
+
+        {/* Today's progress */}
+        <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-orange-700">Today's progress</p>
+            <p className="text-xs font-bold text-orange-600">{todayCount} / 3 deals</p>
+          </div>
+          <div className="h-2.5 bg-orange-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${todayPct >= 100 ? 'bg-green-500' : 'bg-orange-400'}`}
+              style={{ width: `${todayPct}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-orange-500 mt-1.5 font-medium">
+            {todayPct >= 100
+              ? '🎉 Hat trick unlocked today! ₹1,000 earned!'
+              : todayGap === 1
+                ? '🔥 One more close today to unlock ₹1,000!'
+                : `${todayGap} more paid deal${todayGap !== 1 ? 's' : ''} today to unlock ₹1,000`
+            }
+          </p>
+        </div>
+
+        {/* Monthly hat trick log */}
+        {days > 0 && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Hat Trick Days This Month</p>
+            {Object.entries(byDate)
+              .filter(([, n]) => n >= 3)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([date, count]) => (
+                <div key={date} className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                  <span className="text-xs font-semibold text-green-700">
+                    🏏 {new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} — {count} deals
+                  </span>
+                  <span className="text-xs font-bold text-green-600">+₹1,000</span>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* Rule box */}
+        <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">How it works</p>
+          <div className="space-y-1 text-xs text-gray-600">
+            <p>→ Close <strong>3 paid deals</strong> (PaidActual {'>'} 0) on the same day</p>
+            <p>→ Earn <strong>₹1,000</strong> bonus automatically — all programs count</p>
+            <p>→ Repeatable every day — no cap on hat tricks per month</p>
+            <p>→ Applies to all roles: Agent, PreSales, Manager</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
@@ -390,15 +483,20 @@ export default function Kickers() {
         </button>
       </div>
 
-      {/* Cards */}
+      {/* Hat Trick Kicker — always shown on Active tab (not Past) */}
+      {tab === 'active' && (!isManager || manMode === 'forMe') && (
+        <HatTrickCard deals={deals.filter(d => d.Email === effectiveUser?.email)} />
+      )}
+
+      {/* Regular kicker cards */}
       {displayed.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-12 flex flex-col items-center gap-3 text-center">
+        <div className="bg-white rounded-2xl border border-gray-200 p-10 flex flex-col items-center gap-3 text-center">
           <Zap size={32} className="text-gray-200" />
           <p className="text-sm font-semibold text-gray-400">
             {tab === 'active'
               ? isManager && manMode === 'forMyTeam'
                 ? 'No active kickers announced to your team yet.'
-                : 'No active kickers right now. Stay tuned!'
+                : 'No other active kickers right now. Stay tuned!'
               : 'No past kickers to show.'}
           </p>
         </div>

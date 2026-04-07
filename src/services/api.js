@@ -776,11 +776,32 @@ export const getPreSalesSummary = async (email, month) => {
 // ─── Kicker helpers (shared) ──────────────────────────────────────────────────
 // Note: parseKickerRow is defined later (hoisted) near getKickers()
 
+// ── Hat Trick Kicker (always-on default) ─────────────────────────────────────
+// 3 paid deals (PaidActual > 0) in the same calendar day = ₹1,000 bonus.
+// Applies to ALL programs, ALL roles. No start/end date — always active.
+export function computeHatTrickEarnings(agentDeals) {
+  const byDate = {}
+  for (const d of (agentDeals || [])) {
+    if (!(d.PaidActual > 0)) continue            // only paid/collected deals
+    const raw = d.Timestamp || d.PaymentDate
+    if (!raw) continue
+    const ts = new Date(raw)
+    if (isNaN(ts.getTime())) continue
+    // Convert to IST date key (UTC+5:30)
+    const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
+    const key = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`
+    byDate[key] = (byDate[key] || 0) + 1
+  }
+  const hatTrickDays = Object.values(byDate).filter(n => n >= 3).length
+  return { amount: hatTrickDays * 1000, days: hatTrickDays, byDate }
+}
+
 // Compute kicker payout earned by a single agent.
 // agentDeals: ALL deals for the agent (no month filter required beyond what caller provides).
 // Counts past + active kickers — a kicker that has ended still counts if the agent hit it.
 function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers) {
-  let total = 0
+  // Always add hat trick earnings first
+  let total = computeHatTrickEarnings(agentDeals).amount
   for (const raw of (allKickers || [])) {
     const k = parseKickerRow(raw)
     if (!k.id) continue
