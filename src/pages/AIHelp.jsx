@@ -5,9 +5,17 @@ import { getSummary, getManagerTargets, getTeamDealsForMonth, calcManagerCommiss
 import { formatINR } from '../utils/commission'
 import { Send, Bot, User, Zap, TrendingUp, MessageCircle, RefreshCw, Sparkles } from 'lucide-react'
 
-const GEMINI_MODEL = `gemini-2.0-flash-lite`
-const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+// Groq (primary — 14,400 req/day free, very fast)
+const GROQ_KEY     = import.meta.env.VITE_GROQ_KEY
+const GROQ_URL     = `https://api.groq.com/openai/v1/chat/completions`
+const GROQ_MODEL   = `llama-3.1-8b-instant`
+
+// Gemini (fallback)
 const GEMINI_KEY   = import.meta.env.VITE_GEMINI_KEY
+const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent`
+
+const AI_KEY       = GROQ_KEY || GEMINI_KEY
+const AI_PROVIDER  = GROQ_KEY ? 'groq' : 'gemini'
 
 // ── Quick prompt chips ────────────────────────────────────────────────────────
 const AGENT_CHIPS = [
@@ -125,7 +133,7 @@ export default function AIHelp() {
     setCtxLoad(true)
     setMessages([]) // reset on user/month change
 
-    if (!GEMINI_KEY) { setNoKey(true); setCtxLoad(false); return }
+    if (!AI_KEY) { setNoKey(true); setCtxLoad(false); return }
 
     const email = effectiveUser.email
     const daysLeft = daysLeftInMonth(month)
@@ -188,38 +196,59 @@ export default function AIHelp() {
     setMessages(newMessages)
 
     try {
-      // Build Gemini request — include full conversation history (last 20 turns)
-      const history = newMessages.slice(-20).map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }],
-      }))
+      const systemPrompt = buildSystemPrompt(effectiveUser?.role, context)
+      const history = newMessages.slice(-20)
 
-      const payload = {
-        system_instruction: { parts: [{ text: buildSystemPrompt(effectiveUser?.role, context) }] },
-        contents: history,
-        generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
-      }
+      let reply
 
-      // Retry up to 2 times on rate-limit (429)
-      let res, attempts = 0
-      while (attempts < 3) {
-        res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+      if (AI_PROVIDER === 'groq') {
+        // ── Groq (OpenAI-compatible) ──────────────────────────────────────────
+        const messages = [
+          { role: 'system', content: systemPrompt },
+          ...history.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+        ]
+        const res = await fetch(GROQ_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+          body: JSON.stringify({ model: GROQ_MODEL, messages, max_tokens: 512, temperature: 0.7 }),
         })
-        if (res.status !== 429) break
-        attempts++
-        if (attempts < 3) await new Promise(r => setTimeout(r, attempts * 2000)) // 2s, 4s
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          if (res.status === 429) throw new Error('Rate limit hit — please wait a moment and try again')
+          throw new Error(errData?.error?.message || `AI error ${res.status}`)
+        }
+        const data = await res.json()
+        reply = data?.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response."
+
+      } else {
+        // ── Gemini fallback ───────────────────────────────────────────────────
+        const contents = history.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.text }],
+        }))
+        let res, attempts = 0
+        while (attempts < 3) {
+          res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents,
+              generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
+            }),
+          })
+          if (res.status !== 429) break
+          attempts++
+          if (attempts < 3) await new Promise(r => setTimeout(r, attempts * 2000))
+        }
+        if (!res.ok) {
+          if (res.status === 429) throw new Error('Rate limit hit — please wait a moment and try again')
+          throw new Error(`AI error ${res.status}`)
+        }
+        const data = await res.json()
+        reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response."
       }
 
-      if (!res.ok) {
-        if (res.status === 429) throw new Error('Rate limit hit — please wait a moment and try again')
-        if (res.status === 403) throw new Error('API key invalid or quota exceeded')
-        throw new Error(`Gemini error ${res.status}`)
-      }
-      const data = await res.json()
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I couldn\'t generate a response.'
       setMessages(prev => [...prev, { role: 'model', text: reply }])
     } catch (err) {
       setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${err.message}`, error: true }])
@@ -263,15 +292,15 @@ export default function AIHelp() {
         <Sparkles size={16} className="text-brand-600" /> AI Help
       </h2>
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 space-y-3">
-        <p className="font-semibold text-amber-800">Gemini API key not configured</p>
-        <p className="text-sm text-amber-700">To enable AI Help:</p>
+        <p className="font-semibold text-amber-800">AI key not configured</p>
+        <p className="text-sm text-amber-700 font-medium">Recommended: Groq (faster, 14,400 req/day free)</p>
         <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
-          <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline font-medium">aistudio.google.com/app/apikey</a></li>
-          <li>Create a free API key (no credit card needed)</li>
-          <li>Add <code className="bg-amber-100 px-1 rounded font-mono text-xs">VITE_GEMINI_KEY=your_key_here</code> to your <code className="bg-amber-100 px-1 rounded font-mono text-xs">.env</code> file</li>
-          <li>Redeploy the app</li>
+          <li>Go to <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="underline font-medium">console.groq.com/keys</a></li>
+          <li>Sign up free (no credit card) → Create API key</li>
+          <li>In Vercel → Settings → Environment Variables, add:<br/><code className="bg-amber-100 px-1 rounded font-mono text-xs">VITE_GROQ_KEY=your_key_here</code></li>
+          <li>Redeploy</li>
         </ol>
-        <p className="text-xs text-amber-600">Free tier: 1,500 requests/day, 1M token context — more than enough.</p>
+        <p className="text-xs text-amber-600 mt-1">Or use Gemini: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline">aistudio.google.com</a> → add as <code className="font-mono">VITE_GEMINI_KEY</code></p>
       </div>
     </div>
   )
@@ -409,7 +438,7 @@ export default function AIHelp() {
             <Send size={14} className="text-white" />
           </button>
         </form>
-        <p className="text-[10px] text-gray-400 text-center mt-1.5">Gemini 2.0 Flash Lite · Free · Your data stays in browser</p>
+        <p className="text-[10px] text-gray-400 text-center mt-1.5">{AI_PROVIDER === 'groq' ? 'Groq · Llama 3.1' : 'Gemini 2.0 Flash'} · Free · Your data stays in browser</p>
       </div>
 
     </div>
