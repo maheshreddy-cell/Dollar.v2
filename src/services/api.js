@@ -350,10 +350,7 @@ export const assignTarget = async (data, assignerEmail) => {
   const email = data.email.trim().toLowerCase()
   const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
   // Store slabs + optional teamWeightage in CommissionEndDate column
-  const tw = Number(data.teamWeightage ?? 0)
-  const slabsJson = data.slabs
-    ? JSON.stringify({ slabs: data.slabs, teamWeightage: tw })
-    : ''
+  const slabsJson = data.slabs ? JSON.stringify(data.slabs) : ''
   const now   = new Date().toISOString()
   const row   = [key, email, data.month, Number(data.targetAmount), commissionPctValue, data.commissionStartDate || '', slabsJson, assignerEmail, now]
 
