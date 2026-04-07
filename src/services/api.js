@@ -323,8 +323,25 @@ export const deleteTarget = async (email, month) => {
   clearCache()
 }
 
+// Parses the CommissionEndDate field which may be:
+//   old format → JSON array  [{ targetAmount, commissionPct }, ...]
+//   new format → JSON object { slabs: [...], teamWeightage: N }
+// Always returns { slabs: [], teamWeightage: 0 }
+export function parseSlabsField(json) {
+  try {
+    const parsed = JSON.parse(json || '[]')
+    if (Array.isArray(parsed)) return { slabs: parsed, teamWeightage: 0 }
+    return {
+      slabs:         Array.isArray(parsed.slabs) ? parsed.slabs : [],
+      teamWeightage: Number(parsed.teamWeightage ?? 0),
+    }
+  } catch {
+    return { slabs: [], teamWeightage: 0 }
+  }
+}
+
 export const assignTarget = async (data, assignerEmail) => {
-  // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs }
+  // data: { email, month, targetAmount, presetId, commissionPct, commissionStartDate, slabs, teamWeightage }
   // For agents: presetId = "basic"|"average"|"pro" stored in CommissionPct; targetAmount is manager-set
   // For others: commissionPct = numeric %, slabs JSON in CommissionEndDate
   // Each assignment always appends a new row — duplicates are kept as history.
@@ -332,7 +349,11 @@ export const assignTarget = async (data, assignerEmail) => {
   const key   = `${data.email.trim().toLowerCase()}_${data.month}`
   const email = data.email.trim().toLowerCase()
   const commissionPctValue = data.presetId ?? data.commissionPct ?? 0
-  const slabsJson = data.slabs ? JSON.stringify(data.slabs) : ''
+  // Store slabs + optional teamWeightage in CommissionEndDate column
+  const tw = Number(data.teamWeightage ?? 0)
+  const slabsJson = data.slabs
+    ? JSON.stringify({ slabs: data.slabs, teamWeightage: tw })
+    : ''
   const now   = new Date().toISOString()
   const row   = [key, email, data.month, Number(data.targetAmount), commissionPctValue, data.commissionStartDate || '', slabsJson, assignerEmail, now]
 
@@ -942,12 +963,10 @@ function getSlabInfo(achieved, target) {
   if (preset) {
     slabs = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
   } else {
-    try {
-      const parsed = JSON.parse(tf(target, 'CommissionEndDate') || '[]')
-      if (Array.isArray(parsed) && parsed.length) {
-        slabs = [...parsed].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-      }
-    } catch { /* fall through */ }
+    const { slabs: parsed } = parseSlabsField(tf(target, 'CommissionEndDate'))
+    if (parsed.length) {
+      slabs = [...parsed].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
+    }
   }
   if (!slabs.length) return null
 
@@ -1008,9 +1027,9 @@ function calcTieredCommission(achieved, target) {
   }
 
   // 2. Fall back to slabs JSON stored in CommissionEndDate
-  try {
-    const slabs = JSON.parse(tf(target, 'CommissionEndDate') || '[]')
-    if (Array.isArray(slabs) && slabs.length > 0) {
+  {
+    const { slabs } = parseSlabsField(tf(target, 'CommissionEndDate'))
+    if (slabs.length > 0) {
       const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
       let rate = Number(sorted[0]?.commissionPct ?? 0)
       for (const slab of sorted) {
@@ -1018,7 +1037,7 @@ function calcTieredCommission(achieved, target) {
       }
       return achieved * rate / 100
     }
-  } catch { /* fall through */ }
+  }
 
   // 3. Legacy flat rate
   return achieved * Number(tf(target, 'CommissionPct') ?? 0) / 100

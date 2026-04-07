@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
-import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS } from '../services/api'
+import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS, parseSlabsField } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
 import { clearCache } from '../services/appsScript'
@@ -96,6 +96,7 @@ export default function AssignTargets() {
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
   const [minCalls,         setMinCalls]       = useState('')
   const [psTeamWeight,     setPsTeamWeight]   = useState('300000') // 3L default contribution to manager's team target
+  const [teamWeightage,    setTeamWeightage]  = useState('')        // % of agent's deals that count toward team target (0 = no contribution)
 
   // History / delete state
   const [targetHistory,    setTargetHistory]  = useState([])
@@ -221,14 +222,15 @@ export default function AssignTargets() {
         } else {
           setAgentTarget(t.TargetAmount ? String(t.TargetAmount) : '')
         }
+        // Read back teamWeightage from CommissionEndDate wrapper
+        const { teamWeightage: tw } = parseSlabsField(t.CommissionEndDate)
+        setTeamWeightage(tw > 0 ? String(tw) : '')
       } else {
-        try {
-          const parsed = JSON.parse(t.CommissionEndDate || '[]')
-          if (Array.isArray(parsed) && parsed.length) {
-            setSlabs(parsed.map(s => ({ targetAmount: String(s.targetAmount ?? ''), commissionPct: String(s.commissionPct ?? '') })))
-            return
-          }
-        } catch { /* fall through */ }
+        const { slabs: parsedSlabs } = parseSlabsField(t.CommissionEndDate)
+        if (parsedSlabs.length) {
+          setSlabs(parsedSlabs.map(s => ({ targetAmount: String(s.targetAmount ?? ''), commissionPct: String(s.commissionPct ?? '') })))
+          return
+        }
         setSlabs([
           { targetAmount: String(t.TargetAmount ?? ''), commissionPct: String(t.CommissionPct ?? '') },
           EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB,
@@ -257,6 +259,7 @@ export default function AssignTargets() {
     setMinCalls('')
     setPsTeamWeight('300000')
     setSlabs([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
+    setTeamWeightage('')
   }
 
   function parseMgrSlabs(json) {
@@ -440,6 +443,7 @@ export default function AssignTargets() {
         presetId:            isAgent ? selectedPreset : undefined,
         commissionPct:       isAgent ? undefined : Number(slabs.filter(s => s.targetAmount)[0]?.commissionPct ?? 0),
         commissionStartDate: isPresalesCallsBased ? String(minCalls || preset?.defaultMinCalls || 40) : undefined,
+        teamWeightage:       isAgent ? Number(teamWeightage || 0) : 0,
         slabs:               isPresalesCallsBased
           ? []
           : isAgent
@@ -1061,6 +1065,7 @@ export default function AssignTargets() {
                           <th className="px-4 py-2.5 text-left font-medium">Month</th>
                           <th className="px-4 py-2.5 text-right font-medium">Target</th>
                           <th className="px-4 py-2.5 text-left font-medium">Tier / Rate</th>
+                          <th className="px-4 py-2.5 text-center font-medium">Team Wt.</th>
                           <th className="px-4 py-2.5 text-center font-medium">Actions</th>
                         </tr>
                       </thead>
@@ -1073,6 +1078,7 @@ export default function AssignTargets() {
                           const isCurrent = mon === formMonth
                           const isDeleting = deletingMonth === mon
                           const isConfirm  = confirmDeleteMonth === mon
+                          const { teamWeightage: tw } = parseSlabsField(t.CommissionEndDate)
 
                           return (
                             <tr key={mon} className={`transition-colors ${isCurrent ? 'bg-brand-50' : 'hover:bg-gray-50'}`}>
@@ -1099,6 +1105,12 @@ export default function AssignTargets() {
                                   preset?.id === 'ps-mob'     ? 'bg-orange-50 text-orange-700' :
                                                                 'bg-gray-100 text-gray-600'
                                 }`}>{rateLabel}</span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {tw > 0
+                                  ? <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{tw}%</span>
+                                  : <span className="text-xs text-gray-300">—</span>
+                                }
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
@@ -1379,6 +1391,52 @@ export default function AssignTargets() {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ── Team Weightage (agents only) ── */}
+                {isAgent && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">Team Weightage</p>
+                        <p className="text-[11px] text-amber-600 mt-0.5">
+                          How much of this agent's deals count toward the team target.
+                          <span className="font-semibold"> 0 = no contribution (default).</span>
+                        </p>
+                      </div>
+                      {teamWeightage > 0 && (
+                        <span className="text-xs font-bold bg-amber-200 text-amber-900 px-2.5 py-1 rounded-full">{teamWeightage}%</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={teamWeightage}
+                        onChange={e => setTeamWeightage(e.target.value)}
+                        placeholder="0"
+                        className="w-28 border border-amber-300 bg-white rounded-xl px-3 py-2 text-sm font-semibold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      />
+                      <span className="text-sm text-amber-700 font-medium">%</span>
+                      {/* Quick-pick pills */}
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[0, 25, 50, 75, 100].map(v => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setTeamWeightage(v === 0 ? '' : String(v))}
+                            className={`text-[11px] font-semibold px-2 py-1 rounded-full transition-colors ${
+                              Number(teamWeightage || 0) === v
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-100'
+                            }`}
+                          >{v}%</button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
