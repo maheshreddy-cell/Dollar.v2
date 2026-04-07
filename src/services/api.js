@@ -29,13 +29,15 @@ export const login = (email, password) =>
 export const logUsage = (user) => {
   const now = new Date()
   const date = now.toLocaleDateString('en-CA') // YYYY-MM-DD in local time
-  appsScript.appendRow('Usage_Log', {
+  const payload = {
     Timestamp: now.toISOString(),
     Date: date,
     Email: user.email,
     Name: user.name,
     Role: user.role,
-  }).catch(() => {}) // fire-and-forget, never block login
+  }
+  appsScript.appendRow('Usage_Log',    payload).catch(() => {}) // legacy log
+  appsScript.appendRow('UserActivity', payload).catch(() => {}) // fire-and-forget, never block login
 }
 
 export const getUsageLog = () =>
