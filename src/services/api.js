@@ -812,21 +812,30 @@ function mapPresalesCallRow(raw) {
 }
 
 // Fetches the "presales calls" sheet and returns globally deduplicated rows.
-// Dedup rule: same Learner PH → keep row with latest Date (IST).
-// This correctly credits the most-recent PS agent for each unique lead.
+// Dedup rule: rows WITH a Learner PH → keep only the latest row per phone number.
+// Rows WITHOUT a Learner PH → always included (can't be deduped, count as-is).
+// Also requires agentEmail to be non-empty (skips blank/header rows).
 export async function getDeduplicatedPresalesCalls() {
   try {
     const raw  = await appsScript.getSheet('presales calls').catch(() => [])
-    const rows = (raw || []).map(mapPresalesCallRow).filter(r => r.learnerPH)
+    const rows = (raw || [])
+      .map(mapPresalesCallRow)
+      .filter(r => r.agentEmail) // skip blank rows — must have agent email
 
+    const withPhone    = rows.filter(r => r.learnerPH)
+    const withoutPhone = rows.filter(r => !r.learnerPH)
+
+    // Dedup rows that have a phone: keep latest by timestamp per phone
     const byPhone = {}
-    for (const r of rows) {
+    for (const r of withPhone) {
       const existing = byPhone[r.learnerPH]
       const rTime = r.parsedDate ? r.parsedDate.getTime() : 0
       const eTime = existing?.parsedDate ? existing.parsedDate.getTime() : 0
       if (!existing || rTime >= eTime) byPhone[r.learnerPH] = r
     }
-    return Object.values(byPhone)
+
+    // Rows without phone are included as-is (can't dedup without an identifier)
+    return [...Object.values(byPhone), ...withoutPhone]
   } catch {
     return [] // never crash the caller
   }
