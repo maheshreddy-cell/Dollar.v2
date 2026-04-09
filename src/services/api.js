@@ -497,21 +497,21 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
 }
 
 export const getLeaderboard = async (rootEmail, month) => {
-  const [users, targets, deals, allKickers] = await Promise.all([
+  const [users, targets, deals, allKickers, allPsCalls] = await Promise.all([
     appsScript.getSheet('Users'),
     appsScript.getSheet('Targets'),
     appsScript.getSalesSheet(),
     appsScript.getSheet('Kickers').catch(() => []),
+    getDeduplicatedPresalesCalls().catch(() => []),
   ])
   const emails = collectEmails(users, rootEmail).filter(e => e !== rootEmail)
   const agents = users.filter(u => emails.includes(u.Email) && ['Agent', 'PreSales'].includes(u.Role))
-
-  // Use shared helper — counts past + active kickers (not future-only)
 
   return agents.map(agent => {
     const target     = latestTarget(targets, agent.Email?.trim().toLowerCase(), month)
     const tAmount    = target ? Number(tf(target, 'TargetAmount') ?? 0) : 0
     const agentEmail = agent.Email.trim().toLowerCase()
+    const isPS       = (agent.Role || '') === 'PreSales'
 
     const agentDeals = deals.filter(d =>
       d.Email === agentEmail &&
@@ -534,9 +534,15 @@ export const getLeaderboard = async (rootEmail, month) => {
     ).length
     const loanDocsPending = agentDeals.length - loanDocsDone
 
+    // PreSales: count unique calls from the presales calls sheet for this month
+    const callsCount = isPS
+      ? allPsCalls.filter(r => r.agentEmail === agentEmail && (!month || r.month === month)).length
+      : null
+
     return {
       name:              agent.Name,
       email:             agent.Email,
+      role:              agent.Role || 'Agent',
       target:            tAmount,
       achieved,
       dealsCount,
@@ -550,6 +556,7 @@ export const getLeaderboard = async (rootEmail, month) => {
       pct:               tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
       commission,
       slabInfo:          getSlabInfo(achieved, target),
+      callsCount,        // non-null only for PreSales agents
     }
   }).sort((a, b) => b.achieved - a.achieved)
 }
@@ -754,22 +761,59 @@ export function computePSSalesEarnings(salesCount) {
   return slab ? salesCount * slab.ratePerSale : 0
 }
 
-// Reads PreSalesCalls + PreSalesSales sheets and computes incentive summary.
-// Gracefully returns 0s if sheets don't exist yet.
+// ── Presales calls sheet helpers ───────────────────────────────────────────────
+// Maps a raw row from the "presales calls" Google Sheet tab.
+// Column B = "Email address" (the PS agent who made the call)
+// Column E = "Learner PH" (phone — used for deduplication)
+// Column G = "Date" (used to keep the latest call per phone)
+// Column K = "Month" (YYYY-MM — used for month filtering)
+function mapPresalesCallRow(raw) {
+  return {
+    agentEmail:  (col(raw, 'Email address') || '').trim().toLowerCase(),
+    learnerName: String(col(raw, 'Learner Name')  || '').trim(),
+    learnerPH:   String(col(raw, 'Learner PH')    || '').replace(/\D/g, ''), // digits only
+    course:      String(col(raw, 'Course')         || '').trim(),
+    leadSource:  String(col(raw, 'Lead source')    || '').trim(),
+    date:        String(col(raw, 'Date')            || col(raw, 'Timestamp') || '').trim(),
+    month:       normalizeMonth(col(raw, 'Month')),
+    assignedTo:  String(col(raw, 'Assigned to')    || '').trim(),
+  }
+}
+
+// Fetches the "presales calls" sheet and returns globally deduplicated rows.
+// Dedup rule: if the same Learner PH was called by multiple PS agents (or multiple
+// times by the same agent), only the row with the LATEST Date is kept.
+// This correctly credits the most-recent PS agent for each unique lead.
+export async function getDeduplicatedPresalesCalls() {
+  const raw  = await appsScript.getSheet('presales calls').catch(() => [])
+  const rows = (raw || []).map(mapPresalesCallRow).filter(r => r.learnerPH)
+
+  const byPhone = {}
+  for (const r of rows) {
+    const existing = byPhone[r.learnerPH]
+    const rTime = new Date(r.date || 0).getTime() || 0
+    const eTime = existing ? (new Date(existing.date || 0).getTime() || 0) : 0
+    if (!existing || rTime >= eTime) byPhone[r.learnerPH] = r
+  }
+  return Object.values(byPhone)
+}
+
+// Reads "presales calls" (deduplicated) + PreSalesSales sheets and computes
+// incentive summary for a single PS agent. Gracefully returns 0s if sheets missing.
 export const getPreSalesSummary = async (email, month) => {
   const lower = (email || '').trim().toLowerCase()
-  const [callsRaw, salesRaw] = await Promise.all([
-    appsScript.getSheet('PreSalesCalls').catch(() => []),
+  const [allCalls, salesRaw] = await Promise.all([
+    getDeduplicatedPresalesCalls(),
     appsScript.getSheet('PreSalesSales').catch(() => []),
   ])
 
-  const myCalls = (callsRaw || []).filter(r =>
-    (r.PreSalesEmail || '').trim().toLowerCase() === lower &&
-    (!month || r.Month === month)
+  const myCalls = allCalls.filter(r =>
+    r.agentEmail === lower &&
+    (!month || r.month === month)
   )
   const mySales = (salesRaw || []).filter(r =>
     (r.PreSalesEmail || '').trim().toLowerCase() === lower &&
-    (!month || r.Month === month)
+    (!month || normalizeMonth(r.Month) === month)
   )
 
   const callsCount = myCalls.length

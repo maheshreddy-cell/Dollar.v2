@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning } from '../services/api'
+import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
@@ -117,6 +117,133 @@ function HatTrickCard({ deals, agentEmail, agentName }) {
             <p>→ Earn <strong>₹1,000</strong> bonus automatically — all programs count</p>
             <p>→ Repeatable every day — no cap on hat tricks per month</p>
             <p>→ Applies to all roles: Agent, PreSales, Manager</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── PreSales Calls & Sales Card ───────────────────────────────────────────────
+function PSCallsCard({ psSummary }) {
+  if (!psSummary) return (
+    <div className="bg-white rounded-2xl border border-teal-200 p-6 text-center text-xs text-gray-400">
+      Loading calls data…
+    </div>
+  )
+
+  const { callsCount, salesCount, callsEarnings, salesEarnings, totalEarnings,
+          currentCallSlab, nextCallSlab, currentSalesSlab, nextSalesSlab } = psSummary
+
+  // Calls progress bar
+  const maxCallSlab    = PS_CALLS_SLABS[0]?.minCalls || 65
+  const callsPct       = Math.min((callsCount / maxCallSlab) * 100, 100)
+  const maxSalesSlab   = PS_SALES_SLABS[0]?.minSales || 10
+  const salesPct       = Math.min((salesCount / maxSalesSlab) * 100, 100)
+
+  return (
+    <div className="bg-white rounded-2xl border border-teal-200 shadow-sm overflow-hidden ring-2 ring-teal-50">
+      <div className="h-1.5 bg-gradient-to-r from-teal-400 via-cyan-400 to-blue-400" />
+
+      <div className="px-5 py-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold uppercase bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full">📞 Always Active</span>
+              <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
+              <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">👤 PreSales Only</span>
+            </div>
+            <h3 className="text-base font-bold text-gray-900 leading-snug">📞 PreSales Incentive</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Earn per unique call + per closed sale. Resets monthly.</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-black text-teal-500">{formatINR(totalEarnings)}</p>
+            <p className="text-[10px] text-teal-400 font-semibold">total earned</p>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="flex gap-2">
+          <div className="flex-1 bg-teal-50 rounded-xl px-3 py-2.5 text-center">
+            <p className="text-xl font-black text-teal-700">{callsCount}</p>
+            <p className="text-[10px] text-teal-500 font-semibold">Unique Calls</p>
+          </div>
+          <div className="flex-1 bg-cyan-50 rounded-xl px-3 py-2.5 text-center">
+            <p className="text-xl font-black text-cyan-700">{salesCount}</p>
+            <p className="text-[10px] text-cyan-500 font-semibold">Sales Closed</p>
+          </div>
+          <div className="flex-1 bg-blue-50 rounded-xl px-3 py-2.5 text-center">
+            <p className="text-sm font-black text-blue-700">{formatINR(totalEarnings)}</p>
+            <p className="text-[10px] text-blue-500 font-semibold">Earned</p>
+          </div>
+        </div>
+
+        {/* Calls slab progress */}
+        <div className="bg-teal-50 border border-teal-100 rounded-xl px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-teal-700">📞 Calls Slab Progress</p>
+            <p className="text-xs font-bold text-teal-600">{callsCount} / {maxCallSlab} calls</p>
+          </div>
+          <div className="h-2.5 bg-teal-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-700 ${currentCallSlab ? 'bg-teal-500' : 'bg-teal-300'}`}
+              style={{ width: `${callsPct}%` }} />
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className={`font-semibold ${currentCallSlab ? 'text-teal-600' : 'text-gray-400'}`}>
+              {currentCallSlab ? `✅ ₹${currentCallSlab.ratePerCall}/call (${callsCount} calls = ${formatINR(callsEarnings)})` : 'No slab reached yet'}
+            </span>
+            {nextCallSlab && (
+              <span className="text-orange-500 font-medium">
+                🎯 {nextCallSlab.minCalls - callsCount} more → ₹{nextCallSlab.ratePerCall}/call
+              </span>
+            )}
+          </div>
+          {/* All call slabs */}
+          <div className="space-y-1 pt-1">
+            {PS_CALLS_SLABS.slice().reverse().map((s, i) => {
+              const hit = callsCount >= s.minCalls
+              return (
+                <div key={i} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${hit ? 'bg-teal-100 text-teal-700 font-semibold' : 'bg-white text-gray-400'}`}>
+                  <span>{s.minCalls}+ calls</span>
+                  <span>₹{s.ratePerCall}/call {hit ? '✓' : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Sales slab progress */}
+        <div className="bg-cyan-50 border border-cyan-100 rounded-xl px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-cyan-700">🎯 Sales Slab Progress</p>
+            <p className="text-xs font-bold text-cyan-600">{salesCount} / {maxSalesSlab} sales</p>
+          </div>
+          <div className="h-2.5 bg-cyan-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-700 ${currentSalesSlab ? 'bg-cyan-500' : 'bg-cyan-300'}`}
+              style={{ width: `${salesPct}%` }} />
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className={`font-semibold ${currentSalesSlab ? 'text-cyan-600' : 'text-gray-400'}`}>
+              {currentSalesSlab ? `✅ ₹${formatINR(currentSalesSlab.ratePerSale)}/sale (${salesCount} sales = ${formatINR(salesEarnings)})` : 'No slab reached yet'}
+            </span>
+            {nextSalesSlab && (
+              <span className="text-orange-500 font-medium">
+                🎯 {nextSalesSlab.minSales - salesCount} more → {formatINR(nextSalesSlab.ratePerSale)}/sale
+              </span>
+            )}
+          </div>
+          {/* All sales slabs */}
+          <div className="space-y-1 pt-1">
+            {PS_SALES_SLABS.slice().reverse().map((s, i) => {
+              const hit = salesCount >= s.minSales
+              return (
+                <div key={i} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${hit ? 'bg-cyan-100 text-cyan-700 font-semibold' : 'bg-white text-gray-400'}`}>
+                  <span>{s.minSales}+ sales</span>
+                  <span>{formatINR(s.ratePerSale)}/sale {hit ? '✓' : ''}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -426,11 +553,13 @@ export default function Kickers() {
 
   const [kickers,   setKickers]   = useState([])
   const [deals,     setDeals]     = useState([])
+  const [psSummary, setPsSummary] = useState(null)
   const [loading,   setLoading]   = useState(true)
   const [tab,       setTab]       = useState('active')
   const [manMode,   setManMode]   = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
   const isManager   = effectiveUser?.role === 'Manager'
+  const isPreSales  = effectiveUser?.role === 'PreSales'
   const isOversight = OVERSIGHT_ROLES.includes(effectiveUser?.role) && effectiveUser?.email === user?.email
 
   function isVisible(k) {
@@ -448,15 +577,16 @@ export default function Kickers() {
     if (!effectiveUser?.email) return
     setLoading(true)
     try {
-      const [ks, ds] = await Promise.all([
-        getKickers(),
-        getDeals(null, month),
-      ])
+      const fetches = [getKickers(), getDeals(null, month)]
+      // Load PS summary in parallel for PreSales agents
+      if (isPreSales) fetches.push(getPreSalesSummary(effectiveUser.email, month))
+      const [ks, ds, psData] = await Promise.all(fetches)
       setKickers(ks)
       setDeals(ds)
+      if (psData) setPsSummary(psData)
     } catch { /* show empty */ }
     finally { setLoading(false) }
-  }, [effectiveUser?.email, month])
+  }, [effectiveUser?.email, effectiveUser?.role, month])
 
   useEffect(() => { load() }, [load])
 
@@ -538,6 +668,11 @@ export default function Kickers() {
           agentEmail={effectiveUser?.email}
           agentName={effectiveUser?.name}
         />
+      )}
+
+      {/* PreSales Calls + Sales slab card — shown for PreSales agents only */}
+      {tab === 'active' && isPreSales && (
+        <PSCallsCard psSummary={psSummary} />
       )}
 
       {/* Regular kicker cards */}

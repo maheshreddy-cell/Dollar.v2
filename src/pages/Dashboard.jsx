@@ -990,6 +990,7 @@ export default function Dashboard() {
                         <th className="px-4 py-3 text-right font-medium">Commission</th>
                         <th className="px-4 py-3 text-right font-medium">T+2</th>
                         <th className="px-4 py-3 text-right font-medium">Money Made</th>
+                        <th className="px-4 py-3 text-center font-medium">Calls</th>
                         <th className="px-4 py-3 text-center font-medium">Docs</th>
                       </tr>
                     </thead>
@@ -1051,6 +1052,13 @@ export default function Dashboard() {
                               <p className="text-sm font-medium text-purple-700">{formatINR(row.moneyMade ?? 0)}</p>
                             </td>
                             <td className="px-4 py-3.5 text-center">
+                              {row.callsCount !== null && row.callsCount !== undefined ? (
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 px-2.5 py-1 rounded-full">
+                                  📞 {row.callsCount}
+                                </span>
+                              ) : <span className="text-xs text-gray-300">—</span>}
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
                               {row.loanDocsDone !== undefined ? (
                                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${row.loanDocsDone > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                                   {row.loanDocsDone} done / {row.loanDocsPending} pend
@@ -1071,6 +1079,7 @@ export default function Dashboard() {
                           <td className="px-4 py-3 text-right text-purple-600">{formatINR(t.commission)}</td>
                           <td className="px-4 py-3 text-right text-blue-600">{formatINR(t.totalT2Amount)}</td>
                           <td className="px-4 py-3 text-right text-purple-700">{formatINR(t.moneyMade)}</td>
+                          <td />
                           <td className="px-4 py-3 text-center text-gray-600 text-xs">{t.loanDocsDone}d / {t.loanDocsPending}p</td>
                         </tr>
                       )})()}
