@@ -7,14 +7,27 @@ import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
 function HatTrickCard({ deals }) {
-  // All hat trick data for the loaded deals (month-scoped)
+  // All hat trick data for the loaded deals (month-scoped, paid only — for earnings)
   const { amount, days, byDate } = computeHatTrickEarnings(deals)
 
-  // Today's paid deal count
-  const now = new Date()
+  // Today's key (IST)
+  const now    = new Date()
   const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
   const todayKey = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
-  const todayCount = byDate[todayKey] || 0
+
+  // Today's progress = ALL deals today (not just paid), so agents can see their real count
+  const allByDate = {}
+  for (const d of (deals || [])) {
+    const raw = d.Timestamp || d.PaymentDate
+    if (!raw) continue
+    const ts = new Date(raw)
+    if (isNaN(ts.getTime())) continue
+    const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
+    const key = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`
+    allByDate[key] = (allByDate[key] || 0) + 1
+  }
+
+  const todayCount = allByDate[todayKey] || 0
   const todayPct   = Math.min((todayCount / 3) * 100, 100)
   const todayGap   = Math.max(3 - todayCount, 0)
 
