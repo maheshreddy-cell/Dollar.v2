@@ -762,94 +762,51 @@ export function computePSSalesEarnings(salesCount) {
 }
 
 // ── Presales calls sheet helpers ───────────────────────────────────────────────
-// Parses dates in DD/MM/YYYY or DD/MM/YYYY HH:MM:SS format (Google Sheets default).
-// Falls back to standard Date parsing for ISO strings etc.
-function parsePSDate(str) {
-  if (!str) return null
-  const s = String(str).trim()
-  // DD/MM/YYYY or DD/MM/YYYY HH:MM:SS
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
-  const d = new Date(s)
-  return isNaN(d.getTime()) ? null : d
-}
+// Each row in "presales calls" = 1 scheduled call.
+// Month is derived from Timestamp (col A) which Apps Script returns as ISO UTC string.
+// No deduplication — every row for this agent in this month counts as 1 call.
 
-// Converts a Date → IST YYYY-MM string
-function dateToISTMonth(d) {
-  if (!d) return ''
-  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000)
-  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
-}
-
-// Maps a raw row from the "presales calls" Google Sheet tab.
-// Column B = "Email address" (the PS agent who made the call)
-// Column E = "Learner PH" (phone — used for deduplication)
-// Column A = "Timestamp" — primary date source (format: DD/MM/YYYY HH:MM:SS)
-// Column K = "Month" — may be just "April" (no year); we derive month from Timestamp instead
 function mapPresalesCallRow(raw) {
-  // Use Timestamp (col A) as primary date — format is "09/04/2026 14:53:16"
-  // Fall back to Date col only if Timestamp is missing
-  const rawDate = col(raw, 'Timestamp') || col(raw, 'Date') || ''
-  const parsedDate = parsePSDate(rawDate)
-
-  // Derive YYYY-MM from the parsed date (reliable).
-  // Only fall back to normalizeMonth(Month) if date parsing fails — Month col is
-  // often just "April" with no year, which normalizeMonth can't resolve.
-  const month = parsedDate
-    ? dateToISTMonth(parsedDate)
-    : normalizeMonth(col(raw, 'Month'))
+  // Timestamp (col A) comes back as ISO UTC string e.g. "2026-04-09T08:23:16.000Z"
+  const rawTs = col(raw, 'Timestamp') || ''
+  const ts    = rawTs ? new Date(rawTs) : null
+  // Convert UTC → IST to get correct month
+  const month = ts && !isNaN(ts.getTime())
+    ? (() => {
+        const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
+        return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, '0')}`
+      })()
+    : ''
 
   return {
-    agentEmail:  (col(raw, 'Email address') || '').trim().toLowerCase(),
+    agentEmail: (col(raw, 'Email address') || '').trim().toLowerCase(),
+    month,       // YYYY-MM derived from Timestamp col A in IST
+    learnerPH:  String(col(raw, 'Learner PH') || '').replace(/\D/g, ''),
     learnerName: String(col(raw, 'Learner Name') || '').trim(),
-    learnerPH:   String(col(raw, 'Learner PH')   || '').replace(/\D/g, ''), // digits only for dedup
-    course:      String(col(raw, 'Course')        || '').trim(),
-    leadSource:  String(col(raw, 'Lead source')   || '').trim(),
-    parsedDate,               // Date object for dedup comparison
-    month,                    // YYYY-MM derived from actual date — not the Month text col
-    assignedTo:  String(col(raw, 'Assigned to')   || '').trim(),
+    course:      String(col(raw, 'Course')       || '').trim(),
   }
 }
 
-// Fetches the "presales calls" sheet and returns globally deduplicated rows.
-// Dedup rule: rows WITH a Learner PH → keep only the latest row per phone number.
-// Rows WITHOUT a Learner PH → always included (can't be deduped, count as-is).
-// Also requires agentEmail to be non-empty (skips blank/header rows).
-export async function getDeduplicatedPresalesCalls() {
+// Fetches the "presales calls" sheet and returns all rows mapped + filtered.
+// Always bypasses cache so fresh data is returned every time.
+export async function getPresalesCalls() {
   try {
-    // Always clear stale cache before fetching — this sheet updates frequently
-    // and stale empty-array results from previous errors must not be served.
     clearSheetCache('presales calls')
-    const raw  = await appsScript.getSheet('presales calls').catch(() => [])
-    const rows = (raw || [])
-      .map(mapPresalesCallRow)
-      .filter(r => r.agentEmail) // skip blank rows — must have agent email
-
-    const withPhone    = rows.filter(r => r.learnerPH)
-    const withoutPhone = rows.filter(r => !r.learnerPH)
-
-    // Dedup rows that have a phone: keep latest by timestamp per phone
-    const byPhone = {}
-    for (const r of withPhone) {
-      const existing = byPhone[r.learnerPH]
-      const rTime = r.parsedDate ? r.parsedDate.getTime() : 0
-      const eTime = existing?.parsedDate ? existing.parsedDate.getTime() : 0
-      if (!existing || rTime >= eTime) byPhone[r.learnerPH] = r
-    }
-
-    // Rows without phone are included as-is (can't dedup without an identifier)
-    return [...Object.values(byPhone), ...withoutPhone]
+    const raw = await appsScript.getSheet('presales calls').catch(() => [])
+    return (raw || []).map(mapPresalesCallRow).filter(r => r.agentEmail && r.month)
   } catch {
-    return [] // never crash the caller
+    return []
   }
 }
 
-// Reads "presales calls" (deduplicated) + PreSalesSales sheets and computes
-// incentive summary for a single PS agent. Gracefully returns 0s if sheets missing.
+// Keep old name as alias so getLeaderboard still works
+export const getDeduplicatedPresalesCalls = getPresalesCalls
+
+// Reads "presales calls" + PreSalesSales sheets and computes incentive summary.
 export const getPreSalesSummary = async (email, month) => {
   const lower = (email || '').trim().toLowerCase()
   const [allCalls, salesRaw] = await Promise.all([
-    getDeduplicatedPresalesCalls().catch(() => []),   // never crash dashboard
+    getPresalesCalls().catch(() => []),
     appsScript.getSheet('PreSalesSales').catch(() => []),
   ])
 
