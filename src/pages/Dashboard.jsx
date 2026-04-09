@@ -5,8 +5,9 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets } from '../services/api'
-import MetricsCard   from '../components/MetricsCard'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped } from '../services/api'
+import MetricsCard     from '../components/MetricsCard'
+import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { useRefresh } from '../hooks/useRefresh'
@@ -80,6 +81,26 @@ export default function Dashboard() {
   const [drillLoading, setDrillLoading] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all') // 'all'|'Manager'|'Agent'|'PreSales'
   const [psSummary,  setPsSummary]  = useState(null)   // PreSales calls+sales summary
+
+  // Drill-down modal (clickable cards)
+  const [cardModal, setCardModal] = useState({ open: false, title: '', type: '', payload: null, loading: false })
+  const closeCardModal = () => setCardModal(m => ({ ...m, open: false }))
+
+  async function openCardDrill(type, title) {
+    setCardModal({ open: true, title, type, payload: null, loading: true })
+    try {
+      if (type.startsWith('team_')) {
+        // Manager team cards — use already-loaded leaderboard
+        setCardModal(m => ({ ...m, payload: { leaderboard }, loading: false }))
+      } else {
+        // Agent cards — fetch deals breakdown
+        const grouped = await getDealsGrouped(effectiveUser?.email, month)
+        setCardModal(m => ({ ...m, payload: { grouped, summary }, loading: false }))
+      }
+    } catch {
+      setCardModal(m => ({ ...m, loading: false }))
+    }
+  }
 
   const isManager   = MANAGER_ROLES.includes(effectiveUser?.role)
   const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
@@ -209,23 +230,27 @@ export default function Dashboard() {
       title: 'Team Target',
       value: formatINR(summary?.totalTarget ?? 0),
       icon: Target, color: 'blue',
+      onClick: () => openCardDrill('team_target', 'Team Target — Per Agent'),
     },
     {
       title: 'Team Sale Value',
       value: formatINR(summary?.totalSaleValue ?? 0),
       sub:   'Pipeline (all deals)',
       icon: TrendingUp, color: 'blue',
+      onClick: () => openCardDrill('team_pipeline', 'Team Pipeline — Per Agent'),
     },
     {
       title: 'Team Achieved',
       value: formatINR(summary?.totalAchieved ?? 0),
       icon: TrendingUp, color: 'green',
+      onClick: () => openCardDrill('team_achieved', 'Team Achieved — Per Agent'),
     },
     {
       title: 'Total Money Made',
       value: formatINR(summary?.totalMoneyMade ?? 0),
       sub:   `Commission ${formatINR(summary?.totalCommission ?? 0)} · T+2 ${formatINR(summary?.totalT2Amount ?? 0)}`,
       icon: DollarSign, color: 'purple', highlight: false,
+      onClick: () => openCardDrill('team_commission', 'Total Money Made — Per Agent'),
     },
     {
       title: 'Achievement %',
@@ -233,6 +258,7 @@ export default function Dashboard() {
       sub:   gap > 0 ? `${formatINR(gap)} to go` : 'Target hit! 🎉',
       icon: Percent,
       color: achievedPct >= 100 ? 'green' : achievedPct >= 50 ? 'orange' : 'red',
+      onClick: () => openCardDrill('team_achieved', 'Achievement — Per Agent'),
     },
     {
       title: 'Projected %',
@@ -240,6 +266,7 @@ export default function Dashboard() {
       sub:   'If full pipeline pays',
       icon: BarChart2,
       color: projectedPct >= 100 ? 'green' : projectedPct >= 75 ? 'orange' : 'blue',
+      onClick: () => openCardDrill('team_pipeline', 'Pipeline — Per Agent'),
     },
   ]
 
@@ -617,18 +644,21 @@ export default function Dashboard() {
                   title="Incentives Earned"
                   value={formatINR(summary?.totalCommission ?? 0)}
                   icon={DollarSign} color="purple" sub={slabSub}
+                  onClick={() => openCardDrill('commission', 'Incentives Breakdown')}
                 />
                 <MetricsCard
                   title="T+2 Day Incentives"
                   value={formatINR(summary?.totalT2Amount ?? 0)}
                   icon={Zap} color="blue"
                   sub="On-time payment bonus (per deal)"
+                  onClick={() => openCardDrill('commission', 'T+2 Bonus Details')}
                 />
                 <MetricsCard
                   title="Kickers Earned"
                   value={formatINR(summary?.totalKickers ?? 0)}
                   icon={Award} color="green"
                   sub="Confirmed by manager"
+                  onClick={() => openCardDrill('commission', 'Kicker Breakdown')}
                 />
               </div>
               {/* Total Incentives — hero row */}
@@ -686,18 +716,18 @@ export default function Dashboard() {
                     <p className="text-xs text-gray-400 mb-0.5">Target</p>
                     <p className="text-sm font-bold text-gray-800">{formatINR(summary.totalTarget)}</p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-0.5">Achieved</p>
+                  <button className="text-center rounded-lg hover:bg-green-50 transition-colors p-1 -m-1" onClick={() => openCardDrill('achieved', 'Achieved — Paid Deals')}>
+                    <p className="text-xs text-gray-400 mb-0.5">Achieved ›</p>
                     <p className="text-sm font-bold text-green-600">{formatINR(summary.totalAchieved)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-0.5">Sale Value</p>
+                  </button>
+                  <button className="text-center rounded-lg hover:bg-blue-50 transition-colors p-1 -m-1" onClick={() => openCardDrill('pipeline', 'Sale Value — All Deals')}>
+                    <p className="text-xs text-gray-400 mb-0.5">Sale Value ›</p>
                     <p className="text-sm font-bold text-blue-600">{formatINR(summary.totalSaleValue)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400 mb-0.5">Proj %</p>
+                  </button>
+                  <button className="text-center rounded-lg hover:bg-orange-50 transition-colors p-1 -m-1" onClick={() => openCardDrill('pipeline', 'Full Pipeline')}>
+                    <p className="text-xs text-gray-400 mb-0.5">Proj % ›</p>
                     <p className={`text-sm font-bold ${projectedPct >= 100 ? 'text-green-600' : 'text-orange-600'}`}>{projectedPct.toFixed(0)}%</p>
-                  </div>
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-3 border-t border-gray-100">
                   <div className="text-center">
@@ -1068,6 +1098,16 @@ export default function Dashboard() {
 
         </div>
       )}
+
+      {/* ── Drill-down modal (clickable cards) ── */}
+      <DrillDownModal
+        open={cardModal.open}
+        onClose={closeCardModal}
+        title={cardModal.title}
+        type={cardModal.type}
+        payload={cardModal.payload}
+        loading={cardModal.loading}
+      />
 
     </div>
   )

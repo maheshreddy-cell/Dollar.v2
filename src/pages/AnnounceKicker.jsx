@@ -83,8 +83,9 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   const rangeDeals   = allDeals.filter(d => {
     if (!targetEmails.has(d.Email)) return false
     const ts = d.Timestamp || d.PaymentDate
-    if (!ts) return false
-    const t = new Date(ts).getTime()
+    // Fallback: if no date field, use first day of the deal's month so it's still
+    // counted for kickers covering that month (fixes missing-timestamp deals)
+    const t = ts ? new Date(ts).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
     if (isNaN(t) || t < from || t > to) return false
     if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
     return true

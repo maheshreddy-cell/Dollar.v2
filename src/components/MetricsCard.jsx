@@ -13,16 +13,19 @@ export default function MetricsCard({
   color = 'blue',
   trend,
   highlight = false,
+  onClick,
 }) {
   const p = PALETTE[color] ?? PALETTE.blue
 
   return (
     <div className={[
-      'ios-card p-5 flex items-start gap-4 group',
-      'transition-all duration-200 cursor-default',
-      'hover:shadow-ios-md hover:-translate-y-0.5',
+      'ios-card p-5 flex items-start gap-4 group relative',
+      'transition-all duration-200',
+      onClick ? 'cursor-pointer hover:shadow-ios-md hover:-translate-y-0.5 active:scale-[0.98]' : 'cursor-default hover:shadow-ios-md hover:-translate-y-0.5',
       highlight ? `ring-2 ${p.ring}` : '',
-    ].join(' ')}>
+    ].join(' ')}
+    onClick={onClick}
+    >
 
       {Icon && (
         <div className={[
@@ -57,6 +60,12 @@ export default function MetricsCard({
           }`}>
             {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
           </span>
+        )}
+
+        {onClick && (
+          <p className="text-[10px] text-gray-400 mt-1.5 group-hover:text-gray-500 transition-colors">
+            Tap to see details →
+          </p>
         )}
       </div>
     </div>

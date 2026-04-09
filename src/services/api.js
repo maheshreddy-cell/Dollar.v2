@@ -834,7 +834,10 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers) {
     if (Date.now() < from) continue
 
     const inRange = agentDeals.filter(d => {
-      const dt = new Date(d.Timestamp || d.PaymentDate || 0).getTime()
+      const raw = d.Timestamp || d.PaymentDate
+      // Fallback: if no date field, use the first day of the deal's month so it's
+      // still counted for kickers that cover that month (fixes missing-timestamp deals)
+      const dt = raw ? new Date(raw).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : 0)
       return dt >= from && dt <= to
     })
 
