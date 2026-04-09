@@ -816,11 +816,13 @@ export function computeHatTrickEarnings(agentDeals) {
   return { amount: hatTrickDays * 1000, days: hatTrickDays, byDate }
 }
 
-// ── Auto-log hat trick achievement to Google Sheet ────────────────────────────
-// Writes one row per hat-trick day per agent. Caller must deduplicate before calling.
+// ── Auto-log hat trick achievement to KickerEarnings sheet ───────────────────
+// Writes one row per hat-trick day per agent to the KickerEarnings tab.
+// The Kickers tab is for kicker config only — achievements go to KickerEarnings.
+// Caller must deduplicate before calling (sessionStorage-based in HatTrickCard).
 export async function logHatTrickAchievement({ agentEmail, agentName, date, month, dealCount }) {
   try {
-    await appsScript.appendRow('Kickers', {
+    await appsScript.appendRow('KickerEarnings', {
       Date:       date,
       Month:      month,
       AgentEmail: agentEmail,
