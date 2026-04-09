@@ -797,12 +797,12 @@ export const getPreSalesSummary = async (email, month) => {
 // Note: parseKickerRow is defined later (hoisted) near getKickers()
 
 // ── Hat Trick Kicker (always-on default) ─────────────────────────────────────
-// 3 paid deals (PaidActual > 0) in the same calendar day = ₹1,000 bonus.
+// 3 deals (any status) in the same calendar day (IST) = ₹1,000 bonus.
 // Applies to ALL programs, ALL roles. No start/end date — always active.
 export function computeHatTrickEarnings(agentDeals) {
   const byDate = {}
   for (const d of (agentDeals || [])) {
-    if (!(d.PaidActual > 0)) continue            // only paid/collected deals
+    // Count ALL deals regardless of payment status
     const raw = d.Timestamp || d.PaymentDate
     if (!raw) continue
     const ts = new Date(raw)
@@ -814,6 +814,25 @@ export function computeHatTrickEarnings(agentDeals) {
   }
   const hatTrickDays = Object.values(byDate).filter(n => n >= 3).length
   return { amount: hatTrickDays * 1000, days: hatTrickDays, byDate }
+}
+
+// ── Auto-log hat trick achievement to Google Sheet ────────────────────────────
+// Writes one row per hat-trick day per agent. Caller must deduplicate before calling.
+export async function logHatTrickAchievement({ agentEmail, agentName, date, month, dealCount }) {
+  try {
+    await appsScript.appendRow('Kickers', {
+      Date:       date,
+      Month:      month,
+      AgentEmail: agentEmail,
+      AgentName:  agentName,
+      KickerType: 'Hat Trick',
+      Details:    `${dealCount} deals on ${date}`,
+      Amount:     1000,
+      LoggedAt:   new Date().toISOString(),
+    })
+  } catch (e) {
+    // fire-and-forget — never block UI
+  }
 }
 
 // Compute kicker payout earned by a single agent.

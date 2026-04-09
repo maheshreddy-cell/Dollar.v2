@@ -2,34 +2,47 @@ import { useState, useEffect, useCallback } from 'react'
 import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals, computeHatTrickEarnings } from '../services/api'
+import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
-function HatTrickCard({ deals }) {
-  // All hat trick data for the loaded deals (month-scoped, paid only — for earnings)
+function HatTrickCard({ deals, agentEmail, agentName }) {
+  // computeHatTrickEarnings now counts ALL deals (any status) — same logic for progress + earnings
   const { amount, days, byDate } = computeHatTrickEarnings(deals)
 
   // Today's key (IST)
   const now    = new Date()
   const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
   const todayKey = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
+  const todayMonth = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
 
-  // Today's progress = ALL deals today (not just paid), so agents can see their real count
-  const allByDate = {}
-  for (const d of (deals || [])) {
-    const raw = d.Timestamp || d.PaymentDate
-    if (!raw) continue
-    const ts = new Date(raw)
-    if (isNaN(ts.getTime())) continue
-    const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
-    const key = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`
-    allByDate[key] = (allByDate[key] || 0) + 1
-  }
-
-  const todayCount = allByDate[todayKey] || 0
+  const todayCount = byDate[todayKey] || 0
   const todayPct   = Math.min((todayCount / 3) * 100, 100)
   const todayGap   = Math.max(3 - todayCount, 0)
+
+  // Auto-log new hat trick achievements to Kickers sheet (dedup: track in sessionStorage)
+  useEffect(() => {
+    const hatTrickDays = Object.entries(byDate).filter(([, n]) => n >= 3)
+    if (!hatTrickDays.length || !agentEmail) return
+    const loggedKey = `ht_logged_${agentEmail}`
+    let alreadyLogged = []
+    try { alreadyLogged = JSON.parse(sessionStorage.getItem(loggedKey) || '[]') } catch {}
+    const toLog = hatTrickDays.filter(([date]) => !alreadyLogged.includes(date))
+    if (!toLog.length) return
+    toLog.forEach(([date, count]) => {
+      logHatTrickAchievement({
+        agentEmail,
+        agentName: agentName || agentEmail,
+        date,
+        month: todayMonth,
+        dealCount: count,
+      })
+    })
+    try {
+      sessionStorage.setItem(loggedKey, JSON.stringify([...alreadyLogged, ...toLog.map(([d]) => d)]))
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(byDate), agentEmail])
 
   return (
     <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden ring-2 ring-orange-100">
@@ -47,7 +60,7 @@ function HatTrickCard({ deals }) {
               <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">All Programs</span>
             </div>
             <h3 className="text-base font-bold text-gray-900 leading-snug">🏏 Hat Trick Kicker</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Close 3 paid deals in a single day — earn ₹1,000 bonus. Every time. No limit.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Close 3 deals in a single day — earn ₹1,000 bonus. Every time. No limit.</p>
           </div>
           <div className="text-right shrink-0">
             <p className="text-2xl font-black text-orange-500">{formatINR(amount)}</p>
@@ -100,7 +113,7 @@ function HatTrickCard({ deals }) {
         <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">How it works</p>
           <div className="space-y-1 text-xs text-gray-600">
-            <p>→ Close <strong>3 paid deals</strong> (PaidActual {'>'} 0) on the same day</p>
+            <p>→ Close <strong>3 deals</strong> on the same calendar day (any status counts)</p>
             <p>→ Earn <strong>₹1,000</strong> bonus automatically — all programs count</p>
             <p>→ Repeatable every day — no cap on hat tricks per month</p>
             <p>→ Applies to all roles: Agent, PreSales, Manager</p>
@@ -498,7 +511,11 @@ export default function Kickers() {
 
       {/* Hat Trick Kicker — always shown on Active tab (not Past) */}
       {tab === 'active' && (!isManager || manMode === 'forMe') && (
-        <HatTrickCard deals={deals.filter(d => d.Email === effectiveUser?.email)} />
+        <HatTrickCard
+          deals={deals.filter(d => d.Email === effectiveUser?.email)}
+          agentEmail={effectiveUser?.email}
+          agentName={effectiveUser?.name}
+        />
       )}
 
       {/* Regular kicker cards */}
