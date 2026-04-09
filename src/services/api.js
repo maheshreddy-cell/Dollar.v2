@@ -784,12 +784,12 @@ function dateToISTMonth(d) {
 // Maps a raw row from the "presales calls" Google Sheet tab.
 // Column B = "Email address" (the PS agent who made the call)
 // Column E = "Learner PH" (phone — used for deduplication)
-// Column G = "Date" — DD/MM/YYYY format, used for dedup + month derivation
-// Column A = "Timestamp" — fallback date source
-// Column K = "Month" — may be just "April" (no year); we derive month from Date/Timestamp
+// Column A = "Timestamp" — primary date source (format: DD/MM/YYYY HH:MM:SS)
+// Column K = "Month" — may be just "April" (no year); we derive month from Timestamp instead
 function mapPresalesCallRow(raw) {
-  // Derive the canonical call date: prefer "Date" col, fallback to "Timestamp"
-  const rawDate = col(raw, 'Date') || col(raw, 'Timestamp') || ''
+  // Use Timestamp (col A) as primary date — format is "09/04/2026 14:53:16"
+  // Fall back to Date col only if Timestamp is missing
+  const rawDate = col(raw, 'Timestamp') || col(raw, 'Date') || ''
   const parsedDate = parsePSDate(rawDate)
 
   // Derive YYYY-MM from the parsed date (reliable).
