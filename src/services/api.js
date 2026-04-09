@@ -1,5 +1,5 @@
 // All API calls go directly to Apps Script — no Node.js backend needed
-import { appsScript, clearCache } from './appsScript'
+import { appsScript, clearCache, clearSheetCache } from './appsScript'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 
@@ -817,6 +817,9 @@ function mapPresalesCallRow(raw) {
 // Also requires agentEmail to be non-empty (skips blank/header rows).
 export async function getDeduplicatedPresalesCalls() {
   try {
+    // Always clear stale cache before fetching — this sheet updates frequently
+    // and stale empty-array results from previous errors must not be served.
+    clearSheetCache('presales calls')
     const raw  = await appsScript.getSheet('presales calls').catch(() => [])
     const rows = (raw || [])
       .map(mapPresalesCallRow)

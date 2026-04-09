@@ -57,6 +57,14 @@ export function clearCache() {
   } catch {}
 }
 
+// Clears cache for a specific sheet so the next fetch always hits the network.
+// Use this for sheets that change frequently (e.g. presales calls).
+export function clearSheetCache(sheetName) {
+  const key = JSON.stringify({ action: 'getSheet', sheet: sheetName })
+  _cache.delete(key)
+  try { localStorage.removeItem(_lsKey(key)) } catch {}
+}
+
 // ─── In-flight deduplication ──────────────────────────────────────────────────
 const _inflight = new Map()
 
