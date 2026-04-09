@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement } from '../services/api'
+import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
@@ -253,13 +253,35 @@ function nudgeText(slab, type, progress) {
 }
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
-function KickerCard({ kicker, deals }) {
+function KickerCard({ kicker, deals, agentEmail, agentName }) {
   const [expanded, setExpanded] = useState(false)
 
   const active   = kickerIsActive(kicker)
   const past     = kickerIsPast(kicker)
   const progress = computeProgress(kicker, deals)
   const type     = kicker.type || 'team_sales'
+
+  // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
+  useEffect(() => {
+    if (!progress.activeSlab || !agentEmail) return
+    const now     = new Date()
+    const istNow  = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
+    const today   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
+    const month   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
+    const dedupKey = `kicker_logged_${agentEmail}_${kicker.id}_${progress.activeSlab.payout}`
+    try { if (sessionStorage.getItem(dedupKey)) return } catch {}
+    logKickerEarning({
+      agentEmail,
+      agentName: agentName || agentEmail,
+      date:       today,
+      month,
+      kickerType: kicker.title || type,
+      details:    `Slab hit: ${slabLabel(progress.activeSlab, type)} | ${type.startsWith('team_') ? 'Team' : 'Individual'} kicker`,
+      amount:     Number(progress.activeSlab.payout) || 0,
+    })
+    try { sessionStorage.setItem(dedupKey, '1') } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progress.activeSlab?.payout, agentEmail, kicker.id])
   const typeInfo = KICKER_TYPES.find(t => t.value === type)
   const isSales  = type.includes('sales') || type.includes('or') || type.includes('and')
   const isRev    = type.includes('revenue') || type.includes('or') || type.includes('and')
@@ -533,7 +555,13 @@ export default function Kickers() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {displayed.map(k => (
-            <KickerCard key={k.id} kicker={k} deals={dealsFor(k)} />
+            <KickerCard
+              key={k.id}
+              kicker={k}
+              deals={dealsFor(k)}
+              agentEmail={effectiveUser?.email}
+              agentName={effectiveUser?.name}
+            />
           ))}
         </div>
       )}

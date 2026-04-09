@@ -816,25 +816,35 @@ export function computeHatTrickEarnings(agentDeals) {
   return { amount: hatTrickDays * 1000, days: hatTrickDays, byDate }
 }
 
-// ── Auto-log hat trick achievement to KickerEarnings sheet ───────────────────
-// Writes one row per hat-trick day per agent to the KickerEarnings tab.
+// ── Auto-log ANY kicker earning to KickerEarnings sheet ──────────────────────
+// Single function used for ALL kicker types (Hat Trick, individual slabs, team slabs).
 // The Kickers tab is for kicker config only — achievements go to KickerEarnings.
-// Caller must deduplicate before calling (sessionStorage-based in HatTrickCard).
-export async function logHatTrickAchievement({ agentEmail, agentName, date, month, dealCount }) {
+// Caller must deduplicate before calling (sessionStorage-based in components).
+export async function logKickerEarning({ agentEmail, agentName, date, month, kickerType, details, amount }) {
   try {
     await appsScript.appendRow('KickerEarnings', {
       Date:       date,
       Month:      month,
       AgentEmail: agentEmail,
       AgentName:  agentName,
-      KickerType: 'Hat Trick',
-      Details:    `${dealCount} deals on ${date}`,
-      Amount:     1000,
+      KickerType: kickerType,
+      Details:    details,
+      Amount:     amount,
       LoggedAt:   new Date().toISOString(),
     })
   } catch (e) {
     // fire-and-forget — never block UI
   }
+}
+
+// Kept for backward compat — delegates to logKickerEarning
+export async function logHatTrickAchievement({ agentEmail, agentName, date, month, dealCount }) {
+  return logKickerEarning({
+    agentEmail, agentName, date, month,
+    kickerType: 'Hat Trick',
+    details:    `${dealCount} deals on ${date}`,
+    amount:     1000,
+  })
 }
 
 // Compute kicker payout earned by a single agent.
