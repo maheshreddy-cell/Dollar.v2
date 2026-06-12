@@ -1,8 +1,8 @@
-// Vercel serverless function — Supabase data layer (replaces Google Apps Script)
+// Netlify serverless function — Supabase data layer
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 
-const supabase = createClient(
+const getSupabase = () => createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 )
@@ -23,17 +23,17 @@ const TABLE = {
 }
 
 const toSheet = {
-  users:             r => ({ Email: r.email, Name: r.name, Role: r.role, ManagerEmail: r.manager_email, PasswordHash: r.password_hash, InviteToken: r.invite_token, InviteExpiry: r.invite_expiry, Status: r.status, Team: r.team, CreatedAt: r.created_at }),
-  targets:           r => ({ Key: r.key, Email: r.email, Month: r.month, TargetAmount: r.target_amount, CommissionPct: r.commission_pct, CommissionStartDate: r.commission_start_date, CommissionEndDate: r.commission_end_date, AssignedBy: r.assigned_by, AssignedAt: r.assigned_at }),
-  sales:             r => ({ Email: r.agent_email || '', LeadName: r.lead_name || '', CustomerEmail: r.customer_email || '', TotalValue: Number(r.total_sale_value) || 0, PaidActual: Number(r.paid_actual) || 0, AmountCleared: Number(r.amount_cleared) || 0, PaymentDate: r.payment_date || '', Month: r.month || '', Team: r.team || '', Vertical: r.vertical || '', Status: r.status || '', Course: r.course || '', Rating: r.rating, PaymentType: r.payment_type || '', Profession: r.profession || '', Timestamp: r.timestamp || '', LoanDocsCollected: r.loan_docs_collected || '', T2Amount: Number(r.t2_amount) || 0 }),
+  users: r => ({ Email: r.email, Name: r.name, Role: r.role, ManagerEmail: r.manager_email, PasswordHash: r.password_hash, InviteToken: r.invite_token, InviteExpiry: r.invite_expiry, Status: r.status, Team: r.team, CreatedAt: r.created_at }),
+  targets: r => ({ Key: r.key, Email: r.email, Month: r.month, TargetAmount: r.target_amount, CommissionPct: r.commission_pct, CommissionStartDate: r.commission_start_date, CommissionEndDate: r.commission_end_date, AssignedBy: r.assigned_by, AssignedAt: r.assigned_at }),
+  sales: r => ({ Email: r.agent_email || '', LeadName: r.lead_name || '', CustomerEmail: r.customer_email || '', TotalValue: Number(r.total_sale_value) || 0, PaidActual: Number(r.paid_actual) || 0, AmountCleared: Number(r.amount_cleared) || 0, PaymentDate: r.payment_date || '', Month: r.month || '', Team: r.team || '', Vertical: r.vertical || '', Status: r.status || '', Course: r.course || '', Rating: r.rating, PaymentType: r.payment_type || '', Profession: r.profession || '', Timestamp: r.timestamp || '', LoanDocsCollected: r.loan_docs_collected || '', T2Amount: Number(r.t2_amount) || 0 }),
   commission_config: r => ({ Key: r.key, ManagerEmail: r.manager_email, Month: r.month, ProjectedSlabs: r.projected_slabs, RealisedSlabs: r.realised_slabs, AssignedBy: r.assigned_by, AssignedAt: r.assigned_at, ProgramFilter: r.program_filter || 'all' }),
-  kickers:           r => ({ KickerId: r.kicker_id, Title: r.title, Message: r.message, Type: r.type, MinSaleValue: r.min_sale_value || 0, DateFrom: r.date_from, DateTo: r.date_to, Slabs: r.slabs, TargetTeams: r.target_teams, TargetRoles: r.target_roles, Pinned: String(r.pinned || false), AnnouncedBy: r.announced_by, AnnouncedByRole: r.announced_by_role, AnnouncedAt: r.announced_at }),
-  kicker_earnings:   r => ({ Date: r.date, Month: r.month, AgentEmail: r.agent_email, AgentName: r.agent_name, KickerType: r.kicker_type, Details: r.details, Amount: r.amount, LoggedAt: r.logged_at }),
-  presales_calls:    r => ({ Timestamp: r.timestamp, 'Email address': r.email_address, Course: r.course, 'Learner Name': r.learner_name, 'Learner PH': r.learner_ph, 'Lead source': r.lead_source, Date: r.date, 'Assigned to ': r.assigned_to, Month: r.month }),
-  user_activity:     r => ({ Timestamp: r.timestamp, Date: r.date, Email: r.email, Name: r.name, Role: r.role }),
-  presales_sales:    r => ({ PreSalesEmail: r.presales_email, Month: r.month, LeadName: r.lead_name, Amount: r.amount }),
-  manager_slabs:     r => ({ Type: r.type, SlabName: r.slab_name, MaxTarget: r.max_target, CommissionPct: r.commission_pct, CreatedBy: r.created_by }),
-  deals:             r => ({ ID: r.id, Email: r.email, Month: r.month, CustomerName: r.customer_name, Docs: r.docs, Price: r.price, Status: r.status, DealDate: r.deal_date, ClosedDate: r.closed_date }),
+  kickers: r => ({ KickerId: r.kicker_id, Title: r.title, Message: r.message, Type: r.type, MinSaleValue: r.min_sale_value || 0, DateFrom: r.date_from, DateTo: r.date_to, Slabs: r.slabs, TargetTeams: r.target_teams, TargetRoles: r.target_roles, Pinned: String(r.pinned || false), AnnouncedBy: r.announced_by, AnnouncedByRole: r.announced_by_role, AnnouncedAt: r.announced_at }),
+  kicker_earnings: r => ({ Date: r.date, Month: r.month, AgentEmail: r.agent_email, AgentName: r.agent_name, KickerType: r.kicker_type, Details: r.details, Amount: r.amount, LoggedAt: r.logged_at }),
+  presales_calls: r => ({ Timestamp: r.timestamp, 'Email address': r.email_address, Course: r.course, 'Learner Name': r.learner_name, 'Learner PH': r.learner_ph, 'Lead source': r.lead_source, Date: r.date, 'Assigned to ': r.assigned_to, Month: r.month }),
+  user_activity: r => ({ Timestamp: r.timestamp, Date: r.date, Email: r.email, Name: r.name, Role: r.role }),
+  presales_sales: r => ({ PreSalesEmail: r.presales_email, Month: r.month, LeadName: r.lead_name, Amount: r.amount }),
+  manager_slabs: r => ({ Type: r.type, SlabName: r.slab_name, MaxTarget: r.max_target, CommissionPct: r.commission_pct, CreatedBy: r.created_by }),
+  deals: r => ({ ID: r.id, Email: r.email, Month: r.month, CustomerName: r.customer_name, Docs: r.docs, Price: r.price, Status: r.status, DealDate: r.deal_date, ClosedDate: r.closed_date }),
 }
 
 const colMap = {
@@ -64,52 +64,47 @@ function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex')
 }
 
-// Read raw body from Vercel request stream — Vercel does NOT auto-parse JSON
-function readBody(req) {
-  return new Promise((resolve) => {
-    let data = ''
-    req.on('data', chunk => { data += chunk.toString() })
-    req.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve({}) } })
-    req.on('error', () => resolve({}))
-  })
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  if (req.method === 'OPTIONS') return res.status(200).end()
+function ok(data)       { return { statusCode: 200, headers: CORS, body: JSON.stringify({ success: true,  data }) } }
+function fail(msg, s=400) { return { statusCode: s,   headers: CORS, body: JSON.stringify({ success: false, error: msg }) } }
 
-  const ok   = (data)      => res.status(200).json({ success: true,  data })
-  const fail = (msg, s=400) => res.status(s).json({ success: false, error: msg })
+export const handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' }
 
-  // GET requests — action + params from query string
-  if (req.method === 'GET') {
-    const { action, sheet, token } = req.query
+  const supabase = getSupabase()
+  const query = event.queryStringParameters || {}
+  let body = {}
+  if (event.body) { try { body = JSON.parse(event.body) } catch {} }
 
-    if (action === 'getSheet') {
-      const table = TABLE[sheet]
-      if (!table) return ok([])
-      const { data, error } = await supabase.from(table).select('*')
-      if (error) return fail(error.message)
-      const mapper = toSheet[table] || (r => r)
-      return ok((data || []).map(mapper))
-    }
+  const action = body.action || query.action
 
-    if (action === 'getInviteInfo') {
-      const { data, error } = await supabase.from('users').select('email,name,role,invite_expiry').eq('invite_token', token).single()
-      if (error || !data) return fail('Invalid or expired invite token')
-      if (data.invite_expiry && new Date(data.invite_expiry) < new Date()) return fail('Invite token has expired')
-      return ok({ email: data.email, name: data.name, role: data.role })
-    }
-
-    return fail('Unknown action')
+  // ── GET: getSheet ────────────────────────────────────────────────────────────
+  if (action === 'getSheet') {
+    const sheet = body.sheet || query.sheet
+    const table = TABLE[sheet]
+    if (!table) return ok([])
+    const { data, error } = await supabase.from(table).select('*')
+    if (error) return fail(error.message)
+    const mapper = toSheet[table] || (r => r)
+    return ok((data || []).map(mapper))
   }
 
-  // POST requests — read body from stream
-  const body = await readBody(req)
-  const action = body.action || req.query.action
+  // ── GET: getInviteInfo ───────────────────────────────────────────────────────
+  if (action === 'getInviteInfo') {
+    const token = body.token || query.token
+    const { data, error } = await supabase.from('users').select('email,name,role,invite_expiry').eq('invite_token', token).single()
+    if (error || !data) return fail('Invalid or expired invite token')
+    if (data.invite_expiry && new Date(data.invite_expiry) < new Date()) return fail('Invite token has expired')
+    return ok({ email: data.email, name: data.name, role: data.role })
+  }
 
+  // ── POST: login ──────────────────────────────────────────────────────────────
   if (action === 'login') {
     const { email, password } = body
     const hash = sha256(password)
@@ -120,6 +115,7 @@ export default async function handler(req, res) {
     return ok({ email: data.email, name: data.name, role: data.role, managerEmail: data.manager_email, team: data.team })
   }
 
+  // ── POST: activateInvite ─────────────────────────────────────────────────────
   if (action === 'activateInvite') {
     const { token, password } = body
     const { data: user, error } = await supabase.from('users').select('email,name,role,invite_expiry').eq('invite_token', token).single()
@@ -129,6 +125,7 @@ export default async function handler(req, res) {
     return ok({ email: user.email, name: user.name, role: user.role })
   }
 
+  // ── POST: createUser ─────────────────────────────────────────────────────────
   if (action === 'createUser') {
     const { name, email, role, managerEmail } = body
     const inviteToken = crypto.randomUUID()
@@ -138,6 +135,7 @@ export default async function handler(req, res) {
     return ok({ inviteToken })
   }
 
+  // ── POST: appendRow ──────────────────────────────────────────────────────────
   if (action === 'appendRow') {
     const { sheet, row } = body
     const table = TABLE[sheet]
@@ -157,16 +155,19 @@ export default async function handler(req, res) {
     return ok({ appended: true })
   }
 
+  // ── POST: updateRow ──────────────────────────────────────────────────────────
   if (action === 'updateRow') {
     const { sheet, matchCol, matchVal, updates } = body
     const table = TABLE[sheet]
     if (!table) return ok({ updated: true })
+    const whereCol = dbCol(table, matchCol)
     const dbUpdates = Object.fromEntries(Object.entries(updates).map(([k, v]) => [dbCol(table, k), v]))
-    const { error } = await supabase.from(table).update(dbUpdates).eq(dbCol(table, matchCol), matchVal)
+    const { error } = await supabase.from(table).update(dbUpdates).eq(whereCol, matchVal)
     if (error) return fail(error.message)
     return ok({ updated: true })
   }
 
+  // ── POST: deleteRow ──────────────────────────────────────────────────────────
   if (action === 'deleteRow') {
     const { sheet, matchCol, matchVal } = body
     const table = TABLE[sheet]
