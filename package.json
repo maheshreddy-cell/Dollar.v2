@@ -8,13 +8,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "axios": "^1.6.7",
+    "date-fns": "^3.3.1",
+    "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
     "recharts": "^2.10.3",
-    "lucide-react": "^0.344.0",
-    "date-fns": "^3.3.1",
-    "axios": "^1.6.7",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS, parseSlabsField } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { ALL_TARGET_PRESETS, AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPresets'
-import { clearCache } from '../services/appsScript'
+import { clearCache } from '../services/supabase'
 import { ROLE_COLORS } from '../utils/roles'
 
 // Defined outside AssignTargets so React never remounts it on re-render

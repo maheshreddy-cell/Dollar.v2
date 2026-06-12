@@ -1,5 +1,5 @@
 // All API calls go directly to Apps Script — no Node.js backend needed
-import { appsScript, clearCache, clearSheetCache } from './appsScript'
+import { appsScript, clearCache, clearSheetCache } from './supabase'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 

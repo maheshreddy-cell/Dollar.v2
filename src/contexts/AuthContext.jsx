@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { login as apiLogin, activateInvite as apiActivate, logUsage } from '../services/api'
-import { warmCache } from '../services/appsScript'
+import { warmCache } from '../services/supabase'
 
 const AuthContext = createContext(null)
 
