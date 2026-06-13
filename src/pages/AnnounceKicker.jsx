@@ -4,6 +4,7 @@ import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, Chevron
 import { useAuth } from '../contexts/AuthContext'
 import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
@@ -386,6 +387,9 @@ export default function AnnounceKicker() {
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
   const [success,     setSuccess]     = useState(false)
+
+  // Chime when a kicker is successfully announced or updated
+  useNotificationSound(success)
 
   // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
   const activeUser    = effectiveUser || user

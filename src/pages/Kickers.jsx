@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
@@ -318,6 +319,9 @@ export default function Kickers() {
   }, [effectiveUser?.email, month])
 
   useEffect(() => { load() }, [load])
+
+  // Chime when a new active kicker goes live
+  useNotificationSound(kickers.filter(kickerIsActive).length, { playOnMount: true })
 
   // For Manager: split into "For Me" (received) and "For My Team" (announced)
   const forMeKickers     = isManager ? kickers.filter(isVisible) : []

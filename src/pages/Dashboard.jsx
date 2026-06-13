@@ -87,8 +87,13 @@ export default function Dashboard() {
   const isPreSales  = effectiveUser?.role === 'PreSales'
   const tick        = useRefresh()
 
-  // Play notification sound when new at-risk deals appear
-  useNotificationSound(summary?.atRiskCount ?? 0)
+  // ── Notification sounds ───────────────────────────────────────────────────
+  // 1. At-risk deals: play on mount (daily briefing) + every new one
+  useNotificationSound(summary?.atRiskCount ?? 0, { playOnMount: true })
+  // 2. Target assigned: chime the moment a target appears for this month
+  useNotificationSound((summary?.totalTarget ?? 0) > 0 ? 1 : 0, { playOnMount: true })
+  // 3. Achievement unlocked: chime when agent crosses 100%
+  useNotificationSound((summary?.achievementPct ?? 0) >= 100 ? 1 : 0)
 
   // Rotate motivational message every 120s
   useEffect(() => {

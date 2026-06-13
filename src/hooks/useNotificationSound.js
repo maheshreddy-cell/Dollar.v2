@@ -1,37 +1,47 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * Plays /notification.wav whenever `count` increases.
+ * Plays /notification.wav whenever `value` increases (or turns truthy).
  *
- * - Skips the very first render (no sound on initial page load)
- * - Only plays when the value goes UP (new notifications arrived)
- * - Silently swallowed if the browser blocks auto-play
+ * @param {number|boolean} value
+ *   - number  → plays each time count goes UP  (e.g. atRiskCount)
+ *   - boolean → plays each time it flips to true (e.g. success flag)
  *
- * Usage:
- *   useNotificationSound(summary?.atRiskCount ?? 0)
+ * @param {{ playOnMount?: boolean }} options
+ *   playOnMount: also play immediately on the FIRST render when value is truthy.
+ *   Use this for "daily briefing" alerts — things you need to hear the moment
+ *   the page first loads with data (at-risk deals, target assigned, etc.)
+ *
+ * Silently swallowed if the browser blocks auto-play.
  */
-export function useNotificationSound(count) {
-  const prevRef     = useRef(null)   // null = "not yet initialised"
-  const audioRef    = useRef(null)
+export function useNotificationSound(value, { playOnMount = false } = {}) {
+  const prevRef  = useRef(null)   // null = not yet initialised
+  const audioRef = useRef(null)
 
-  // Lazily create the Audio object once
+  // Lazily create one Audio instance per hook call
   if (!audioRef.current && typeof window !== 'undefined') {
     audioRef.current = new Audio('/notification.wav')
     audioRef.current.volume = 0.7
   }
 
   useEffect(() => {
-    // First time we receive a real count — just record it, don't play
+    // Normalise: boolean → 0/1, undefined/null → 0
+    const num = typeof value === 'boolean' ? (value ? 1 : 0) : (value ?? 0)
+
     if (prevRef.current === null) {
-      prevRef.current = count
+      // Very first render — optionally play right away
+      if (playOnMount && num > 0) {
+        audioRef.current?.play().catch(() => {})
+      }
+      prevRef.current = num
       return
     }
 
-    // Play only when count goes up (new notifications)
-    if (count > prevRef.current) {
-      audioRef.current?.play().catch(() => { /* browser auto-play blocked */ })
+    // Play whenever value goes up (new count or flag turning true)
+    if (num > prevRef.current) {
+      audioRef.current?.play().catch(() => {})
     }
 
-    prevRef.current = count
-  }, [count])
+    prevRef.current = num
+  }, [value, playOnMount])
 }

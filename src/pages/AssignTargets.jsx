@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus } from 'lucide-react'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs } from '../services/api'
@@ -48,6 +49,9 @@ export default function AssignTargets() {
   const [success,          setSuccess]        = useState(false)
   const [submitting,       setSubmitting]     = useState(false)
   const [formError,        setFormError]      = useState('')
+
+  // Chime when target is successfully assigned
+  useNotificationSound(success)
   const [selectedPreset,   setSelectedPreset] = useState(null)
   const [agentTarget,      setAgentTarget]    = useState('')
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])

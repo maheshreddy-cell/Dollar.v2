@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getDealsGrouped, getDealsGroupedForTeam, getLeaderboard, getTeam } from '../services/api'
 import { useRefresh } from '../hooks/useRefresh'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 import { formatINR } from '../utils/commission'
 
 const ALL_SENTINEL = '__all__' // sentinel for "All …" picker option
@@ -201,6 +202,11 @@ export default function Deals() {
     if (isSHLevel && selectedVH) return `${selectedVH.name}'s VH — All Agents (${teamAgents.length})`
     return `All Team Deals (${teamAgents.length} agents)`
   })()
+
+  // ── Notification sound — at-risk deals (safe even when data is null) ────
+  useNotificationSound(
+    data ? STAGE_GROUPS.flatMap(g => data.groups[g.key] || []).filter(d => d.isAtRisk).length : 0
+  )
 
   // ── Render loading / error states ────────────────────────────────────────
   if (loading) return (
