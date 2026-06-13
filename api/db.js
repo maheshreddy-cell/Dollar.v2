@@ -120,28 +120,38 @@ function parseSheetNum(val) {
   return parseFloat(v) || 0
 }
 
-function parseCSVLine(line) {
-  const fields = []
-  let cur = '', inQ = false
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]
-    if (c === '"') { inQ = !inQ }
-    else if (c === ',' && !inQ) { fields.push(cur); cur = '' }
-    else { cur += c }
+// Proper CSV parser — handles multiline cells (quoted newlines) correctly
+function parseCSV(text) {
+  const rows = []
+  let row = [], cur = '', inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === '"') {
+      if (inQ && text[i + 1] === '"') { cur += '"'; i++ } // escaped quote
+      else inQ = !inQ
+    } else if (c === ',' && !inQ) {
+      row.push(cur); cur = ''
+    } else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(cur); cur = ''
+      rows.push(row); row = []
+    } else {
+      cur += c
+    }
   }
-  fields.push(cur)
-  return fields
+  if (cur || row.length) { row.push(cur); rows.push(row) }
+  return rows
 }
 
 async function fetchSalesFromSheet() {
   const res = await fetch(SALES_SHEET_CSV)
   if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`)
   const text = await res.text()
-  const lines = text.split(/\r?\n/)
+  const allRows = parseCSV(text)
   const rows = []
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue
-    const r = parseCSVLine(lines[i])
+  for (let i = 1; i < allRows.length; i++) {
+    const r = allRows[i]
+    if (!r || r.every(c => !c.trim())) continue
     const email = (r[1] || '').trim().toLowerCase()
     if (!email) continue
     rows.push({
