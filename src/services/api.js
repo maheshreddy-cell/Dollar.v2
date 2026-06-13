@@ -169,7 +169,7 @@ export const getDealsGrouped = async (email, month) => {
     atRiskAmount,
     wipSlabHint,
     tAmount,
-    commissionPreset: resolvePresetLabel(tf(target, 'CommissionPct')) ?? tf(target, 'CommissionPct'),
+    commissionPreset: target ? (resolvePresetLabel(tf(target, 'CommissionPct')) ?? tf(target, 'CommissionPct')) : null,
     achieved,
   }
 }
