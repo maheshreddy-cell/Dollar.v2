@@ -60,6 +60,21 @@ function dbCol(table, sheetCol) {
   return colMap[table]?.[sheetCol] ?? sheetCol.toLowerCase().replace(/ /g, '_')
 }
 
+// Supabase caps a single select at 1000 rows. Fetch all rows in 1000-row pages.
+async function selectAll(table) {
+  const PAGE = 1000
+  let from = 0
+  let all = []
+  for (;;) {
+    const { data, error } = await supabase.from(table).select('*').range(from, from + PAGE - 1)
+    if (error) return { data: null, error }
+    all = all.concat(data || [])
+    if (!data || data.length < PAGE) break
+    from += PAGE
+  }
+  return { data: all, error: null }
+}
+
 function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex')
 }
@@ -90,7 +105,7 @@ export default async function handler(req, res) {
     if (action === 'getSheet') {
       const table = TABLE[sheet]
       if (!table) return ok([])
-      const { data, error } = await supabase.from(table).select('*')
+      const { data, error } = await selectAll(table)
       if (error) return fail(error.message)
       const mapper = toSheet[table] || (r => r)
       return ok((data || []).map(mapper))
