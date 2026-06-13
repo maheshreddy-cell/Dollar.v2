@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getTargets, getDeals, getKickers } from '../services/api'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 import SlabDisplay from '../components/SlabDisplay'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { formatINR, calculateCommission, getAchievementPct } from '../utils/commission'
@@ -86,6 +87,9 @@ export default function MyTargets() {
       .catch(() => setError('Failed to load targets.'))
       .finally(() => setLoading(false))
   }, [month, user?.email, user?.role])
+
+  // Chime when a target is present for this month (daily briefing + new assignment)
+  useNotificationSound(target ? 1 : 0, { playOnMount: true })
 
   if (loading) {
     return (
