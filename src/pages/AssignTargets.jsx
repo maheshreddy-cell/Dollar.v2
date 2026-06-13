@@ -476,8 +476,6 @@ export default function AssignTargets() {
       setSuccess(true)
       setExisting(true)
       clearCache()
-      // Small delay so Apps Script has time to commit the write before we re-read
-      await new Promise(r => setTimeout(r, 1200))
       reloadHistory()
     } catch (err) {
       setFormError(err?.message ?? 'Failed to assign target.')

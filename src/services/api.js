@@ -1,4 +1,4 @@
-// All API calls go directly to Apps Script — no Node.js backend needed
+// All data operations go through Supabase via /api/db (Vercel serverless)
 import { appsScript, clearCache, clearSheetCache } from './supabase'
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
@@ -767,8 +767,8 @@ export function computePSSalesEarnings(salesCount) {
 // No deduplication — every row for this agent in this month counts as 1 call.
 
 function mapPresalesCallRow(raw) {
-  // Timestamp (col A) comes back as ISO UTC string e.g. "2026-04-09T08:23:16.000Z"
-  const rawTs = col(raw, 'Timestamp') || ''
+  // Timestamp comes back as ISO UTC string e.g. "2026-04-09T08:23:16.000Z"
+  const rawTs = tf(raw, 'Timestamp') || ''
   const ts    = rawTs ? new Date(rawTs) : null
   // Convert UTC → IST to get correct month
   const month = ts && !isNaN(ts.getTime())
@@ -779,11 +779,11 @@ function mapPresalesCallRow(raw) {
     : ''
 
   return {
-    agentEmail: (col(raw, 'Email address') || '').trim().toLowerCase(),
-    month,       // YYYY-MM derived from Timestamp col A in IST
-    learnerPH:  String(col(raw, 'Learner PH') || '').replace(/\D/g, ''),
-    learnerName: String(col(raw, 'Learner Name') || '').trim(),
-    course:      String(col(raw, 'Course')       || '').trim(),
+    agentEmail:  (tf(raw, 'Email address') || '').trim().toLowerCase(),
+    month,
+    learnerPH:   String(tf(raw, 'Learner PH')   || '').replace(/\D/g, ''),
+    learnerName: String(tf(raw, 'Learner Name')  || '').trim(),
+    course:      String(tf(raw, 'Course')        || '').trim(),
   }
 }
 

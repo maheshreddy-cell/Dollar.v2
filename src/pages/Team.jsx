@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { getTeam, inviteUser, getSubtree, reassignAgent, changeRole, deleteUser } from '../services/api'
 import { notifyTeamMemberAdded } from '../services/slack'
-import { clearCache } from '../services/appsScript'
+import { clearCache } from '../services/supabase'
 import InviteLinkModal from '../components/InviteLinkModal'
 
 const ROLE_COLORS = {
