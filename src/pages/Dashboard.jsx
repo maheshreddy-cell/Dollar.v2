@@ -11,6 +11,7 @@ import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { useRefresh } from '../hooks/useRefresh'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 import { useBackground } from '../hooks/useBackground'
 import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
@@ -106,6 +107,9 @@ export default function Dashboard() {
   const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
   const isPreSales  = effectiveUser?.role === 'PreSales'
   const tick        = useRefresh()
+
+  // Play notification sound when new at-risk deals appear
+  useNotificationSound(summary?.atRiskCount ?? 0)
 
   // Rotate motivational message every 120s
   useEffect(() => {
