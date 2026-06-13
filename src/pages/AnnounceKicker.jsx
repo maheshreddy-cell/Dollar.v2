@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getDeals } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { notifKickerAnnounced } from '../services/notifications'
+import { notifyKickerAnnounced } from '../services/slack'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
@@ -533,6 +534,17 @@ export default function AnnounceKicker() {
         await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0) }, activeUser.email, activeUser.role)
       }
       notifKickerAnnounced({ title: form.title, isEdit: !!editingId })
+      notifyKickerAnnounced({
+        title:       form.title,
+        message:     form.message,
+        type:        form.type,
+        dateFrom:    form.dateFrom,
+        dateTo:      form.dateTo,
+        targetRoles: form.targetRoles || [],
+        slabs:       cleanSlabs,
+        announcerName: activeUser?.name || activeUser?.email || '',
+        isEdit:      !!editingId,
+      })
       setSuccess(true)
       setForm(BLANK_FORM)
       setEditingId(null)

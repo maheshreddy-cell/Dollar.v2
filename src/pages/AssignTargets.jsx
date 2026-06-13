@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
 import { notifTargetAssigned } from '../services/notifications'
+import { notifyTargetAssigned } from '../services/slack'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS, parseSlabsField } from '../services/api'
@@ -463,6 +464,14 @@ export default function AssignTargets() {
         month:         formMonth,
         targetAmount:  agentTarget || 0,
         assignerEmail: user?.email || '',
+      })
+      notifyTargetAssigned({
+        agentName:    selected?.Name  || selected?.Email || '',
+        agentEmail:   selected?.Email || '',
+        month:        formMonth,
+        targetAmount: agentTarget || 0,
+        presetLabel:  presets.find(p => p.id === selectedPreset)?.label || '',
+        assignerName: user?.name || user?.email || '',
       })
       setSuccess(true)
       setExisting(true)

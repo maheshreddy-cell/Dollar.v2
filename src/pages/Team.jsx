@@ -3,6 +3,7 @@ import { UserPlus, X, Users, GitBranch, ArrowRightLeft, CheckCircle, ChevronRigh
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { getTeam, inviteUser, getSubtree, reassignAgent, changeRole, deleteUser } from '../services/api'
+import { notifyTeamMemberAdded } from '../services/slack'
 import { clearCache } from '../services/appsScript'
 import InviteLinkModal from '../components/InviteLinkModal'
 
@@ -385,11 +386,20 @@ export default function Team() {
     if (!form.role)         { setFormError('Role is required.'); return }
     setSubmitting(true)
     try {
+      const mgrEmail = form.managerEmail || user?.email
       const token = await inviteUser({
         name:         form.name.trim(),
         email:        form.email.trim().toLowerCase(),
         role:         form.role,
-        managerEmail: form.managerEmail || user?.email,
+        managerEmail: mgrEmail,
+      })
+      // Fire Slack notification immediately — real-time
+      const mgrOption = managerOptions.find(m => m.Email === mgrEmail)
+      notifyTeamMemberAdded({
+        name:        form.name.trim(),
+        email:       form.email.trim().toLowerCase(),
+        role:        form.role,
+        managerName: mgrOption?.Name || mgrEmail || user?.name || '',
       })
       setInviteLink(window.location.origin + '/invite?token=' + token)
       setForm({ name: '', email: '', role: '', managerEmail: '' })
