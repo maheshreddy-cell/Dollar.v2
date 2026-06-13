@@ -9,40 +9,41 @@ import { usePermissions } from '../contexts/PermissionsContext'
 import { ROLE_COLORS } from '../utils/roles'
 import { getUnreadCount } from '../services/notifications'
 
+// color = [iconBg, iconColor] when inactive
 const NAV_BASE = [
   {
     label: null,
     items: [
-      { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, baseRoles: ['Admin','SalesHead','VH','Manager'],
+      { to: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, color: ['bg-blue-100',   'text-blue-600'],   baseRoles: ['Admin','SalesHead','VH','Manager'],
         permAdd: { agent_dashboard: 'Agent', presales_dashboard: 'PreSales' } },
-      { to: '/deals',             label: 'Deals',             icon: Briefcase,       baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/deals',             label: 'Deals',             icon: Briefcase,       color: ['bg-orange-100', 'text-orange-600'], baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_deals: 'Manager', agent_deals: 'Agent', presales_deals: 'PreSales' } },
-      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       baseRoles: ['Admin','SalesHead','VH','Agent'],
+      { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       color: ['bg-violet-100', 'text-violet-600'], baseRoles: ['Admin','SalesHead','VH','Agent'],
         permAdd: { presales_metrics: 'PreSales', manager_metrics: 'Manager' } },
-      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/assign-targets',    label: 'Assign Targets',    icon: DollarSign,      color: ['bg-emerald-100','text-emerald-600'],baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_assign: 'Manager' } },
-      { to: '/manager-targets',   label: 'My Targets',        icon: Star,            baseRoles: ['Manager'],
+      { to: '/manager-targets',   label: 'My Targets',        icon: Star,            color: ['bg-amber-100',  'text-amber-500'],  baseRoles: ['Manager'],
         permAdd: { agent_targets: 'Agent', presales_targets: 'PreSales', vh_my_targets: 'VH', saleshead_my_targets: 'SalesHead' } },
-      { to: '/team',              label: 'My Team',           icon: Users,           baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/team',              label: 'My Team',           icon: Users,           color: ['bg-cyan-100',   'text-cyan-600'],   baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_team: 'Manager', agent_team: 'Agent', presales_team: 'PreSales' } },
-      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/org',               label: 'Org Chart',         icon: GitBranch,       color: ['bg-pink-100',   'text-pink-600'],   baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_org: 'Manager', agent_org: 'Agent', presales_org: 'PreSales' } },
-      { to: '/commission-config', label: 'Commission Config', icon: Settings,        baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/commission-config', label: 'Commission Config', icon: Settings,        color: ['bg-slate-100',  'text-slate-600'],  baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_commission: 'Manager', agent_commission: 'Agent', presales_commission: 'PreSales' } },
-      { to: '/kickers',           label: 'My Kickers',        icon: Zap,             baseRoles: ['Admin','SalesHead','VH'],
+      { to: '/kickers',           label: 'My Kickers',        icon: Zap,             color: ['bg-yellow-100', 'text-yellow-600'], baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_kickers: 'Manager', agent_kickers: 'Agent', presales_kickers: 'PreSales' } },
-      { to: '/announce-kicker',   label: 'Announce Kicker',   icon: Megaphone,       baseRoles: ['Admin'],
+      { to: '/announce-kicker',   label: 'Announce Kicker',   icon: Megaphone,       color: ['bg-red-100',    'text-red-500'],    baseRoles: ['Admin'],
         permAdd: { saleshead_announce_kicker: 'SalesHead', vh_announce_kicker: 'VH', manager_announce_kicker: 'Manager' } },
-      { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'],
+      { to: '/permissions',       label: 'Permissions',       icon: Shield,          color: ['bg-rose-100',   'text-rose-600'],   baseRoles: ['Admin'],
         permAdd: { saleshead_permissions: 'SalesHead', vh_permissions: 'VH' } },
-      { to: '/usage',             label: 'Usage Analytics',   icon: Activity,        baseRoles: ['Admin'] },
-      { to: '/notifications',     label: 'Notifications',     icon: Bell,            baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'], badge: true },
+      { to: '/usage',             label: 'Usage Analytics',   icon: Activity,        color: ['bg-teal-100',   'text-teal-600'],   baseRoles: ['Admin'] },
+      { to: '/notifications',     label: 'Notifications',     icon: Bell,            color: ['bg-indigo-100', 'text-indigo-600'], baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'], badge: true },
     ],
   },
   {
     label: 'Support',
     items: [
-      { to: '/ai-help', label: 'AI Help & Docs', icon: Sparkles, baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
+      { to: '/ai-help', label: 'AI Help & Docs', icon: Sparkles, color: ['bg-purple-100', 'text-purple-600'], baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'] },
     ],
   },
 ]
@@ -99,26 +100,26 @@ export default function Sidebar() {
                 </p>
               )}
               <div className="space-y-0.5">
-                {visible.map(({ to, label, icon: Icon, badge: showBadge }) => (
+                {visible.map(({ to, label, icon: Icon, badge: showBadge, color = [] }) => (
                   <NavLink
                     key={to}
                     to={to}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-ios text-[14px] font-medium transition-all duration-150 ${
+                      `flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-all duration-150 ${
                         isActive
-                          ? 'bg-brand-50 text-brand-500'
-                          : 'text-gray-600 hover:bg-ios-gray6 hover:text-gray-900'
+                          ? 'bg-brand-50 text-brand-600'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`
                     }
                   >
                     {({ isActive }) => (
                       <>
-                        <span className={`w-7 h-7 rounded-[8px] flex items-center justify-center shrink-0 transition-all duration-150 ${
-                          isActive ? 'bg-brand-500 shadow-ios-sm' : 'bg-transparent'
+                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150 ${
+                          isActive ? 'bg-brand-500 shadow-sm' : (color[0] || 'bg-gray-100')
                         }`}>
-                          <Icon size={15} className={isActive ? 'text-white' : 'text-ios-gray1'} strokeWidth={isActive ? 2 : 1.8} />
+                          <Icon size={14} className={isActive ? 'text-white' : (color[1] || 'text-gray-500')} strokeWidth={2} />
                         </span>
-                        <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : ''}`}>{label}</span>
+                        <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : 'text-gray-700'}`}>{label}</span>
                         {showBadge && unread > 0 && (
                           <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
                             {unread > 99 ? '99+' : unread}
