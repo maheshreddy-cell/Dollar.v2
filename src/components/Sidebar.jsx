@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles,
+  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles, Bell,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { ROLE_COLORS } from '../utils/roles'
+import { getUnreadCount } from '../services/notifications'
 
 const NAV_BASE = [
   {
@@ -34,6 +36,7 @@ const NAV_BASE = [
       { to: '/permissions',       label: 'Permissions',       icon: Shield,          baseRoles: ['Admin'],
         permAdd: { saleshead_permissions: 'SalesHead', vh_permissions: 'VH' } },
       { to: '/usage',             label: 'Usage Analytics',   icon: Activity,        baseRoles: ['Admin'] },
+      { to: '/notifications',     label: 'Notifications',     icon: Bell,            baseRoles: ['Admin','SalesHead','VH','Manager','Agent','PreSales'], badge: true },
     ],
   },
   {
@@ -48,6 +51,14 @@ export default function Sidebar() {
   const { user, effectiveUser, isRole } = useAuth()
   const { can } = usePermissions()
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
+
+  const [unread, setUnread] = useState(0)
+  useEffect(() => {
+    const refresh = () => setUnread(getUnreadCount(user?.email))
+    refresh()
+    const id = setInterval(refresh, 15_000)
+    return () => clearInterval(id)
+  }, [user?.email])
 
   function effectiveRoles(item) {
     const roles = [...item.baseRoles]
@@ -88,7 +99,7 @@ export default function Sidebar() {
                 </p>
               )}
               <div className="space-y-0.5">
-                {visible.map(({ to, label, icon: Icon }) => (
+                {visible.map(({ to, label, icon: Icon, badge: showBadge }) => (
                   <NavLink
                     key={to}
                     to={to}
@@ -107,7 +118,12 @@ export default function Sidebar() {
                         }`}>
                           <Icon size={15} className={isActive ? 'text-white' : 'text-ios-gray1'} strokeWidth={isActive ? 2 : 1.8} />
                         </span>
-                        <span className={isActive ? 'text-brand-600 font-semibold' : ''}>{label}</span>
+                        <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : ''}`}>{label}</span>
+                        {showBadge && unread > 0 && (
+                          <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
                       </>
                     )}
                   </NavLink>
