@@ -1170,9 +1170,10 @@ function parseMgrSlabsJson(json) {
 }
 
 function parseMgrPersonalContrib(json) {
-  const parsed = safeParse(json, [])
-  if (Array.isArray(parsed)) return 0
-  return Number(parsed.personalContribution ?? 0)
+  try {
+    const parsed = safeParse(json, [])
+    if (Array.isArray(parsed)) return 0
+    return Number(parsed.personalContribution ?? 0)
   } catch { return 0 }
 }
 
