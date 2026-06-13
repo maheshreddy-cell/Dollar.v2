@@ -3,6 +3,7 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/daily-summary", "schedule": "30 5 * * *" }
+    { "path": "/api/daily-summary", "schedule": "30 5 * * *" },
+    { "path": "/api/sync-sales", "schedule": "0 * * * *" }
   ]
 }
