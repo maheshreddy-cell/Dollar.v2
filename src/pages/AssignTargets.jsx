@@ -264,8 +264,12 @@ export default function AssignTargets() {
 
   function parseMgrSlabs(json) {
     try {
-      const arr = JSON.parse(json || '[]')
-      if (Array.isArray(arr) && arr.length) {
+      // Handle Supabase JSONB (already parsed array/object) or legacy JSON string
+      const raw = Array.isArray(json) ? json
+        : (json && typeof json === 'object') ? (Array.isArray(json.slabs) ? json.slabs : [])
+        : JSON.parse(json || '[]')
+      const arr = Array.isArray(raw) ? raw : (Array.isArray(raw?.slabs) ? raw.slabs : [])
+      if (arr.length) {
         const padded = [...arr.map(s => ({ targetAmount: String(s.targetAmount ?? ''), commissionPct: String(s.commissionPct ?? '') }))]
         while (padded.length < 4) padded.push(EMPTY_MGR_SLAB)
         return padded
@@ -295,13 +299,10 @@ export default function AssignTargets() {
               proj: parseMgrSlabs(match.ProjectedSlabs),
               real: parseMgrSlabs(match.RealisedSlabs),
             }
-            // Read back personalContribution from ProjectedSlabs wrapper
-            try {
-              const parsed = JSON.parse(match.ProjectedSlabs || '[]')
-              if (!Array.isArray(parsed) && parsed.personalContribution) {
-                newContrib[p.id] = String(parsed.personalContribution)
-              }
-            } catch { /* ignore */ }
+            // Read back personalContribution — already extracted by toMgrRecord()
+            if (match.personalContribution) {
+              newContrib[p.id] = String(match.personalContribution)
+            }
           }
         }
         setProgramSlabs(newSlabs)
@@ -658,8 +659,8 @@ export default function AssignTargets() {
                           const isConfirm   = mgrConfirmDel === mon
                           const isEditing   = formMonth === mon
                           // Parse slabs for summary display
-                          const pSlabs = (() => { try { const a = JSON.parse(t.ProjectedSlabs || '[]'); return Array.isArray(a) ? a.filter(s => s.targetAmount) : [] } catch { return [] } })()
-                          const rSlabs = (() => { try { const a = JSON.parse(t.RealisedSlabs  || '[]'); return Array.isArray(a) ? a.filter(s => s.targetAmount) : [] } catch { return [] } })()
+                          const pSlabs = (t.projectedSlabs || []).filter(s => s.targetAmount)
+                          const rSlabs = (t.realisedSlabs  || []).filter(s => s.targetAmount)
                           const pMax = pSlabs.length ? Math.max(...pSlabs.map(s => Number(s.targetAmount))) : 0
                           const rMax = rSlabs.length ? Math.max(...rSlabs.map(s => Number(s.targetAmount))) : 0
                           return (
@@ -710,8 +711,8 @@ export default function AssignTargets() {
                                     <button
                                       onClick={() => {
                                         setFormMonth(mon)
-                                        setMgrProjSlabs(parseMgrSlabs(t.ProjectedSlabs))
-                                        setMgrRealSlabs(parseMgrSlabs(t.RealisedSlabs))
+                                        setMgrProjSlabs(parseMgrSlabs(t.projectedSlabs))
+                                        setMgrRealSlabs(parseMgrSlabs(t.realisedSlabs))
                                         setMgrProgram(t.programFilter || 'all')
                                         setMgrSuccess(false)
                                         setMgrError('')

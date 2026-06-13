@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { useRefresh } from '../hooks/useRefresh'
-import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, getTeamDealsForMonth, filterDealsByProgram, MANAGER_TARGET_PROGRAMS, getTargets } from '../services/api'
+import { getManagerTargets, calcManagerCommissionInfo, getLeaderboard, getKickers, getDeals, getTeamDealsForMonth, filterDealsByProgram, MANAGER_TARGET_PROGRAMS, getTargets, parseSlabsField } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { TrendingUp, Target, CheckCircle2, Users, Zap, Clock, AlertCircle, Award } from 'lucide-react'
 
@@ -369,7 +369,7 @@ export default function ManagerTargets() {
   // Individual target commission
   const indivSlabs = (() => {
     if (!individualTarget) return []
-    try { return JSON.parse(individualTarget.SlabsJson || '[]') } catch { return [] }
+    return parseSlabsField(individualTarget.CommissionEndDate).slabs
   })()
   const personalAchieved  = personalDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
   const personalPipeline  = personalDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
