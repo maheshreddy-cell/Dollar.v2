@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
 import { useNotificationSound } from '../hooks/useNotificationSound'
+import { notifTargetAssigned } from '../services/notifications'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS, parseSlabsField } from '../services/api'
@@ -459,6 +460,13 @@ export default function AssignTargets() {
             ? preset.slabs.map(s => ({ targetAmount: s.targetAmount, commissionPct: s.commissionPct }))
             : slabs.filter(s => s.targetAmount).map(s => ({ targetAmount: Number(s.targetAmount), commissionPct: Number(s.commissionPct) })),
       }, user.email)
+      notifTargetAssigned({
+        agentName:     selected?.Name  || selected?.Email || '',
+        agentEmail:    selected?.Email || '',
+        month:         formMonth,
+        targetAmount:  agentTarget || 0,
+        assignerEmail: user?.email || '',
+      })
       setSuccess(true)
       setExisting(true)
       clearCache()

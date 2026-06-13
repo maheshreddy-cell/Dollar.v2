@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   DollarSign, AlertTriangle, CheckCircle, Zap, Award,
   Target, TrendingUp, BarChart2, Percent, Phone,
@@ -15,6 +15,7 @@ import { useNotificationSound } from '../hooks/useNotificationSound'
 import { useBackground } from '../hooks/useBackground'
 import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
+import { notifAtRisk } from '../services/notifications'
 
 // Preset slab badge color
 const PRESET_COLOR = {
@@ -115,6 +116,22 @@ export default function Dashboard() {
   useNotificationSound((summary?.totalTarget ?? 0) > 0 ? 1 : 0, { playOnMount: true })
   // 3. Achievement unlocked: chime when agent crosses 100%
   useNotificationSound((summary?.achievementPct ?? 0) >= 100 ? 1 : 0)
+
+  // ── Push in-app notification when at-risk count rises ────────────────────
+  const prevAtRiskRef = useRef(null)
+  useEffect(() => {
+    const count = summary?.atRiskCount ?? 0
+    if (count > 0 && (prevAtRiskRef.current === null || count > prevAtRiskRef.current)) {
+      notifAtRisk({
+        agentName:  effectiveUser?.name  || effectiveUser?.email || '',
+        agentEmail: effectiveUser?.email || '',
+        count,
+        amount:     summary?.atRiskAmount ?? 0,
+        forUser:    effectiveUser?.email  || '',
+      })
+    }
+    prevAtRiskRef.current = count
+  }, [summary?.atRiskCount]) // eslint-disable-line
 
   // Rotate motivational message every 120s
   useEffect(() => {

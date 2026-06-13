@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { LogOut, Eye, X } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { LogOut, Eye, X, Bell } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getAllUsers } from '../services/api'
+import { getUnreadCount } from '../services/notifications'
 
 const PAGE_TITLES = {
   '/dashboard':        'Dashboard',
@@ -26,8 +27,10 @@ export default function Navbar() {
   const { user, logout, viewAs, setViewAs, clearViewAs } = useAuth()
   const { month, setMonth } = useMonth()
   const location = useLocation()
+  const navigate  = useNavigate()
 
-  const [allUsers, setAllUsers] = useState([])
+  const [allUsers,     setAllUsers]     = useState([])
+  const [unreadCount,  setUnreadCount]  = useState(0)
 
   useEffect(() => {
     if (user?.role !== 'Admin') return
@@ -35,6 +38,14 @@ export default function Navbar() {
       .then(users => setAllUsers((users ?? []).filter(u => u.Email !== user?.email)))
       .catch(() => {})
   }, [user])
+
+  // Poll unread notification count every 15 s
+  useEffect(() => {
+    const refresh = () => setUnreadCount(getUnreadCount(user?.email))
+    refresh()
+    const id = setInterval(refresh, 15_000)
+    return () => clearInterval(id)
+  }, [user?.email])
 
   const title = PAGE_TITLES[location.pathname] ?? 'Dollar.v2'
 
@@ -77,6 +88,20 @@ export default function Navbar() {
               className="text-[12px] bg-transparent border-0 focus:outline-none text-gray-800 font-medium cursor-pointer"
             />
           </div>
+
+          {/* Notifications bell */}
+          <button
+            onClick={() => navigate('/notifications')}
+            className="relative flex items-center justify-center w-9 h-9 rounded-ios hover:bg-ios-gray6 transition-colors"
+            aria-label="Notifications"
+          >
+            <Bell size={17} strokeWidth={1.8} className={unreadCount > 0 ? 'text-brand-500' : 'text-ios-gray1'} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
 
           {/* Logout */}
           <button

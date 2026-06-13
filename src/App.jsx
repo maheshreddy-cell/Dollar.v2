@@ -26,6 +26,7 @@ const Kickers          = lazy(() => import('./pages/Kickers'))
 const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
 const Usage            = lazy(() => import('./pages/Usage'))
 const AIHelp           = lazy(() => import('./pages/AIHelp'))
+const Notifications    = lazy(() => import('./pages/Notifications'))
 
 // Prefetch all page chunks in the background after login so navigation is instant
 const LAZY_CHUNKS = [
@@ -217,6 +218,7 @@ export default function App() {
                 </RequireRole>
               }
             />
+            <Route path="/notifications" element={<Notifications />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
