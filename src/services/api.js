@@ -1364,3 +1364,11 @@ export async function changeRole(email, newRole) {
   await appsScript.updateRow('Users', 'Email', email, { Role: newRole })
   clearCache()
 }
+
+// ── Delete / deactivate a user account ───────────────────────────────────────
+// Removes the user from the Users sheet entirely.
+// Historical deal / target data is preserved in other sheets.
+export async function deleteUser(email) {
+  await appsScript.deleteRow('Users', 'Email', email)
+  clearCache()
+}

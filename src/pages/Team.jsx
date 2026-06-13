@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { UserPlus, X, Users, GitBranch, ArrowRightLeft, CheckCircle, ChevronRight, Search } from 'lucide-react'
+import { UserPlus, X, Users, GitBranch, ArrowRightLeft, CheckCircle, ChevronRight, Search, Trash2, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
-import { getTeam, inviteUser, getSubtree, reassignAgent, changeRole } from '../services/api'
+import { getTeam, inviteUser, getSubtree, reassignAgent, changeRole, deleteUser } from '../services/api'
 import { clearCache } from '../services/appsScript'
 import InviteLinkModal from '../components/InviteLinkModal'
 
@@ -44,6 +44,15 @@ const CAN_REASSIGN_ROLES  = ['Admin', 'SalesHead', 'VH']
 const CAN_CHANGE_ROLE     = ['Admin', 'SalesHead', 'VH', 'Manager']
 const REASSIGNABLE_ROLES  = ['Agent', 'PreSales', 'Manager']
 
+// Roles that can remove accounts, and what roles they can remove
+const CAN_DELETE_ROLES = ['Admin', 'SalesHead', 'VH', 'Manager']
+const DELETABLE_BY = {
+  Admin:     ['SalesHead', 'VH', 'Manager', 'Agent', 'PreSales'],
+  SalesHead: ['VH', 'Manager', 'Agent', 'PreSales'],
+  VH:        ['Manager', 'Agent', 'PreSales'],
+  Manager:   ['Agent', 'PreSales'],
+}
+
 function flattenTree(node, result = []) {
   if (!node) return result
   result.push(node)
@@ -52,7 +61,7 @@ function flattenTree(node, result = []) {
 }
 
 // ── Member Detail Panel (slide-over) ─────────────────────────────────────────
-function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onClose, onDone }) {
+function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, canDelete, onClose, onDone }) {
   const availableRoles   = ROLE_CHANGE_TO[user?.role] ?? []
   const managerOptions   = allMembers.filter(m =>
     m.Email !== member.Email && !['Agent', 'PreSales'].includes(m.Role)
@@ -66,6 +75,8 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
   const [roleSuccess,    setRoleSuccess]    = useState(false)
   const [managerSuccess, setManagerSuccess] = useState(false)
   const [error,          setError]          = useState('')
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [deleting,       setDeleting]       = useState(false)
 
   const filteredManagers = managerOptions.filter(m =>
     m.Name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
@@ -93,6 +104,15 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
       setTimeout(() => { setManagerSuccess(false); onDone() }, 1200)
     } catch (e) { setError(e?.message ?? 'Failed to reassign.') }
     finally { setSavingManager(false) }
+  }
+
+  async function handleDelete() {
+    setDeleting(true); setError('')
+    try {
+      await deleteUser(member.Email)
+      onDone()
+      onClose()
+    } catch (e) { setError(e?.message ?? 'Failed to remove account.'); setDeleting(false); setConfirmDelete(false) }
   }
 
   const currentManager = allMembers.find(m => m.Email === member.ManagerEmail)
@@ -249,9 +269,55 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, onC
             </div>
           )}
 
-          {!canChangeRole && !canReassign && (
+          {!canChangeRole && !canReassign && !canDelete && (
             <div className="bg-gray-50 rounded-2xl p-5 text-center">
               <p className="text-sm text-gray-400">You can view this member's details but don't have permission to make changes.</p>
+            </div>
+          )}
+
+          {/* ── Danger Zone: Remove Account ── */}
+          {canDelete && (
+            <div className="bg-white rounded-2xl border border-red-200 overflow-hidden">
+              <div className="px-4 py-3 bg-red-50 border-b border-red-100">
+                <p className="text-xs font-bold text-red-800 uppercase tracking-wide">Danger Zone</p>
+                <p className="text-[11px] text-red-600 mt-0.5">Permanently remove {member.Name} from the platform</p>
+              </div>
+              <div className="p-4">
+                {!confirmDelete ? (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    className="w-full flex items-center justify-center gap-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                  >
+                    <Trash2 size={14} />
+                    Remove Account
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                      <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-700 leading-relaxed">
+                        This will permanently delete <strong>{member.Name}</strong>'s account. Their deals and targets history will be preserved. This cannot be undone.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={deleting}
+                        className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                      >
+                        {deleting ? 'Removing…' : <><Trash2 size={13} /> Yes, Remove</>}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -530,6 +596,11 @@ export default function Team() {
           user={user}
           canReassign={canReassign}
           canChangeRole={canChangeRole}
+          canDelete={
+            CAN_DELETE_ROLES.includes(user?.role) &&
+            (DELETABLE_BY[user?.role] ?? []).includes(selectedMember?.Role) &&
+            selectedMember?.Email !== user?.email
+          }
           onClose={() => setSelectedMember(null)}
           onDone={() => { setSelectedMember(null); loadTeam() }}
         />
