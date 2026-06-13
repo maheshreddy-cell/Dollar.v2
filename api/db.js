@@ -94,6 +94,80 @@ function readBody(req) {
   })
 }
 
+const SALES_SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1vumM76Vr8NVB-2jG5StiAeVY-cM_hVoYE4gCaDEHm1s/export?format=csv&gid=0'
+
+function parseSheetDate(val) {
+  if (!val) return ''
+  const s = String(val).trim().split('T')[0].split(' ')[0]
+  const dmY = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (dmY) return `${dmY[3]}-${dmY[2].padStart(2,'0')}-${dmY[1].padStart(2,'0')}`
+  return s
+}
+
+function parseSheetMonth(val) {
+  if (!val) return ''
+  const s = String(val).trim()
+  if (/^\d{4}-\d{2}$/.test(s)) return s
+  const months = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12' }
+  const m = s.toLowerCase().match(/^([a-z]{3})\s+(\d{4})$/)
+  if (m && months[m[1]]) return `${m[2]}-${months[m[1]]}`
+  return s
+}
+
+function parseSheetNum(val) {
+  if (!val) return 0
+  const v = String(val).replace(/₹/g,'').replace(/,/g,'').trim()
+  return parseFloat(v) || 0
+}
+
+function parseCSVLine(line) {
+  const fields = []
+  let cur = '', inQ = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') { inQ = !inQ }
+    else if (c === ',' && !inQ) { fields.push(cur); cur = '' }
+    else { cur += c }
+  }
+  fields.push(cur)
+  return fields
+}
+
+async function fetchSalesFromSheet() {
+  const res = await fetch(SALES_SHEET_CSV)
+  if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`)
+  const text = await res.text()
+  const lines = text.split(/\r?\n/)
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue
+    const r = parseCSVLine(lines[i])
+    const email = (r[1] || '').trim().toLowerCase()
+    if (!email) continue
+    rows.push({
+      Email:             email,
+      LeadName:          (r[2]  || '').trim(),
+      Course:            (r[3]  || '').trim(),
+      Rating:            (r[5]  || '').trim(),
+      TotalValue:        parseSheetNum(r[6]),
+      PaymentType:       (r[7]  || '').trim(),
+      Profession:        (r[8]  || '').trim(),
+      PaymentDate:       parseSheetDate(r[10]),
+      PaidActual:        parseSheetNum(r[20]),   // Col U
+      LoanDocsCollected: (r[21] || '').trim(),
+      Status:            (r[23] || '').trim(),
+      Month:             parseSheetMonth(r[24]),
+      AmountCleared:     parseSheetNum(r[25]),
+      Team:              (r[26] || '').trim(),
+      Vertical:          (r[37] || '').trim(),
+      T2Amount:          parseSheetNum(r[39]),
+      Timestamp:         (r[0]  || '').trim(),
+      CustomerEmail:     '',
+    })
+  }
+  return rows
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -108,6 +182,11 @@ export default async function handler(req, res) {
     const { action, sheet, token } = req.query
 
     if (action === 'getSheet') {
+      // Sales are read live from Google Sheet so the dashboard always reflects
+      // new form submissions without any sync delay.
+      if (sheet === 'Sales done raw dump') {
+        return ok(await fetchSalesFromSheet())
+      }
       const table = TABLE[sheet]
       if (!table) return ok([])
       const { data, error } = await selectAll(table)
