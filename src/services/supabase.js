@@ -3,10 +3,15 @@
 
 const BASE_URL = '/api/db'
 
-// ─── In-memory cache (55s TTL) ────────────────────────────────────────────────
+// ─── In-memory cache (30s TTL) ────────────────────────────────────────────────
 const _cache = new Map()
-const CACHE_TTL = 55_000
+const CACHE_TTL = 30_000
 let _gen = 0
+
+// Subscribers notified when background fetch brings fresh data
+const _subs = new Set()
+export function onCacheUpdate(fn) { _subs.add(fn); return () => _subs.delete(fn) }
+function _notify() { _subs.forEach(fn => { try { fn() } catch {} }) }
 
 function cacheGet(key) {
   const hit = _cache.get(key)
@@ -15,9 +20,9 @@ function cacheGet(key) {
 }
 function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
 
-// ─── localStorage cache (5 min TTL) ──────────────────────────────────────────
+// ─── localStorage cache (60s TTL) ────────────────────────────────────────────
 const LS_PREFIX = 'dv2_'
-const LS_TTL    = 5 * 60 * 1000
+const LS_TTL    = 60_000
 
 function _lsKey(key) {
   let h = 5381
@@ -60,7 +65,7 @@ function _bgFetch(key, url) {
     .then(r => r.json())
     .then(data => {
       if (!data.success) throw new Error(data.error || 'DB error')
-      if (_gen === gen) { cacheSet(key, data.data); lsWrite(key, data.data) }
+      if (_gen === gen) { cacheSet(key, data.data); lsWrite(key, data.data); _notify() }
       _inflight.delete(key)
       return data.data
     })
