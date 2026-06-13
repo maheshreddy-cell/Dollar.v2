@@ -129,13 +129,14 @@ export default function Sidebar() {
                     {({ isActive }) => (
                       <>
                         <span
-                          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150"
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150 ${isActive ? 'bg-brand-500 shadow-sm' : ''}`}
                           style={isActive ? {} : { backgroundColor: color[0] }}
                         >
                           <Icon
                             size={14}
                             strokeWidth={2}
-                            style={isActive ? { color: '#fff' } : { color: color[1] }}
+                            className={isActive ? 'text-white' : ''}
+                            style={isActive ? {} : { color: color[1] }}
                           />
                         </span>
                         <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : 'text-gray-700'}`}>
