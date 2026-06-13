@@ -57,7 +57,12 @@ const objToDb = {
 }
 
 function dbCol(table, sheetCol) {
-  return colMap[table]?.[sheetCol] ?? sheetCol.toLowerCase().replace(/ /g, '_')
+  if (colMap[table]?.[sheetCol]) return colMap[table][sheetCol]
+  // Generic fallback: camelCase / "Space Separated" → snake_case
+  return sheetCol
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')  // TargetAmount → Target_Amount
+    .replace(/ /g, '_')                       // "Manager Email" → Manager_Email
+    .toLowerCase()
 }
 
 // Supabase caps a single select at 1000 rows. Fetch all rows in 1000-row pages.
