@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getAllUsers } from '../services/api'
 import { getUnreadCount } from '../services/notifications'
+import { useNotificationSound } from '../hooks/useNotificationSound'
 
 const PAGE_TITLES = {
   '/dashboard':        'Dashboard',
@@ -46,6 +47,9 @@ export default function Navbar() {
     const id = setInterval(refresh, 15_000)
     return () => clearInterval(id)
   }, [user?.email])
+
+  // Sound plays ONLY when a new notification arrives (unreadCount goes up)
+  useNotificationSound(unreadCount)
 
   const title = PAGE_TITLES[location.pathname] ?? 'Dollar.v2'
 

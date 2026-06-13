@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { formatINR } from '../utils/commission'
-import { useNotificationSound } from '../hooks/useNotificationSound'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
 function HatTrickCard({ deals, agentEmail, agentName }) {
@@ -590,9 +589,6 @@ export default function Kickers() {
   }, [effectiveUser?.email, effectiveUser?.role, month])
 
   useEffect(() => { load() }, [load])
-
-  // Chime when a new active kicker goes live
-  useNotificationSound(kickers.filter(kickerIsActive).length, { playOnMount: true })
 
   // For Manager: split into "For Me" (received) and "For My Team" (announced)
   const forMeKickers     = isManager ? kickers.filter(isVisible) : []

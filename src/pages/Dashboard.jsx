@@ -11,7 +11,6 @@ import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
 import DaysLeftBadge from '../components/DaysLeftBadge'
 import { useRefresh } from '../hooks/useRefresh'
-import { useNotificationSound } from '../hooks/useNotificationSound'
 import { useBackground } from '../hooks/useBackground'
 import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
@@ -108,14 +107,6 @@ export default function Dashboard() {
   const isVHorAbove = ['Admin','SalesHead','VH'].includes(effectiveUser?.role)
   const isPreSales  = effectiveUser?.role === 'PreSales'
   const tick        = useRefresh()
-
-  // ── Notification sounds ───────────────────────────────────────────────────
-  // 1. At-risk deals: play on mount (daily briefing) + every new one
-  useNotificationSound(summary?.atRiskCount ?? 0, { playOnMount: true })
-  // 2. Target assigned: chime the moment a target appears for this month
-  useNotificationSound((summary?.totalTarget ?? 0) > 0 ? 1 : 0, { playOnMount: true })
-  // 3. Achievement unlocked: chime when agent crosses 100%
-  useNotificationSound((summary?.achievementPct ?? 0) >= 100 ? 1 : 0)
 
   // ── Push in-app notification when at-risk count rises ────────────────────
   const prevAtRiskRef = useRef(null)

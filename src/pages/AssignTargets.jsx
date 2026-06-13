@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
-import { useNotificationSound } from '../hooks/useNotificationSound'
 import { notifTargetAssigned } from '../services/notifications'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -94,8 +93,6 @@ export default function AssignTargets() {
   const [submitting,       setSubmitting]     = useState(false)
   const [formError,        setFormError]      = useState('')
 
-  // Chime when target is successfully assigned
-  useNotificationSound(success)
   const [selectedPreset,   setSelectedPreset] = useState(null)
   const [agentTarget,      setAgentTarget]    = useState('')
   const [slabs,            setSlabs]          = useState([EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB, EMPTY_SLAB])
