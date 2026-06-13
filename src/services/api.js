@@ -1,5 +1,13 @@
 // All data operations go through Supabase via /api/db (Vercel serverless)
 import { appsScript, clearCache, clearSheetCache } from './supabase'
+
+// Supabase JSONB columns come back as already-parsed JS objects/arrays.
+// Google Sheets returned JSON strings. This handles both cases safely.
+function safeParse(val, fallback = []) {
+  if (val === null || val === undefined) return fallback
+  if (typeof val === 'string') { try { return JSON.parse(val) } catch { return fallback } }
+  return val // already parsed by Supabase JSONB
+}
 import { v4 as uuidv4 } from 'uuid'
 import { ALL_TARGET_PRESETS } from '../utils/targetPresets'
 
@@ -330,15 +338,11 @@ export const deleteTarget = async (email, month) => {
 //   new format → JSON object { slabs: [...], teamWeightage: N }
 // Always returns { slabs: [], teamWeightage: 0 }
 export function parseSlabsField(json) {
-  try {
-    const parsed = JSON.parse(json || '[]')
-    if (Array.isArray(parsed)) return { slabs: parsed, teamWeightage: 0 }
-    return {
-      slabs:         Array.isArray(parsed.slabs) ? parsed.slabs : [],
-      teamWeightage: Number(parsed.teamWeightage ?? 0),
-    }
-  } catch {
-    return { slabs: [], teamWeightage: 0 }
+  const parsed = safeParse(json, [])
+  if (Array.isArray(parsed)) return { slabs: parsed, teamWeightage: 0 }
+  return {
+    slabs:         Array.isArray(parsed.slabs) ? parsed.slabs : [],
+    teamWeightage: Number(parsed.teamWeightage ?? 0),
   }
 }
 
@@ -1160,18 +1164,15 @@ function editDistance(a, b) {
 // ProjectedSlabs / RealisedSlabs = JSON  [{targetAmount, commissionPct}]
 
 function parseMgrSlabsJson(json) {
-  try {
-    const parsed = JSON.parse(json || '[]')
-    if (Array.isArray(parsed)) return parsed
-    return Array.isArray(parsed.slabs) ? parsed.slabs : []
-  } catch { return [] }
+  const parsed = safeParse(json, [])
+  if (Array.isArray(parsed)) return parsed
+  return Array.isArray(parsed.slabs) ? parsed.slabs : []
 }
 
 function parseMgrPersonalContrib(json) {
-  try {
-    const parsed = JSON.parse(json || '[]')
-    if (Array.isArray(parsed)) return 0
-    return Number(parsed.personalContribution ?? 0)
+  const parsed = safeParse(json, [])
+  if (Array.isArray(parsed)) return 0
+  return Number(parsed.personalContribution ?? 0)
   } catch { return 0 }
 }
 
@@ -1293,7 +1294,7 @@ export function calcManagerCommission(teamMetric, slabs) {
 
 // ── Kickers ───────────────────────────────────────────────────────────────────
 function parseKickerRow(r) {
-  const safe = (key) => { try { const v = JSON.parse(r[key] || '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+  const safeArr = (key) => { const v = safeParse(r[key], []); return Array.isArray(v) ? v : [] }
   return {
     id:             r.KickerId    || '',
     title:          r.Title       || '',
@@ -1302,10 +1303,10 @@ function parseKickerRow(r) {
     minSaleValue:   Number(r.MinSaleValue || 0),
     dateFrom:       r.DateFrom    || '',
     dateTo:         r.DateTo      || '',
-    slabs:          safe('Slabs'),
-    targetTeams:    safe('TargetTeams'),
-    targetRoles:    safe('TargetRoles'),
-    pinned:         r.Pinned === 'true',
+    slabs:          safeArr('Slabs'),
+    targetTeams:    safeArr('TargetTeams'),
+    targetRoles:    safeArr('TargetRoles'),
+    pinned:         r.Pinned === 'true' || r.Pinned === true,
     announcedBy:    r.AnnouncedBy     || '',
     announcedByRole:r.AnnouncedByRole || '',
     announcedAt:    r.AnnouncedAt     || '',
