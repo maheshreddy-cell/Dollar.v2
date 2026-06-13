@@ -121,10 +121,11 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, can
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col animate-slide-in-right border-l">
+      {/* Panel — centered modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="w-full max-w-md bg-white shadow-2xl flex flex-col rounded-2xl pointer-events-auto max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -322,6 +323,7 @@ function MemberPanel({ member, allMembers, user, canReassign, canChangeRole, can
             </div>
           )}
         </div>
+      </div>
       </div>
     </>
   )
