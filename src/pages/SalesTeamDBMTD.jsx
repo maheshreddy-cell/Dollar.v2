@@ -205,7 +205,7 @@ export default function SalesTeamDBMTD() {
       map[r.Email].projected += (r.TotalValue || 0)
       map[r.Email].deals     += 1
     })
-    return Object.values(map).sort((a, b) => b.realised - a.realised)
+    return Object.values(map).sort((a, b) => b.projected - a.projected)
   }, [sales, month])
 
   if (loading) return (
