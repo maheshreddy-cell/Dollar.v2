@@ -27,6 +27,7 @@ const AnnounceKicker   = lazy(() => import('./pages/AnnounceKicker'))
 const Usage            = lazy(() => import('./pages/Usage'))
 const AIHelp           = lazy(() => import('./pages/AIHelp'))
 const Notifications    = lazy(() => import('./pages/Notifications'))
+const SalesTeamDBMTD   = lazy(() => import('./pages/SalesTeamDBMTD'))
 
 // Prefetch all page chunks in the background after login so navigation is instant
 const LAZY_CHUNKS = [
@@ -43,6 +44,7 @@ const LAZY_CHUNKS = [
   () => import('./pages/Kickers'),
   () => import('./pages/AnnounceKicker'),
   () => import('./pages/AIHelp'),
+  () => import('./pages/SalesTeamDBMTD'),
 ]
 
 function PrefetchChunks() {
@@ -219,6 +221,14 @@ export default function App() {
               }
             />
             <Route path="/notifications" element={<Notifications />} />
+            <Route
+              path="/sales-db-mtd"
+              element={
+                <RequireRole roles={['Admin','SalesHead','VH']}>
+                  <SalesTeamDBMTD />
+                </RequireRole>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles, Bell,
+  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles, Bell, TrendingUp,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -20,6 +20,8 @@ const NAV_BASE = [
       { to: '/deals',             label: 'Deals',             icon: Briefcase,       color: ['#FFEDD5', '#EA580C'],
         baseRoles: ['Admin','SalesHead','VH'],
         permAdd: { manager_deals: 'Manager', agent_deals: 'Agent', presales_deals: 'PreSales' } },
+      { to: '/sales-db-mtd',      label: 'Sales Team DB MTD', icon: TrendingUp,      color: ['#DCFCE7', '#16A34A'],
+        baseRoles: ['Admin','SalesHead','VH'] },
       { to: '/metrics',           label: 'Metrics',           icon: BarChart2,       color: ['#EDE9FE', '#7C3AED'],
         baseRoles: ['Admin','SalesHead','VH','Agent'],
         permAdd: { presales_metrics: 'PreSales', manager_metrics: 'Manager' } },
