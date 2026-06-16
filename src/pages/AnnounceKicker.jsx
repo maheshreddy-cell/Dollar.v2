@@ -9,12 +9,14 @@ import { notifyKickerAnnounced } from '../services/slack'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',   label: '🎯 Kicker on Sales',   desc: 'Each person hits X sales count within the date window → earns payout',   unit: 'sales'   },
-  { value: 'revenue', label: '💰 Kicker on Revenue', desc: 'Each person hits X revenue amount within the date window → earns payout', unit: 'revenue' },
+  { value: 'sales',      label: '🎯 Kicker on Sales',        desc: 'Each person independently hits X sales → earns payout',                     unit: 'sales'   },
+  { value: 'revenue',    label: '💰 Kicker on Revenue',      desc: 'Each person hits X revenue amount → earns payout',                           unit: 'revenue' },
+  { value: 'collective', label: '🤝 Collective Team Kicker', desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
 ]
 
-// Normalize old 6-type values to the new 2-type system (for existing DB records)
+// Normalize old 6-type values to the new type system (for existing DB records)
 function normalizeType(t) {
+  if (t === 'collective') return 'collective'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales' // covers 'sales', 'team_sales', 'individual_sales', 'individual_or', 'individual_and', null
 }
@@ -148,13 +150,27 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 
   const agentList = Object.values(stats)
 
-  if (isTeam) {
-    const totals   = agentList.reduce((acc, a) => { acc.sales += a.sales; acc.revenue += a.revenue; return acc }, { sales: 0, revenue: 0 })
-    const slabHit  = getSlabHit(totals.sales, totals.revenue)
+  const isCollective = type === 'collective'
+
+  if (isTeam || isCollective) {
+    const totals  = agentList.reduce((acc, a) => { acc.sales += a.sales; acc.revenue += a.revenue; return acc }, { sales: 0, revenue: 0 })
+    const slabHit = getSlabHit(totals.sales, totals.revenue)
+
+    if (isCollective) {
+      // Every agent who contributed ≥ 1 sale earns when the team threshold is hit
+      const agents     = agentList.map(a => ({
+        ...a,
+        slabHit: (a.sales > 0 && slabHit) ? slabHit : null,
+        payout:  (a.sales > 0 && slabHit) ? Number(slabHit.payout) : 0,
+      }))
+      const eligible   = agents.filter(a => a.payout > 0)
+      return { kind: 'collective', totals, slabHit, agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
+    }
+
     return { kind: 'team', totals, slabHit, agents: agentList, payout: slabHit ? Number(slabHit.payout) : 0, slabs }
   } else {
-    const agents      = agentList.map(a => { const sh = getSlabHit(a.sales, a.revenue); return { ...a, slabHit: sh, payout: sh ? Number(sh.payout) : 0 } })
-    const eligible    = agents.filter(a => a.slabHit)
+    const agents   = agentList.map(a => { const sh = getSlabHit(a.sales, a.revenue); return { ...a, slabHit: sh, payout: sh ? Number(sh.payout) : 0 } })
+    const eligible = agents.filter(a => a.slabHit)
     return { kind: 'individual', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
   }
 }
@@ -166,6 +182,58 @@ function ProgressPanel({ kicker, progress }) {
   function slabLabel(s, idx) {
     if (isRevType) return `S${idx+1}: ${formatINR(Number(s.threshold || s.revenueThreshold || 0))}`
     return `S${idx+1}: ${s.threshold || s.salesThreshold || 0} sales`
+  }
+
+  if (progress.kind === 'collective') {
+    const { totals, slabHit, agents, eligible, totalPayout, slabs } = progress
+    const nextSlab  = slabs.find(s => !slabHit || Number(s.payout) > Number(slabHit.payout))
+    const threshold = nextSlab
+      ? Number(nextSlab.threshold || nextSlab.salesThreshold || 0)
+      : (slabHit ? Number(slabHit.threshold || slabHit.salesThreshold || 0) : 1)
+    const pct = Math.min(100, Math.round((totals.sales / Math.max(threshold, 1)) * 100))
+
+    return (
+      <div className="mt-3 border-t border-gray-100 pt-3 space-y-3">
+        {/* Team collective bar */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-gray-500">
+            <span className="font-semibold text-blue-700">🤝 Team total: {totals.sales} sales</span>
+            <span>{slabHit ? `Slab hit ✓` : (nextSlab ? `Next: ${nextSlab.threshold || 0} sales` : '')}</span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${slabHit ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+          {slabHit && (
+            <p className="text-[10px] font-bold text-green-700">
+              ✅ Threshold hit! {eligible} contributor{eligible !== 1 ? 's' : ''} earn {formatINR(Number(slabHit.payout))} each · Total payout: {formatINR(totalPayout)}
+            </p>
+          )}
+        </div>
+        {/* Per-agent contribution */}
+        {agents.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px]">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-100">
+                  <th className="text-left pb-1 font-semibold">Agent</th>
+                  <th className="text-right pb-1 font-semibold">Contrib.</th>
+                  <th className="text-right pb-1 font-semibold">Earns</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {[...agents].sort((a, b) => b.sales - a.sales).map(a => (
+                  <tr key={a.email} className={a.payout > 0 ? 'bg-green-50/40' : ''}>
+                    <td className="py-1 text-gray-700 font-medium">{a.name}</td>
+                    <td className="py-1 text-right text-gray-600">{a.sales} sale{a.sales !== 1 ? 's' : ''}</td>
+                    <td className="py-1 text-right font-semibold text-green-700">{a.payout > 0 ? formatINR(a.payout) : (a.sales > 0 ? '—' : <span className="text-gray-300">0</span>)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
   }
 
   if (progress.kind === 'team') {
@@ -402,7 +470,9 @@ export default function AnnounceKicker() {
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
   const [success,     setSuccess]     = useState(false)
-  const [manageTab,   setManageTab]   = useState('live') // 'live' | 'past'
+  const [manageTab,      setManageTab]      = useState('live') // 'live' | 'past'
+  const [agentSearch,    setAgentSearch]    = useState('')
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false)
 
   // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
   const activeUser    = effectiveUser || user
@@ -466,18 +536,14 @@ export default function AnnounceKicker() {
   }
 
   function toggleRole(role) {
+    setAgentSearch('')
+    setAgentPickerOpen(false)
     setForm(p => {
       const newRoles = p.targetRoles.includes(role)
         ? p.targetRoles.filter(r => r !== role)
         : [...p.targetRoles, role]
-      // Auto-select All Teams when only agent-level roles are targeted
-      const agentLevelRoles = ['Agent', 'PreSales']
-      const isAgentOnly = newRoles.length > 0 && newRoles.every(r => agentLevelRoles.includes(r))
-      return {
-        ...p,
-        targetRoles: newRoles,
-        targetTeams: isAgentOnly ? ['ALL'] : p.targetTeams,
-      }
+      // Default targetTeams to ALL whenever roles change — user can narrow down via pickers
+      return { ...p, targetRoles: newRoles, targetTeams: ['ALL'] }
     })
   }
 
@@ -694,7 +760,7 @@ export default function AnnounceKicker() {
           {/* Type */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Kicker Type *</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {KICKER_TYPES.map(t => (
                 <button key={t.value} type="button" onClick={() => setField('type', t.value)}
                   className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
@@ -755,7 +821,7 @@ export default function AnnounceKicker() {
             )}
           </div>
 
-          {/* Target Teams — only shown when manager-level roles are selected */}
+          {/* Target Teams — manager-level roles */}
           {form.targetRoles.some(r => ['Manager', 'VH', 'SalesHead'].includes(r)) && (() => {
             const managerLevelRoles = ['Manager', 'VH', 'SalesHead']
             const selectedMgrRoles  = form.targetRoles.filter(r => managerLevelRoles.includes(r))
@@ -792,6 +858,94 @@ export default function AnnounceKicker() {
             )
           })()}
 
+          {/* Agent picker — searchable dropdown when Agent or PreSales is selected */}
+          {form.targetRoles.some(r => ['Agent', 'PreSales'].includes(r)) && (() => {
+            const agentRoles  = form.targetRoles.filter(r => ['Agent', 'PreSales'].includes(r))
+            const agentPool   = subtreeAll.filter(m => agentRoles.includes(m.Role))
+            const isAll       = form.targetTeams.includes('ALL')
+            const selCount    = isAll ? agentPool.length : form.targetTeams.length
+            const filtered    = agentPool.filter(a =>
+              !agentSearch ||
+              (a.Name  || '').toLowerCase().includes(agentSearch.toLowerCase()) ||
+              (a.Email || '').toLowerCase().includes(agentSearch.toLowerCase())
+            )
+
+            return (
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
+                  Which Agents?
+                </label>
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  {/* Summary toggle row */}
+                  <button type="button" onClick={() => setAgentPickerOpen(v => !v)}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm">
+                    <span className="font-semibold text-gray-700">
+                      {isAll
+                        ? `All ${agentPool.length} agent${agentPool.length !== 1 ? 's' : ''}`
+                        : `${selCount} of ${agentPool.length} selected`}
+                    </span>
+                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${agentPickerOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {agentPickerOpen && (
+                    <div className="border-t border-gray-100">
+                      {/* Search */}
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <input
+                          value={agentSearch}
+                          onChange={e => setAgentSearch(e.target.value)}
+                          placeholder="Search agents…"
+                          className="w-full text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        />
+                      </div>
+
+                      {/* Select All */}
+                      <button type="button" onClick={() => toggleTeam('ALL')}
+                        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold border-b border-gray-50 transition-colors ${
+                          isAll ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50 text-gray-600'
+                        }`}>
+                        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                          isAll ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-300'
+                        }`}>
+                          {isAll && '✓'}
+                        </span>
+                        Select All ({agentPool.length})
+                      </button>
+
+                      {/* Agent list */}
+                      <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
+                        {filtered.length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-4">No agents found.</p>
+                        ) : filtered.map(a => {
+                          const sel = !isAll && form.targetTeams.includes(a.Email)
+                          return (
+                            <button key={a.Email} type="button" onClick={() => toggleTeam(a.Email)}
+                              className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-xs transition-colors ${
+                                sel ? 'bg-brand-50 text-brand-700' : 'hover:bg-gray-50 text-gray-600'
+                              }`}>
+                              <span className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                sel ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-300'
+                              }`}>
+                                {sel && '✓'}
+                              </span>
+                              <span className="font-medium flex-1 text-left">{a.Name || a.Email}</span>
+                              <span className="text-[10px] text-gray-400">{a.Role}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!isAll && (
+                  <p className="text-[10px] text-brand-600 font-semibold mt-1">
+                    {selCount} agent{selCount !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Slabs */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs (up to 4)</label>
@@ -800,7 +954,9 @@ export default function AnnounceKicker() {
                 <thead>
                   <tr className="text-[10px] font-bold uppercase bg-brand-50 text-brand-600">
                     <th className="px-3 py-2 text-left w-8">#</th>
-                    <th className="px-3 py-2 text-left">{typeInfo.unit === 'revenue' ? 'Revenue (₹)' : 'Sales Count'}</th>
+                    <th className="px-3 py-2 text-left">
+                      {typeInfo.unit === 'revenue' ? 'Revenue (₹)' : form.type === 'collective' ? 'Combined Team Sales' : 'Sales Count'}
+                    </th>
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
                   </tr>
                 </thead>

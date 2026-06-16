@@ -253,11 +253,13 @@ function PSCallsCard({ psSummary }) {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',   label: '🎯 Kicker on Sales',   unit: 'sales'   },
-  { value: 'revenue', label: '💰 Kicker on Revenue', unit: 'revenue' },
+  { value: 'sales',      label: '🎯 Kicker on Sales',        unit: 'sales'   },
+  { value: 'revenue',    label: '💰 Kicker on Revenue',      unit: 'revenue' },
+  { value: 'collective', label: '🤝 Collective Team Kicker', unit: 'sales'   },
 ]
 
 function normalizeType(t) {
+  if (t === 'collective') return 'collective'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales'
 }
@@ -284,7 +286,7 @@ function countdown(k) {
 }
 
 // ── Progress calculation ──────────────────────────────────────────────────────
-function computeProgress(kicker, allDeals) {
+function computeProgress(kicker, allDeals, myEmail) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
@@ -297,11 +299,21 @@ function computeProgress(kicker, allDeals) {
     return false
   })
 
+  const minVal   = kicker.minSaleValue > 0 ? kicker.minSaleValue : 0
   const rawSales = inRange.length
   const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
-  const sales    = kicker.minSaleValue > 0
-    ? inRange.filter(d => (d.TotalValue || 0) >= kicker.minSaleValue).length
+  const sales    = minVal > 0
+    ? inRange.filter(d => (d.TotalValue || 0) >= minVal).length
     : rawSales
+
+  // Individual contribution — used for collective kicker display
+  const myContribution = myEmail
+    ? inRange.filter(d => {
+        if ((d.Email || '').toLowerCase() !== myEmail.toLowerCase()) return false
+        if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
+        return true
+      }).length
+    : 0
 
   const type   = normalizeType(kicker.type || 'sales')
   const isRev  = type === 'revenue'
@@ -321,7 +333,7 @@ function computeProgress(kicker, allDeals) {
     else if (!nextSlab) nextSlab = slab
   }
 
-  return { sales, revenue, activeSlab, nextSlab, sorted }
+  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution }
 }
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
@@ -355,9 +367,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
 
   const active    = kickerIsActive(kicker)
   const past      = kickerIsPast(kicker)
-  const progress  = computeProgress(kicker, deals)
   const origType  = kicker.type || 'sales'
   const type      = normalizeType(origType)
+  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
 
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
@@ -380,10 +392,11 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
     try { sessionStorage.setItem(dedupKey, '1') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress.activeSlab?.payout, agentEmail, kicker.id])
-  const typeInfo = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]
-  const isSales  = type === 'sales'
-  const isRev    = type === 'revenue'
-  const isTeam   = origType.startsWith('team_')
+  const typeInfo     = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]
+  const isSales      = type === 'sales'
+  const isRev        = type === 'revenue'
+  const isCollective = type === 'collective'
+  const isTeam       = origType.startsWith('team_')
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
@@ -442,31 +455,71 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
 
         {/* Progress stats — show for both active and past */}
         {(active || past) && (
-          <div className="flex gap-2">
-            {isSales && (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
-                <p className="text-[10px] text-indigo-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Sales</p>
-              </div>
-            )}
-            {isRev && (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
-                <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
-                <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
-              </div>
-            )}
-            {progress.activeSlab ? (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+          <>
+            {isCollective ? (
+              /* Collective: show team total + my contribution */
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-blue-50 border border-blue-100">
+                    <p className="text-xl font-black text-blue-700">{progress.sales}</p>
+                    <p className="text-[10px] text-blue-500 font-semibold">Team Total Sales</p>
+                  </div>
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                    <p className="text-xl font-black text-indigo-700">{progress.myContribution}</p>
+                    <p className="text-[10px] text-indigo-500 font-semibold">Your Contribution</p>
+                  </div>
+                  {progress.activeSlab ? (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                      <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                      <p className="text-[10px] text-green-600 font-semibold">🎉 You Earn!</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                      <p className="text-sm font-black text-gray-400">—</p>
+                      <p className="text-[10px] text-gray-400 font-semibold">Team not there yet</p>
+                    </div>
+                  )}
+                </div>
+                {progress.myContribution === 0 && active && (
+                  <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2">
+                    ⚡ Make a sale to become a contributor — team earnings count only if you contributed!
+                  </p>
+                )}
+                {progress.myContribution > 0 && progress.activeSlab && (
+                  <p className="text-[11px] text-green-700 font-semibold bg-green-50 rounded-lg px-3 py-2">
+                    🎉 Team hit the target & you contributed {progress.myContribution} sale{progress.myContribution !== 1 ? 's' : ''}! {formatINR(Number(progress.activeSlab.payout))} is yours.
+                  </p>
+                )}
               </div>
             ) : (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
-                <p className="text-sm font-black text-gray-400">—</p>
-                <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+              /* Individual / manager / revenue */
+              <div className="flex gap-2">
+                {(isSales || isTeam) && (
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                    <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
+                    <p className="text-[10px] text-indigo-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Sales</p>
+                  </div>
+                )}
+                {isRev && (
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                    <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                    <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
+                  </div>
+                )}
+                {progress.activeSlab ? (
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                    <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                    <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                    <p className="text-sm font-black text-gray-400">—</p>
+                    <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
 
         {/* Incentive Tiers */}
@@ -606,6 +659,16 @@ export default function Kickers() {
 
   function dealsFor(k) {
     if (k.type?.startsWith('team_')) return deals
+    const type = normalizeType(k.type || 'sales')
+
+    // Collective: return all targeted agents' combined deals
+    if (type === 'collective') {
+      const targetTeams = k.targetTeams || ['ALL']
+      if (targetTeams.includes('ALL')) return deals
+      const emailSet = new Set(targetTeams.map(e => e.toLowerCase()))
+      return deals.filter(d => emailSet.has((d.Email || '').toLowerCase()))
+    }
+
     // Manager-targeted kicker: count team sales via d.Team column
     const targetsManagers = (k.targetRoles || []).includes('Manager') &&
       !(k.targetRoles || []).includes('Agent') &&
