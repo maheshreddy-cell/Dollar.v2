@@ -21,7 +21,7 @@ function cacheGet(key) {
 function cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
 
 // ─── localStorage cache (30 min TTL, stale-while-revalidate) ─────────────────
-const LS_PREFIX = 'dv2_'
+const LS_PREFIX = 'dv2_v3_'
 const LS_TTL    = 30 * 60_000  // 30 minutes
 
 function _lsKey(key) {
