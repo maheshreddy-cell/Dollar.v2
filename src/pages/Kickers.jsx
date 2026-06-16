@@ -318,6 +318,14 @@ function computeProgress(kicker, allDeals, myEmail) {
       }).length
     : 0
 
+  // Per-agent contribution map — used for "who is eligible" list on collective kickers
+  const contributorsMap = {}
+  for (const d of inRange) {
+    if (minVal > 0 && (d.TotalValue || 0) < minVal) continue
+    const email = (d.Email || '').toLowerCase()
+    if (email) contributorsMap[email] = (contributorsMap[email] || 0) + 1
+  }
+
   const type   = normalizeType(kicker.type || 'sales')
   const isRev  = type === 'revenue'
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
@@ -336,7 +344,7 @@ function computeProgress(kicker, allDeals, myEmail) {
     else if (!nextSlab) nextSlab = slab
   }
 
-  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution }
+  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap }
 }
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
@@ -367,6 +375,7 @@ function nudgeText(slab, type, progress) {
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
 function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const [expanded, setExpanded] = useState(false)
+  const [showContributors, setShowContributors] = useState(false)
 
   const active    = kickerIsActive(kicker)
   const past      = kickerIsPast(kicker)
@@ -377,6 +386,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
     if (!progress.activeSlab || !agentEmail) return
+    // Collective: only log if this agent actually contributed — no contribution = no earning
+    if (type === 'collective' && !(progress.myContribution > 0)) return
     const now     = new Date()
     const istNow  = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
     const today   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
@@ -400,6 +411,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const isRev        = type === 'revenue'
   const isCollective = type === 'collective'
   const isTeam       = origType.startsWith('team_')
+
+  // Sorted contributors list for collective kickers
+  const contributors = isCollective
+    ? Object.entries(progress.contributorsMap || {}).map(([email, count]) => {
+        const earns = !!(progress.activeSlab && count > 0)
+        const payout = earns ? Number(progress.activeSlab.payout) : 0
+        const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+        return { email, count, earns, payout, displayName }
+      }).sort((a, b) => b.payout - a.payout || b.count - a.count)
+    : []
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
@@ -471,10 +492,15 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                     <p className="text-xl font-black text-indigo-700">{progress.myContribution}</p>
                     <p className="text-[10px] text-indigo-500 font-semibold">Your Contribution</p>
                   </div>
-                  {progress.activeSlab ? (
+                  {progress.activeSlab && progress.myContribution > 0 ? (
                     <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
                       <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
                       <p className="text-[10px] text-green-600 font-semibold">🎉 You Earn!</p>
+                    </div>
+                  ) : progress.activeSlab && progress.myContribution === 0 ? (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-red-50 border border-red-200">
+                      <p className="text-sm font-black text-red-400">₹0</p>
+                      <p className="text-[10px] text-red-500 font-semibold">No Contribution</p>
                     </div>
                   ) : (
                     <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
@@ -483,7 +509,12 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                     </div>
                   )}
                 </div>
-                {progress.myContribution === 0 && active && (
+                {progress.myContribution === 0 && progress.activeSlab && (
+                  <p className="text-[11px] text-red-600 font-semibold bg-red-50 rounded-lg px-3 py-2">
+                    ❌ Team hit the target but you didn't contribute — no payout for you this time.
+                  </p>
+                )}
+                {progress.myContribution === 0 && !progress.activeSlab && active && (
                   <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 rounded-lg px-3 py-2">
                     ⚡ Make a sale to become a contributor — team earnings count only if you contributed!
                   </p>
@@ -492,6 +523,36 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                   <p className="text-[11px] text-green-700 font-semibold bg-green-50 rounded-lg px-3 py-2">
                     🎉 Team hit the target & you contributed {progress.myContribution} sale{progress.myContribution !== 1 ? 's' : ''}! {formatINR(Number(progress.activeSlab.payout))} is yours.
                   </p>
+                )}
+                {/* Contributors toggle */}
+                {contributors.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowContributors(v => !v)}
+                      className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
+                    >
+                      <span>👥 {contributors.length} contributor{contributors.length !== 1 ? 's' : ''}{progress.activeSlab ? ` — ${formatINR(Number(progress.activeSlab.payout))} each` : ''}</span>
+                      {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                    {showContributors && (
+                      <div className="mt-2 space-y-1">
+                        {contributors.map((c, i) => (
+                          <div key={c.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                            c.earns ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400 font-mono w-4 text-right">{i + 1}</span>
+                              <span className={`font-semibold ${c.earns ? 'text-green-700' : 'text-gray-600'}`}>{c.displayName}</span>
+                              <span className="text-gray-400">{c.count} sale{c.count !== 1 ? 's' : ''}</span>
+                            </div>
+                            <span className={`font-bold ${c.earns ? 'text-green-700' : 'text-gray-400'}`}>
+                              {c.earns ? formatINR(c.payout) : '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (
