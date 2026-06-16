@@ -290,14 +290,17 @@ function computeProgress(kicker, allDeals, myEmail, skipDateFilter = false) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
-  // skipDateFilter = true for manager kickers — deals are already filtered by Month+Team
-  // in dealsFor(), so no need to re-check dates (avoids raw Timestamp format issues).
+  // skipDateFilter = true for manager kickers (already filtered by dealsFor by PaymentDate+Team).
+  // For all other kickers: use PaymentDate (YYYY-MM-DD, reliable) — Timestamp is raw
+  // DD/MM/YYYY from Indian-locale Google Sheets which JS misparses as M/D/YYYY.
+  // Fall back to Month field when PaymentDate is missing.
+  const kickerMonth = kicker.dateFrom?.substring(0, 7)
   const inRange = skipDateFilter ? allDeals : allDeals.filter(d => {
-    const dateStr = d.PaymentDate || d.Timestamp
-    if (!dateStr) return false
-    const dt = new Date(dateStr)
-    if (isNaN(dt.getTime())) return false
-    return dt >= from && dt <= to
+    if (d.PaymentDate) {
+      const dt = new Date(d.PaymentDate)
+      if (!isNaN(dt.getTime())) return dt >= from && dt <= to
+    }
+    return kickerMonth ? d.Month === kickerMonth : false
   })
 
   const minVal   = kicker.minSaleValue > 0 ? kicker.minSaleValue : 0
@@ -679,13 +682,20 @@ export default function Kickers() {
       const firstName = (effectiveUser?.name || '').trim().split(' ')[0].toLowerCase()
       const teamFallback = firstName ? `team ${firstName}` : ''
       const teamToMatch  = myTeam || teamFallback
-      // Use Month field (same source as the team section) — avoids raw Timestamp format issues
       const kickerMonth  = (k.dateFrom || '').substring(0, 7) // "2026-06"
+      const from = k.dateFrom ? new Date(k.dateFrom) : null
+      const to   = k.dateTo  ? new Date(k.dateTo + 'T23:59:59') : null
       if (teamToMatch) {
-        return deals.filter(d =>
-          (d.Team || '').trim().toLowerCase() === teamToMatch &&
-          (!kickerMonth || d.Month === kickerMonth)
-        )
+        return deals.filter(d => {
+          if ((d.Team || '').trim().toLowerCase() !== teamToMatch) return false
+          // PaymentDate is normalized YYYY-MM-DD by parseSheetDate — use it for precise filtering
+          if (d.PaymentDate && from && to) {
+            const dt = new Date(d.PaymentDate)
+            if (!isNaN(dt.getTime())) return dt >= from && dt <= to
+          }
+          // Fallback to Month when PaymentDate is missing
+          return kickerMonth ? d.Month === kickerMonth : false
+        })
       }
     }
     return deals.filter(d => (d.Email || '').toLowerCase() === (effectiveUser?.email || '').toLowerCase())

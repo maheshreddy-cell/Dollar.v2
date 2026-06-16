@@ -96,27 +96,21 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 
   // Helper: does deal fall in date window + meet min value?
   function inWindow(d) {
-    // Try PaymentDate first (pre-parsed YYYY-MM-DD → reliable).
-    // Timestamp is raw DD/MM/YYYY from Indian-locale sheets — JS parses it as M/D/YYYY
-    // (wrong month), so if the date-range check fails, fall back to Month field.
-    const dateStr = d.PaymentDate || d.Timestamp
-    if (dateStr) {
-      const dt = new Date(dateStr).getTime()
-      if (!isNaN(dt) && dt >= from && dt <= to) {
-        // date-range match — still apply minVal
-        if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
-        return true
-      }
-    }
-    // Fallback: if no reliable date, check Month field against the kicker's month
-    if (d.Month) {
+    // PaymentDate is normalized to YYYY-MM-DD by parseSheetDate — reliable for new Date().
+    // Timestamp is raw DD/MM/YYYY from Indian-locale Google Sheets — JS misparses it as
+    // M/D/YYYY (e.g. "12/6/2026" → December 6), so we ignore it entirely.
+    // Fall back to Month field when PaymentDate is empty.
+    let inDateRange = false
+    if (d.PaymentDate) {
+      const dt = new Date(d.PaymentDate).getTime()
+      if (!isNaN(dt)) inDateRange = dt >= from && dt <= to
+    } else if (d.Month) {
       const kickerMonth = kicker.dateFrom?.substring(0, 7)
-      if (kickerMonth && d.Month === kickerMonth) {
-        if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
-        return true
-      }
+      inDateRange = kickerMonth ? d.Month === kickerMonth : false
     }
-    return false
+    if (!inDateRange) return false
+    if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
+    return true
   }
 
   if (targetingManagers) {
