@@ -286,16 +286,15 @@ function countdown(k) {
 }
 
 // ── Progress calculation ──────────────────────────────────────────────────────
-function computeProgress(kicker, allDeals, myEmail, skipDateFilter = false) {
+function computeProgress(kicker, allDeals, myEmail) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
-  // skipDateFilter = true for manager kickers (already filtered by dealsFor by PaymentDate+Team).
-  // For all other kickers: use PaymentDate (YYYY-MM-DD, reliable) — Timestamp is raw
-  // DD/MM/YYYY from Indian-locale Google Sheets which JS misparses as M/D/YYYY.
-  // Fall back to Month field when PaymentDate is missing.
+  // PaymentDate is normalized to YYYY-MM-DD by parseSheetDate() — primary date source.
+  // Timestamp is raw DD/MM/YYYY from Indian-locale Sheets (JS misparses as M/D/YYYY).
+  // Month field is the fallback when PaymentDate is empty.
   const kickerMonth = kicker.dateFrom?.substring(0, 7)
-  const inRange = skipDateFilter ? allDeals : allDeals.filter(d => {
+  const inRange = allDeals.filter(d => {
     if (d.PaymentDate) {
       const dt = new Date(d.PaymentDate)
       if (!isNaN(dt.getTime())) return dt >= from && dt <= to
@@ -373,7 +372,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const past      = kickerIsPast(kicker)
   const origType  = kicker.type || 'sales'
   const type      = normalizeType(origType)
-  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined, isManagerViewer)
+  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
 
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
