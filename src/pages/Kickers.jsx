@@ -253,13 +253,14 @@ function PSCallsCard({ psSummary }) {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'team_sales',          label: '👥 Team Sales',               unit: 'sales',   metric: 'team' },
-  { value: 'team_revenue',        label: '👥 Team Revenue',             unit: 'revenue', metric: 'team' },
-  { value: 'individual_sales',    label: '👤 Individual Sales',         unit: 'sales',   metric: 'ind'  },
-  { value: 'individual_revenue',  label: '👤 Individual Revenue',       unit: 'revenue', metric: 'ind'  },
-  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', unit: 'or',      metric: 'ind'  },
-  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue',unit: 'and',     metric: 'ind'  },
+  { value: 'sales',   label: '🎯 Kicker on Sales',   unit: 'sales'   },
+  { value: 'revenue', label: '💰 Kicker on Revenue', unit: 'revenue' },
 ]
+
+function normalizeType(t) {
+  if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
+  return 'sales'
+}
 
 // Roles that see all kickers (oversight view)
 const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH']
@@ -293,28 +294,25 @@ function computeProgress(kicker, allDeals) {
   })
 
   const rawSales = inRange.length
-  // Use TotalValue (projected revenue = full sale value) for kicker progress
   const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
   const sales    = kicker.minSaleValue > 0
     ? inRange.filter(d => (d.TotalValue || 0) >= kicker.minSaleValue).length
     : rawSales
 
+  const type   = normalizeType(kicker.type || 'sales')
+  const isRev  = type === 'revenue'
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
-    const at = Number(a.threshold || a.salesThreshold || 0)
-    const bt = Number(b.threshold || b.salesThreshold || 0)
+    const at = Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0)
+    const bt = Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
     return at - bt
   })
 
-  const type = kicker.type || 'team_sales'
   let activeSlab = null
   let nextSlab   = null
 
   for (const slab of sorted) {
-    let hit = false
-    if      (type === 'team_sales'       || type === 'individual_sales')    hit = sales   >= Number(slab.threshold)
-    else if (type === 'team_revenue'     || type === 'individual_revenue')  hit = revenue >= Number(slab.threshold)
-    else if (type === 'individual_or')   hit = sales >= Number(slab.salesThreshold) || revenue >= Number(slab.revenueThreshold)
-    else if (type === 'individual_and')  hit = sales >= Number(slab.salesThreshold) && revenue >= Number(slab.revenueThreshold)
+    const t   = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+    const hit = isRev ? revenue >= t : sales >= t
     if (hit) activeSlab = slab
     else if (!nextSlab) nextSlab = slab
   }
@@ -324,69 +322,38 @@ function computeProgress(kicker, allDeals) {
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
 function slabLabel(slab, type) {
-  if (type === 'team_sales' || type === 'individual_sales')
-    return `${slab.threshold} sales → ${formatINR(Number(slab.payout))}`
-  if (type === 'team_revenue' || type === 'individual_revenue')
-    return `${formatINR(Number(slab.threshold))} revenue → ${formatINR(Number(slab.payout))}`
-  if (type === 'individual_or')
-    return `${slab.salesThreshold} sales OR ${formatINR(Number(slab.revenueThreshold))} → ${formatINR(Number(slab.payout))}`
-  if (type === 'individual_and')
-    return `${slab.salesThreshold} sales AND ${formatINR(Number(slab.revenueThreshold))} → ${formatINR(Number(slab.payout))}`
-  return ''
+  const t = normalizeType(type)
+  const threshold = Number(slab.threshold || (t === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 0)
+  if (t === 'revenue') return `${formatINR(threshold)} revenue → ${formatINR(Number(slab.payout))}`
+  return `${threshold} sales → ${formatINR(Number(slab.payout))}`
 }
 
 function slabBarPct(slab, type, progress) {
-  if (type === 'team_sales' || type === 'individual_sales')
-    return Math.min((progress.sales / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  if (type === 'team_revenue' || type === 'individual_revenue')
-    return Math.min((progress.revenue / Math.max(Number(slab.threshold), 1)) * 100, 100)
-  if (type === 'individual_or') {
-    const sp = progress.sales   / Math.max(Number(slab.salesThreshold),   1)
-    const rp = progress.revenue / Math.max(Number(slab.revenueThreshold), 1)
-    return Math.min(Math.max(sp, rp) * 100, 100)
-  }
-  if (type === 'individual_and') {
-    const sp = progress.sales   / Math.max(Number(slab.salesThreshold),   1)
-    const rp = progress.revenue / Math.max(Number(slab.revenueThreshold), 1)
-    return Math.min(Math.min(sp, rp) * 100, 100)
-  }
-  return 0
+  const t = normalizeType(type)
+  const threshold = Number(slab.threshold || (t === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 1)
+  if (t === 'revenue') return Math.min((progress.revenue / Math.max(threshold, 1)) * 100, 100)
+  return Math.min((progress.sales / Math.max(threshold, 1)) * 100, 100)
 }
 
 function nudgeText(slab, type, progress) {
-  if (type === 'team_sales' || type === 'individual_sales') {
-    const gap = Number(slab.threshold) - progress.sales
-    return gap > 0 ? `${gap} more sale${gap > 1 ? 's' : ''} to unlock ${formatINR(Number(slab.payout))}` : null
-  }
-  if (type === 'team_revenue' || type === 'individual_revenue') {
-    const gap = Number(slab.threshold) - progress.revenue
+  const t = normalizeType(type)
+  if (t === 'revenue') {
+    const gap = Number(slab.threshold || slab.revenueThreshold || 0) - progress.revenue
     return gap > 0 ? `${formatINR(gap)} more revenue to unlock ${formatINR(Number(slab.payout))}` : null
   }
-  if (type === 'individual_or') {
-    const sg = Number(slab.salesThreshold) - progress.sales
-    const rg = Number(slab.revenueThreshold) - progress.revenue
-    if (sg <= 0 || rg <= 0) return null
-    return `${sg} more sales OR ${formatINR(rg)} more revenue to unlock`
-  }
-  if (type === 'individual_and') {
-    const sg = Number(slab.salesThreshold) - progress.sales
-    const rg = Number(slab.revenueThreshold) - progress.revenue
-    const parts = []
-    if (sg > 0) parts.push(`${sg} more sales`)
-    if (rg > 0) parts.push(`${formatINR(rg)} more revenue`)
-    return parts.length ? parts.join(' AND ') + ' to unlock' : null
-  }
-  return null
+  const gap = Number(slab.threshold || slab.salesThreshold || 0) - progress.sales
+  return gap > 0 ? `${gap} more sale${gap > 1 ? 's' : ''} to unlock ${formatINR(Number(slab.payout))}` : null
 }
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
 function KickerCard({ kicker, deals, agentEmail, agentName }) {
   const [expanded, setExpanded] = useState(false)
 
-  const active   = kickerIsActive(kicker)
-  const past     = kickerIsPast(kicker)
-  const progress = computeProgress(kicker, deals)
-  const type     = kicker.type || 'team_sales'
+  const active    = kickerIsActive(kicker)
+  const past      = kickerIsPast(kicker)
+  const progress  = computeProgress(kicker, deals)
+  const origType  = kicker.type || 'sales'
+  const type      = normalizeType(origType)
 
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
@@ -403,16 +370,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName }) {
       date:       today,
       month,
       kickerType: kicker.title || type,
-      details:    `Slab hit: ${slabLabel(progress.activeSlab, type)} | ${type.startsWith('team_') ? 'Team' : 'Individual'} kicker`,
+      details:    `Slab hit: ${slabLabel(progress.activeSlab, origType)} | ${isTeam ? 'Team' : 'Individual'} kicker`,
       amount:     Number(progress.activeSlab.payout) || 0,
     })
     try { sessionStorage.setItem(dedupKey, '1') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress.activeSlab?.payout, agentEmail, kicker.id])
-  const typeInfo = KICKER_TYPES.find(t => t.value === type)
-  const isSales  = type.includes('sales') || type.includes('or') || type.includes('and')
-  const isRev    = type.includes('revenue') || type.includes('or') || type.includes('and')
-  const isTeam   = type.startsWith('team_')
+  const typeInfo = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]
+  const isSales  = type === 'sales'
+  const isRev    = type === 'revenue'
+  const isTeam   = origType.startsWith('team_')
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
@@ -606,8 +573,7 @@ export default function Kickers() {
   const displayed = tab === 'active' ? active : past
 
   function dealsFor(k) {
-    const isTeam = k.type?.startsWith('team_')
-    if (isTeam) return deals
+    if (k.type?.startsWith('team_')) return deals
     return deals.filter(d => d.Email === effectiveUser?.email)
   }
 

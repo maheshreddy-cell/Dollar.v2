@@ -9,13 +9,15 @@ import { notifyKickerAnnounced } from '../services/slack'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'team_sales',          label: '👥 Team Sales',               desc: 'Team hits X total sales → everyone gets payout',        unit: 'sales',   metric: 'team' },
-  { value: 'team_revenue',        label: '👥 Team Revenue',             desc: 'Team hits X revenue total → everyone gets payout',      unit: 'revenue', metric: 'team' },
-  { value: 'individual_sales',    label: '👤 Individual Sales',         desc: 'Each person hits X sales → they personally get payout', unit: 'sales',   metric: 'ind'  },
-  { value: 'individual_revenue',  label: '👤 Individual Revenue',       desc: 'Each person hits X revenue → they get payout',          unit: 'revenue', metric: 'ind'  },
-  { value: 'individual_or',       label: '⚡ Combo — Sales OR Revenue', desc: 'X sales OR Y revenue → person gets payout',             unit: 'or',      metric: 'ind'  },
-  { value: 'individual_and',      label: '🎯 Combo — Sales AND Revenue',desc: 'X sales AND Y revenue → person gets payout',            unit: 'and',     metric: 'ind'  },
+  { value: 'sales',   label: '🎯 Kicker on Sales',   desc: 'Each person hits X sales count within the date window → earns payout',   unit: 'sales'   },
+  { value: 'revenue', label: '💰 Kicker on Revenue', desc: 'Each person hits X revenue amount within the date window → earns payout', unit: 'revenue' },
 ]
+
+// Normalize old 6-type values to the new 2-type system (for existing DB records)
+function normalizeType(t) {
+  if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
+  return 'sales' // covers 'sales', 'team_sales', 'individual_sales', 'individual_or', 'individual_and', null
+}
 
 // Roles each announcer level can target
 const ANNOUNCE_FOR = {
@@ -58,14 +60,13 @@ function canManage(kicker, user) {
 
 // ── Kicker progress computation ───────────────────────────────────────────────
 function computeKickerProgress(kicker, allMembers, allDeals) {
-  const from   = new Date(kicker.dateFrom).getTime()
-  const to     = new Date(kicker.dateTo).getTime() + 86399999
-  const minVal = Number(kicker.minSaleValue || 0)
-  const type   = kicker.type || 'individual_sales'
-  const isTeam     = type.startsWith('team_')
-  const isRevType  = type === 'team_revenue' || type === 'individual_revenue'
-  const isComboOr  = type === 'individual_or'
-  const isComboAnd = type === 'individual_and'
+  const from      = new Date(kicker.dateFrom).getTime()
+  const to        = new Date(kicker.dateTo).getTime() + 86399999
+  const minVal    = Number(kicker.minSaleValue || 0)
+  const origType  = kicker.type || 'sales'
+  const isTeam    = origType.startsWith('team_')
+  const type      = normalizeType(origType)
+  const isRevType = type === 'revenue'
 
   // Filter members targeted by this kicker
   const targetRoles = new Set(kicker.targetRoles || [])
@@ -106,19 +107,13 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   // Slabs sorted ascending (so we find highest hit via iteration)
   const slabs = (kicker.slabs || [])
     .filter(s => Number(s.payout) > 0)
-    .sort((a, b) => {
-      if (isComboOr || isComboAnd) return Number(a.salesThreshold) - Number(b.salesThreshold)
-      return Number(a.threshold) - Number(b.threshold)
-    })
+    .sort((a, b) => Number(a.threshold || a.salesThreshold || 0) - Number(b.threshold || b.salesThreshold || 0))
 
   function getSlabHit(sales, revenue) {
     let best = null
     for (const s of slabs) {
-      let hit = false
-      if      (isComboOr)  hit = sales >= Number(s.salesThreshold)   || revenue >= Number(s.revenueThreshold)
-      else if (isComboAnd) hit = sales >= Number(s.salesThreshold)   && revenue >= Number(s.revenueThreshold)
-      else if (isRevType)  hit = revenue >= Number(s.threshold)
-      else                 hit = sales   >= Number(s.threshold)
+      const t = Number(s.threshold || (isRevType ? s.revenueThreshold : s.salesThreshold) || 0)
+      const hit = isRevType ? revenue >= t : sales >= t
       if (hit) best = s
     }
     return best
@@ -139,14 +134,11 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 
 // ── ProgressPanel ─────────────────────────────────────────────────────────────
 function ProgressPanel({ kicker, progress }) {
-  const type      = kicker.type || 'individual_sales'
-  const isRevType = type === 'team_revenue' || type === 'individual_revenue'
-  const isCombo   = type === 'individual_or' || type === 'individual_and'
+  const isRevType = normalizeType(kicker.type) === 'revenue'
 
   function slabLabel(s, idx) {
-    if (isCombo)    return `S${idx+1}: ${s.salesThreshold} sales ${type === 'individual_or' ? 'OR' : 'AND'} ${formatINR(Number(s.revenueThreshold))}`
-    if (isRevType)  return `S${idx+1}: ${formatINR(Number(s.threshold))}`
-    return `S${idx+1}: ${s.threshold} sales`
+    if (isRevType) return `S${idx+1}: ${formatINR(Number(s.threshold || s.revenueThreshold || 0))}`
+    return `S${idx+1}: ${s.threshold || s.salesThreshold || 0} sales`
   }
 
   if (progress.kind === 'team') {
@@ -223,7 +215,7 @@ function ProgressPanel({ kicker, progress }) {
               <tr className="text-gray-400 border-b border-gray-100">
                 <th className="text-left pb-1 font-semibold">Agent</th>
                 {!isRevType && <th className="text-right pb-1 font-semibold">Sales</th>}
-                {(isRevType || isCombo) && <th className="text-right pb-1 font-semibold">Revenue</th>}
+                {isRevType && <th className="text-right pb-1 font-semibold">Revenue</th>}
                 <th className="text-right pb-1 font-semibold">Slab</th>
                 <th className="text-right pb-1 font-semibold">Payout</th>
               </tr>
@@ -233,7 +225,7 @@ function ProgressPanel({ kicker, progress }) {
                 <tr key={a.email} className={a.slabHit ? 'bg-green-50/40' : ''}>
                   <td className="py-1 text-gray-700 font-medium">{a.name}</td>
                   {!isRevType && <td className="py-1 text-right text-gray-600">{a.sales}</td>}
-                  {(isRevType || isCombo) && <td className="py-1 text-right text-gray-600">{formatINR(a.revenue)}</td>}
+                  {isRevType && <td className="py-1 text-right text-gray-600">{formatINR(a.revenue)}</td>}
                   <td className="py-1 text-right">
                     {a.slabHit
                       ? <span className="text-green-600 font-bold">S{progress.slabs.indexOf(a.slabHit)+1} ✓</span>
@@ -319,16 +311,10 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
           <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
             <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Slabs</p>
             {kicker.slabs.map((s, i) => {
-              const type = kicker.type || 'team_sales'
-              let desc = ''
-              if (type === 'team_sales' || type === 'individual_sales')
-                desc = `${s.threshold} sales → ${formatINR(Number(s.payout))}`
-              else if (type === 'team_revenue' || type === 'individual_revenue')
-                desc = `${formatINR(Number(s.threshold))} → ${formatINR(Number(s.payout))}`
-              else if (type === 'individual_or')
-                desc = `${s.salesThreshold} sales OR ${formatINR(Number(s.revenueThreshold))} → ${formatINR(Number(s.payout))}`
-              else if (type === 'individual_and')
-                desc = `${s.salesThreshold} sales AND ${formatINR(Number(s.revenueThreshold))} → ${formatINR(Number(s.payout))}`
+              const isRev = normalizeType(kicker.type) === 'revenue'
+              const desc = isRev
+                ? `${formatINR(Number(s.threshold || s.revenueThreshold || 0))} → ${formatINR(Number(s.payout))}`
+                : `${s.threshold || s.salesThreshold || 0} sales → ${formatINR(Number(s.payout))}`
               return <p key={i} className="text-[10px] text-gray-600">S{i+1}: {desc}</p>
             })}
           </div>
@@ -373,7 +359,7 @@ export default function AnnounceKicker() {
   }, [user?.role, navigate])
 
   const BLANK_FORM = {
-    title: '', message: '', type: 'team_sales', minSaleValue: '',
+    title: '', message: '', type: 'sales', minSaleValue: '',
     dateFrom: TODAY, dateTo: TODAY,
     targetTeams: ['ALL'], targetRoles: [],
     pinned: false, slabs: emptySlabs(),
@@ -393,8 +379,7 @@ export default function AnnounceKicker() {
   // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
   const activeUser    = effectiveUser || user
   const eligibleRoles = ANNOUNCE_FOR[activeUser?.role] ?? []
-  const typeInfo      = KICKER_TYPES.find(t => t.value === form.type)
-  const isCombo       = form.type === 'individual_or' || form.type === 'individual_and'
+  const typeInfo      = KICKER_TYPES.find(t => t.value === form.type) ?? KICKER_TYPES[0]
 
   const manageable = allKickers.filter(k => canManage(k, user))
 
@@ -453,12 +438,19 @@ export default function AnnounceKicker() {
   }
 
   function toggleRole(role) {
-    setForm(p => ({
-      ...p,
-      targetRoles: p.targetRoles.includes(role)
+    setForm(p => {
+      const newRoles = p.targetRoles.includes(role)
         ? p.targetRoles.filter(r => r !== role)
-        : [...p.targetRoles, role],
-    }))
+        : [...p.targetRoles, role]
+      // Auto-select All Teams when only agent-level roles are targeted
+      const agentLevelRoles = ['Agent', 'PreSales']
+      const isAgentOnly = newRoles.length > 0 && newRoles.every(r => agentLevelRoles.includes(r))
+      return {
+        ...p,
+        targetRoles: newRoles,
+        targetTeams: isAgentOnly ? ['ALL'] : p.targetTeams,
+      }
+    })
   }
 
   function setSlab(i, field, val) {
@@ -472,7 +464,7 @@ export default function AnnounceKicker() {
     setForm({
       title:        kicker.title,
       message:      kicker.message,
-      type:         kicker.type || 'team_sales',
+      type:         normalizeType(kicker.type || 'sales'),
       minSaleValue: kicker.minSaleValue || '',
       dateFrom:     kicker.dateFrom,
       dateTo:       kicker.dateTo,
@@ -502,9 +494,10 @@ export default function AnnounceKicker() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.title.trim())             { setError('Title is required.'); return }
-    if (!form.dateFrom || !form.dateTo) { setError('Date range is required.'); return }
-    if (form.targetRoles.length === 0)  { setError('Select at least one target role.'); return }
+    if (!form.title.trim())                    { setError('Title is required.'); return }
+    if (!form.dateFrom || !form.dateTo)        { setError('Date range is required.'); return }
+    if (!form.minSaleValue || Number(form.minSaleValue) <= 0) { setError('Minimum Sale Value is required.'); return }
+    if (form.targetRoles.length === 0)         { setError('Select at least one target role.'); return }
     const filledSlabs = form.slabs.filter(s => s.payout !== '')
     if (!filledSlabs.length)            { setError('Add at least one slab.'); return }
 
@@ -655,7 +648,7 @@ export default function AnnounceKicker() {
           {/* Type */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Kicker Type *</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {KICKER_TYPES.map(t => (
                 <button key={t.value} type="button" onClick={() => setField('type', t.value)}
                   className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
@@ -668,15 +661,14 @@ export default function AnnounceKicker() {
             </div>
           </div>
 
-          {/* Min sale value */}
-          {(form.type.includes('sales') || form.type.includes('or') || form.type.includes('and')) && (
-            <div>
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Minimum Sale Value (optional)</label>
-              <input type="number" value={form.minSaleValue} onChange={e => setField('minSaleValue', e.target.value)}
-                placeholder="e.g. 50000 — only sales above this count"
-                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            </div>
-          )}
+          {/* Min sale value — required */}
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Minimum Sale Value *</label>
+            <input type="number" value={form.minSaleValue} onChange={e => setField('minSaleValue', e.target.value)}
+              placeholder="e.g. 50000 — only deals above this value count"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            {form.minSaleValue && <p className="text-[10px] text-gray-400 mt-1">Deals below {formatINR(Number(form.minSaleValue))} won't count toward this kicker</p>}
+          </div>
 
           {/* Date range */}
           <div>
@@ -739,16 +731,9 @@ export default function AnnounceKicker() {
             <div className="rounded-xl overflow-hidden border border-gray-200">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className={`text-[10px] font-bold uppercase ${isCombo ? 'bg-purple-50 text-purple-600' : 'bg-brand-50 text-brand-600'}`}>
+                  <tr className="text-[10px] font-bold uppercase bg-brand-50 text-brand-600">
                     <th className="px-3 py-2 text-left w-8">#</th>
-                    {isCombo ? (
-                      <>
-                        <th className="px-3 py-2 text-left">Sales Threshold</th>
-                        <th className="px-3 py-2 text-left">Revenue Threshold (₹)</th>
-                      </>
-                    ) : (
-                      <th className="px-3 py-2 text-left">{typeInfo?.unit === 'sales' ? 'Sales Count' : 'Revenue (₹)'}</th>
-                    )}
+                    <th className="px-3 py-2 text-left">{typeInfo.unit === 'revenue' ? 'Revenue (₹)' : 'Sales Count'}</th>
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
                   </tr>
                 </thead>
@@ -756,26 +741,12 @@ export default function AnnounceKicker() {
                   {form.slabs.map((s, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2 font-bold text-gray-400">S{i + 1}</td>
-                      {isCombo ? (
-                        <>
-                          <td className="px-2 py-2">
-                            <input type="number" value={s.salesThreshold} onChange={e => setSlab(i, 'salesThreshold', e.target.value)}
-                              placeholder="e.g. 2" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                          </td>
-                          <td className="px-2 py-2">
-                            <input type="number" value={s.revenueThreshold} onChange={e => setSlab(i, 'revenueThreshold', e.target.value)}
-                              placeholder="e.g. 125000" className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                            {s.revenueThreshold && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.revenueThreshold))}</p>}
-                          </td>
-                        </>
-                      ) : (
-                        <td className="px-2 py-2">
-                          <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
-                            placeholder={typeInfo?.unit === 'sales' ? 'e.g. 15' : 'e.g. 1250000'}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                          {s.threshold && typeInfo?.unit !== 'sales' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
-                        </td>
-                      )}
+                      <td className="px-2 py-2">
+                        <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
+                          placeholder={typeInfo.unit === 'revenue' ? 'e.g. 1250000' : 'e.g. 15'}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                        {s.threshold && typeInfo.unit === 'revenue' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
+                      </td>
                       <td className="px-2 py-2">
                         <input type="number" value={s.payout} onChange={e => setSlab(i, 'payout', e.target.value)}
                           placeholder="e.g. 1000" className="w-full border border-green-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
