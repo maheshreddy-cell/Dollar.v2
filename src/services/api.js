@@ -428,7 +428,7 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
   const commission      = calcTieredCommission(achieved, target)
   const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
   const totalT2Amount   = agentDeals.reduce((s, d) => s + (d.T2Amount    || 0), 0)
-  const totalKickers    = computeKickerEarningsForAgent(userRole, agentDeals, allKickers)
+  const totalKickers    = computeKickerEarningsForAgent(userRole, agentDeals, allKickers, deals, lowerUser)
   const totalMoneyMade  = commission + totalT2Amount + totalKickers
 
   // Loan Documents Collected — count each unique dropdown value
@@ -529,7 +529,7 @@ export const getLeaderboard = async (rootEmail, month) => {
     const totalSaleValue  = agentDeals.reduce((s, d) => s + (d.TotalValue  || 0), 0)
     const totalT2Amount   = agentDeals.reduce((s, d) => s + (d.T2Amount    || 0), 0)
     const commission      = target ? calcTieredCommission(achieved, target) : 0
-    const kickerEarnings  = computeKickerEarningsForAgent(agent.Role || 'Agent', agentDeals, allKickers)
+    const kickerEarnings  = computeKickerEarningsForAgent(agent.Role || 'Agent', agentDeals, allKickers, deals, agentEmail)
     const moneyMade       = commission + totalT2Amount + kickerEarnings
 
     // Loan docs: count "payment cleared" as done, everything else as pending
@@ -607,7 +607,8 @@ export const getManagersLeaderboard = async (rootEmail, month) => {
       const aDeals      = teamDeals.filter(d => (d.Email||'').trim().toLowerCase() === aEmail)
       const aPaid       = aDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
       if (target) totalCommission += calcTieredCommission(aPaid, target)
-      totalKickers += computeKickerEarningsForAgent(agent.Role || 'Agent', aDeals, allKickers)
+      const aEmail = (agent.Email || '').trim().toLowerCase()
+      totalKickers += computeKickerEarningsForAgent(agent.Role || 'Agent', aDeals, allKickers, deals, aEmail)
     }
 
     const loanDocsDone    = teamDeals.filter(d => (d.LoanDocsCollected || '').trim().toLowerCase() === 'payment cleared').length
@@ -901,8 +902,10 @@ export async function logHatTrickAchievement({ agentEmail, agentName, date, mont
 // Compute kicker payout earned by a single agent.
 // agentDeals: ALL deals for the agent (no month filter required beyond what caller provides).
 // Counts past + active kickers — a kicker that has ended still counts if the agent hit it.
-function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers) {
-  // Always add hat trick earnings first
+function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDeals, agentEmail) {
+  allDeals   = allDeals   || []
+  agentEmail = (agentEmail || '').trim().toLowerCase()
+
   let total = computeHatTrickEarnings(agentDeals).amount
   for (const raw of (allKickers || [])) {
     const k = parseKickerRow(raw)
@@ -911,35 +914,67 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers) {
 
     const from = new Date(k.dateFrom).getTime()
     const to   = new Date(k.dateTo).getTime() + 86399999
-
-    // Skip kickers that haven't started yet
     if (Date.now() < from) continue
 
-    const inRange = agentDeals.filter(d => {
-      const raw = d.Timestamp || d.PaymentDate
-      // Fallback: if no date field, use the first day of the deal's month so it's
-      // still counted for kickers that cover that month (fixes missing-timestamp deals)
-      const dt = raw ? new Date(raw).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : 0)
-      return dt >= from && dt <= to
-    })
+    // Normalize type — mirrors Kickers.jsx normalizeType
+    const rawType = k.type || 'sales'
+    const type = rawType === 'collective' ? 'collective'
+               : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
+               : 'sales'  // catches team_sales, individual_sales, sales, and anything else
 
-    const rawSales = inRange.length
-    const revenue  = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
-    const sales    = k.minSaleValue > 0 ? inRange.filter(d => (d.TotalValue || 0) >= k.minSaleValue).length : rawSales
+    // Date filter — PaymentDate (YYYY-MM-DD) as primary, Month as fallback
+    const kickerMonth = (k.dateFrom || '').substring(0, 7)
+    function inDateRange(d) {
+      if (d.PaymentDate) {
+        const dt = new Date(d.PaymentDate).getTime()
+        if (!isNaN(dt)) return dt >= from && dt <= to
+      }
+      return kickerMonth ? d.Month === kickerMonth : false
+    }
+
+    let sales = 0, revenue = 0, teamSales = 0, agentContrib = 0
+
+    if (type === 'collective') {
+      if (!allDeals.length || !agentEmail) continue
+      const targetTeams = k.targetTeams || ['ALL']
+      const emailSet = targetTeams.includes('ALL') ? null : new Set(targetTeams.map(e => e.toLowerCase()))
+      const teamDeals = allDeals.filter(d => {
+        if (!inDateRange(d)) return false
+        if (emailSet && !emailSet.has((d.Email || '').toLowerCase())) return false
+        return true
+      })
+      const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+      teamSales = teamDeals.filter(d => minVal <= 0 || (d.TotalValue || 0) >= minVal).length
+      agentContrib = teamDeals.filter(d =>
+        (d.Email || '').toLowerCase() === agentEmail &&
+        (minVal <= 0 || (d.TotalValue || 0) >= minVal)
+      ).length
+    } else {
+      const inRange = agentDeals.filter(inDateRange)
+      const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+      revenue = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+      sales   = minVal > 0 ? inRange.filter(d => (d.TotalValue || 0) >= minVal).length : inRange.length
+    }
 
     const sorted = [...k.slabs].sort((a, b) =>
-      Number(a.threshold || a.salesThreshold || 0) - Number(b.threshold || b.salesThreshold || 0)
+      Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0) -
+      Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
     )
     let earnedSlab = null
     for (const slab of sorted) {
+      const t = Number(slab.threshold || (type === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 0)
       let hit = false
-      if      (k.type === 'team_sales'       || k.type === 'individual_sales')    hit = sales   >= Number(slab.threshold)
-      else if (k.type === 'team_revenue'     || k.type === 'individual_revenue')  hit = revenue >= Number(slab.threshold)
-      else if (k.type === 'individual_or')   hit = sales >= Number(slab.salesThreshold) || revenue >= Number(slab.revenueThreshold)
-      else if (k.type === 'individual_and')  hit = sales >= Number(slab.salesThreshold) && revenue >= Number(slab.revenueThreshold)
+      if      (type === 'sales')      hit = sales >= t
+      else if (type === 'revenue')    hit = revenue >= t
+      else if (type === 'collective') hit = teamSales >= t
       if (hit) earnedSlab = slab
     }
-    if (earnedSlab) total += Number(earnedSlab.payout || 0)
+    if (earnedSlab) {
+      // Collective: payout is per contributing sale (agentContrib × slabPayout)
+      total += type === 'collective'
+        ? agentContrib * Number(earnedSlab.payout || 0)
+        : Number(earnedSlab.payout || 0)
+    }
   }
   return total
 }

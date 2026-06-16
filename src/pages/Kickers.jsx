@@ -401,7 +401,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
       month,
       kickerType: kicker.title || type,
       details:    `Slab hit: ${slabLabel(progress.activeSlab, origType)} | ${isTeam ? 'Team' : 'Individual'} kicker`,
-      amount:     Number(progress.activeSlab.payout) || 0,
+      amount:     (type === 'collective'
+        ? progress.myContribution * Number(progress.activeSlab.payout)
+        : Number(progress.activeSlab.payout)) || 0,
     })
     try { sessionStorage.setItem(dedupKey, '1') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -412,11 +414,11 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const isCollective = type === 'collective'
   const isTeam       = origType.startsWith('team_')
 
-  // Sorted contributors list for collective kickers
+  // Sorted contributors list for collective kickers — payout is per-sale × slabRate
   const contributors = isCollective
     ? Object.entries(progress.contributorsMap || {}).map(([email, count]) => {
         const earns = !!(progress.activeSlab && count > 0)
-        const payout = earns ? Number(progress.activeSlab.payout) : 0
+        const payout = earns ? count * Number(progress.activeSlab.payout) : 0
         const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
         return { email, count, earns, payout, displayName }
       }).sort((a, b) => b.payout - a.payout || b.count - a.count)
@@ -494,7 +496,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                   </div>
                   {progress.activeSlab && progress.myContribution > 0 ? (
                     <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                      <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                      <p className="text-sm font-black text-green-700">{formatINR(progress.myContribution * Number(progress.activeSlab.payout))}</p>
                       <p className="text-[10px] text-green-600 font-semibold">🎉 You Earn!</p>
                     </div>
                   ) : progress.activeSlab && progress.myContribution === 0 ? (
@@ -521,7 +523,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                 )}
                 {progress.myContribution > 0 && progress.activeSlab && (
                   <p className="text-[11px] text-green-700 font-semibold bg-green-50 rounded-lg px-3 py-2">
-                    🎉 Team hit the target & you contributed {progress.myContribution} sale{progress.myContribution !== 1 ? 's' : ''}! {formatINR(Number(progress.activeSlab.payout))} is yours.
+                    🎉 Team hit the target! You contributed {progress.myContribution} sale{progress.myContribution !== 1 ? 's' : ''} × {formatINR(Number(progress.activeSlab.payout))}/sale = {formatINR(progress.myContribution * Number(progress.activeSlab.payout))} is yours.
                   </p>
                 )}
                 {/* Contributors toggle */}
@@ -531,7 +533,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
                       onClick={() => setShowContributors(v => !v)}
                       className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
                     >
-                      <span>👥 {contributors.length} contributor{contributors.length !== 1 ? 's' : ''}{progress.activeSlab ? ` — ${formatINR(Number(progress.activeSlab.payout))} each` : ''}</span>
+                      <span>👥 {contributors.length} contributor{contributors.length !== 1 ? 's' : ''}{progress.activeSlab ? ` — ${formatINR(Number(progress.activeSlab.payout))}/sale` : ''}</span>
                       {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     </button>
                     {showContributors && (
