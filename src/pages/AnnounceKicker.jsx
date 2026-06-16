@@ -730,6 +730,11 @@ export default function AnnounceKicker() {
                 Today Only
               </button>
             </div>
+            {form.dateFrom && form.dateTo && (() => {
+              const days = Math.round((new Date(form.dateTo) - new Date(form.dateFrom)) / 86400000) + 1
+              if (days < 1) return <p className="text-[11px] text-red-500 mt-1">End date must be on or after start date</p>
+              return <p className="text-[11px] text-brand-600 font-semibold mt-1">{days} day{days !== 1 ? 's' : ''}</p>
+            })()}
           </div>
 
           {/* Target Roles */}
