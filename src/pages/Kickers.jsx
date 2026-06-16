@@ -286,14 +286,13 @@ function countdown(k) {
 }
 
 // ── Progress calculation ──────────────────────────────────────────────────────
-function computeProgress(kicker, allDeals, myEmail) {
+function computeProgress(kicker, allDeals, myEmail, skipDateFilter = false) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
-  const inRange = allDeals.filter(d => {
-    // PaymentDate is pre-parsed to YYYY-MM-DD (safe for new Date()).
-    // Timestamp is raw from the sheet (DD/MM/YYYY in Indian locale) — JS parses it as
-    // M/D/YYYY which gives the wrong month, so only fall back to it if PaymentDate is empty.
+  // skipDateFilter = true for manager kickers — deals are already filtered by Month+Team
+  // in dealsFor(), so no need to re-check dates (avoids raw Timestamp format issues).
+  const inRange = skipDateFilter ? allDeals : allDeals.filter(d => {
     const dateStr = d.PaymentDate || d.Timestamp
     if (!dateStr) return false
     const dt = new Date(dateStr)
@@ -371,7 +370,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const past      = kickerIsPast(kicker)
   const origType  = kicker.type || 'sales'
   const type      = normalizeType(origType)
-  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
+  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined, isManagerViewer)
 
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
@@ -676,13 +675,17 @@ export default function Kickers() {
       !(k.targetRoles || []).includes('Agent') &&
       !(k.targetRoles || []).includes('PreSales')
     if (isManager && targetsManagers) {
-      const myTeam = (effectiveUser?.team || '').trim().toLowerCase()
-      // Fallback: "Team <FirstName>" if the team field isn't populated in the session
+      const myTeam    = (effectiveUser?.team || '').trim().toLowerCase()
       const firstName = (effectiveUser?.name || '').trim().split(' ')[0].toLowerCase()
       const teamFallback = firstName ? `team ${firstName}` : ''
-      const teamToMatch = myTeam || teamFallback
+      const teamToMatch  = myTeam || teamFallback
+      // Use Month field (same source as the team section) — avoids raw Timestamp format issues
+      const kickerMonth  = (k.dateFrom || '').substring(0, 7) // "2026-06"
       if (teamToMatch) {
-        return deals.filter(d => (d.Team || '').trim().toLowerCase() === teamToMatch)
+        return deals.filter(d =>
+          (d.Team || '').trim().toLowerCase() === teamToMatch &&
+          (!kickerMonth || d.Month === kickerMonth)
+        )
       }
     }
     return deals.filter(d => (d.Email || '').toLowerCase() === (effectiveUser?.email || '').toLowerCase())
