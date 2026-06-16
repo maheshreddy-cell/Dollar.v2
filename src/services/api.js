@@ -607,7 +607,6 @@ export const getManagersLeaderboard = async (rootEmail, month) => {
       const aDeals      = teamDeals.filter(d => (d.Email||'').trim().toLowerCase() === aEmail)
       const aPaid       = aDeals.filter(d => d.PaidActual > 0).reduce((s, d) => s + d.PaidActual, 0)
       if (target) totalCommission += calcTieredCommission(aPaid, target)
-      const aEmail = (agent.Email || '').trim().toLowerCase()
       totalKickers += computeKickerEarningsForAgent(agent.Role || 'Agent', aDeals, allKickers, deals, aEmail)
     }
 
@@ -1329,23 +1328,58 @@ export function calcManagerCommission(teamMetric, slabs) {
 }
 
 // ── Kickers ───────────────────────────────────────────────────────────────────
+// Slabs column holds either:
+//  - a bare array (legacy rows)              → [{ threshold, payout, ... }, ...]
+//  - a packed object (new workflow fields)   → { slabs: [...], status, paidDate, notes, individualAmounts }
+// This avoids any DB schema change — new fields ride inside the existing jsonb column.
+function unpackSlabsCol(raw) {
+  const parsed = safeParse(raw, [])
+  if (Array.isArray(parsed)) {
+    // Legacy kicker — no workflow data yet. Treat as already-live so nothing
+    // changes visually for kickers announced before this revamp.
+    return { slabs: parsed, status: 'Approved', paidDate: '', notes: '', individualAmounts: {} }
+  }
+  return {
+    slabs:             Array.isArray(parsed.slabs) ? parsed.slabs : [],
+    status:            parsed.status            || 'Announced',
+    paidDate:          parsed.paidDate          || '',
+    notes:             parsed.notes             || '',
+    individualAmounts: parsed.individualAmounts || {},
+  }
+}
+
+export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts }) {
+  return JSON.stringify({
+    slabs:             slabs || [],
+    status:            status || 'Announced',
+    paidDate:          paidDate || '',
+    notes:             notes || '',
+    individualAmounts: individualAmounts || {},
+  })
+}
+
 function parseKickerRow(r) {
   const safeArr = (key) => { const v = safeParse(r[key], []); return Array.isArray(v) ? v : [] }
+  const extra = unpackSlabsCol(r.Slabs)
   return {
-    id:             r.KickerId    || '',
-    title:          r.Title       || '',
-    message:        r.Message     || '',
-    type:           r.Type        || 'team_sales',
-    minSaleValue:   Number(r.MinSaleValue || 0),
-    dateFrom:       r.DateFrom    || '',
-    dateTo:         r.DateTo      || '',
-    slabs:          safeArr('Slabs'),
-    targetTeams:    safeArr('TargetTeams'),
-    targetRoles:    safeArr('TargetRoles'),
-    pinned:         r.Pinned === 'true' || r.Pinned === true,
-    announcedBy:    r.AnnouncedBy     || '',
-    announcedByRole:r.AnnouncedByRole || '',
-    announcedAt:    r.AnnouncedAt     || '',
+    id:                r.KickerId    || '',
+    title:             r.Title       || '',
+    message:           r.Message     || '',
+    type:              r.Type        || 'team_sales',
+    minSaleValue:      Number(r.MinSaleValue || 0),
+    dateFrom:          r.DateFrom    || '',
+    dateTo:            r.DateTo      || '',
+    slabs:             extra.slabs,
+    status:            extra.status,            // 'Announced' | 'Approved' | 'Paid'
+    paidDate:          extra.paidDate,
+    notes:             extra.notes,
+    individualAmounts: extra.individualAmounts,  // { email: customAmount }
+    targetTeams:       safeArr('TargetTeams'),
+    targetRoles:       safeArr('TargetRoles'),
+    pinned:            r.Pinned === 'true' || r.Pinned === true,
+    announcedBy:       r.AnnouncedBy     || '',
+    announcedByRole:   r.AnnouncedByRole || '',
+    announcedAt:       r.AnnouncedAt     || '',
   }
 }
 
@@ -1366,7 +1400,12 @@ export async function announceKicker(data, announcerEmail, announcerRole) {
     data.minSaleValue || 0,
     data.dateFrom,
     data.dateTo,
-    JSON.stringify(data.slabs || []),
+    packSlabsCol({
+      slabs: data.slabs || [],
+      status: data.status || 'Announced',
+      notes: data.notes || '',
+      individualAmounts: data.individualAmounts || {},
+    }),
     JSON.stringify(data.targetTeams || ['ALL']),
     JSON.stringify(data.targetRoles || []),
     data.pinned ? 'true' : 'false',
@@ -1376,6 +1415,20 @@ export async function announceKicker(data, announcerEmail, announcerRole) {
   ])
   clearCache()
   return id
+}
+
+// Update just the workflow status (Announced/Approved/Paid) of a kicker,
+// preserving its existing slabs/notes/individualAmounts.
+export async function setKickerStatus(kicker, status) {
+  await updateKicker(kicker.id, {
+    Slabs: packSlabsCol({
+      slabs: kicker.slabs,
+      status,
+      paidDate: status === 'Paid' ? new Date().toISOString().split('T')[0] : kicker.paidDate,
+      notes: kicker.notes,
+      individualAmounts: kicker.individualAmounts,
+    }),
+  })
 }
 
 export async function deleteKicker(kickerId) {

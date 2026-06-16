@@ -1,11 +1,26 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users } from 'lucide-react'
+import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users, ClipboardCheck, BadgeCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { announceKicker, getKickers, updateKicker, deleteKicker, getSubtree, getDeals } from '../services/api'
+import { announceKicker, getKickers, updateKicker, setKickerStatus, deleteKicker, getSubtree, getDeals, packSlabsCol } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { notifKickerAnnounced } from '../services/notifications'
 import { notifyKickerAnnounced } from '../services/slack'
+
+// ── Status workflow ──────────────────────────────────────────────────────────
+const STATUSES = ['Announced', 'Approved', 'Paid']
+const STATUS_COLORS = {
+  Announced: 'bg-amber-100 text-amber-700',
+  Approved:  'bg-indigo-100 text-indigo-700',
+  Paid:      'bg-green-100 text-green-700',
+}
+
+function prevMonthLabel() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1)
+  return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+}
+function isReviewDue() { return new Date().getDate() >= 8 }
+const REVIEW_KEY = 'dv2_kicker_reviewed_month'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
@@ -179,8 +194,14 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 
     return { kind: 'team', totals, slabHit, agents: agentList, payout: slabHit ? Number(slabHit.payout) : 0, slabs }
   } else {
-    const agents   = agentList.map(a => { const sh = getSlabHit(a.sales, a.revenue); return { ...a, slabHit: sh, payout: sh ? Number(sh.payout) : 0 } })
-    const eligible = agents.filter(a => a.slabHit)
+    const overrides = kicker.individualAmounts || {}
+    const agents   = agentList.map(a => {
+      const sh = getSlabHit(a.sales, a.revenue)
+      const override = overrides[(a.email || '').toLowerCase()]
+      const payout = override != null ? Number(override) : (sh ? Number(sh.payout) : 0)
+      return { ...a, slabHit: sh, payout, hasOverride: override != null }
+    })
+    const eligible = agents.filter(a => a.slabHit || a.hasOverride)
     return { kind: 'individual', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
   }
 }
@@ -334,10 +355,15 @@ function ProgressPanel({ kicker, progress }) {
                   <td className="py-1 text-right">
                     {a.slabHit
                       ? <span className="text-green-600 font-bold">S{progress.slabs.indexOf(a.slabHit)+1} ✓</span>
-                      : <span className="text-gray-400">—</span>
+                      : a.hasOverride
+                        ? <span className="text-purple-500 font-semibold">override</span>
+                        : <span className="text-gray-400">—</span>
                     }
                   </td>
-                  <td className="py-1 text-right font-semibold text-green-700">{a.payout > 0 ? formatINR(a.payout) : '—'}</td>
+                  <td className="py-1 text-right font-semibold text-green-700">
+                    {a.payout > 0 ? formatINR(a.payout) : '—'}
+                    {a.hasOverride && <span className="ml-1 text-[9px] text-purple-400">✏️</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -351,7 +377,7 @@ function ProgressPanel({ kicker, progress }) {
 }
 
 // ── Compact ManageCard ────────────────────────────────────────────────────────
-function ManageCard({ kicker, onEdit, onDelete, progress }) {
+function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
   const [delConfirm,    setDelConfirm]    = useState(false)
   const [expanded,      setExpanded]      = useState(false)
   const [showProgress,  setShowProgress]  = useState(false)
@@ -359,7 +385,7 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
   const active  = kickerIsActive(kicker)
   const past    = kickerIsPast(kicker)
 
-  const statusBadge = past
+  const liveBadge = past
     ? <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>
     : active
       ? <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
@@ -372,12 +398,16 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap gap-1 mb-1">
-              {statusBadge}
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLORS[kicker.status] || STATUS_COLORS.Announced}`}>
+                {kicker.status || 'Announced'}
+              </span>
+              {liveBadge}
               {kicker.pinned && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌</span>}
             </div>
             <p className="text-sm font-bold text-gray-900 leading-snug">{kicker.title}</p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               {kicker.dateFrom} → {kicker.dateTo} · by {kicker.announcedByRole}
+              {kicker.status === 'Paid' && kicker.paidDate && ` · Paid ${kicker.paidDate}`}
             </p>
             <div className="flex flex-wrap gap-1 mt-1.5">
               {(kicker.targetRoles || []).map(r => (
@@ -392,6 +422,18 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
 
           {/* Actions */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {kicker.status !== 'Approved' && kicker.status !== 'Paid' && (
+              <button onClick={() => onStatusChange(kicker, 'Approved')}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors">
+                Approve
+              </button>
+            )}
+            {kicker.status !== 'Paid' && (
+              <button onClick={() => onStatusChange(kicker, 'Paid')}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
+                Mark Paid
+              </button>
+            )}
             <button onClick={() => setExpanded(v => !v)} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors">
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
@@ -422,6 +464,17 @@ function ManageCard({ kicker, onEdit, onDelete, progress }) {
                 : `${s.threshold || s.salesThreshold || 0} sales → ${formatINR(Number(s.payout))}`
               return <p key={i} className="text-[10px] text-gray-600">S{i+1}: {desc}</p>
             })}
+            {Object.keys(kicker.individualAmounts || {}).length > 0 && (
+              <p className="text-[10px] text-purple-500 mt-1">
+                ✏️ {Object.keys(kicker.individualAmounts).length} individual override(s)
+              </p>
+            )}
+          </div>
+        )}
+
+        {expanded && kicker.notes && (
+          <div className="mt-3 text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+            📝 {kicker.notes}
           </div>
         )}
 
@@ -468,6 +521,7 @@ export default function AnnounceKicker() {
     dateFrom: TODAY, dateTo: TODAY,
     targetTeams: ['ALL'], targetRoles: [],
     pinned: false, slabs: emptySlabs(),
+    status: 'Announced', paidDate: '', notes: '', individualOverridesText: '',
   }
 
   const [form,        setForm]        = useState(BLANK_FORM)
@@ -484,6 +538,10 @@ export default function AnnounceKicker() {
   const [agentSearch,    setAgentSearch]    = useState('')
   const [agentPickerOpen, setAgentPickerOpen] = useState(false)
 
+  // ── Monthly review banner state ──────────────────────────────────────────
+  const [reviewDismissed, setReviewDismissed] = useState(true)
+  const reviewMonth = prevMonthLabel()
+
   // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
   const activeUser    = effectiveUser || user
   const eligibleRoles = ANNOUNCE_FOR[activeUser?.role] ?? []
@@ -499,6 +557,59 @@ export default function AnnounceKicker() {
         progressMap[k.id] = computeKickerProgress(k, subtreeAll, allDeals)
       }
     }
+  }
+
+  // ── Monthly review: kickers whose date range fell in last month, not yet Paid ──
+  const lastMonthBounds = useMemo(() => {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+    return { start, end }
+  }, [])
+
+  const lastMonthKickers = useMemo(() => {
+    if (!isReviewDue()) return []
+    return manageable.filter(k => {
+      if (k.status === 'Paid') return false
+      const to = new Date(k.dateTo)
+      return to >= lastMonthBounds.start && to <= lastMonthBounds.end
+    })
+  }, [manageable, lastMonthBounds])
+
+  const lastMonthProgress = {}
+  if (allDeals.length > 0 && subtreeAll.length > 0) {
+    for (const k of lastMonthKickers) {
+      lastMonthProgress[k.id] = computeKickerProgress(k, subtreeAll, allDeals)
+    }
+  }
+
+  const qualifiedLastMonth = lastMonthKickers.filter(k => {
+    const p = lastMonthProgress[k.id]
+    if (!p) return false
+    return (p.kind === 'team' || p.kind === 'collective') ? !!p.slabHit : p.eligible > 0
+  })
+
+  useEffect(() => {
+    if (!isReviewDue()) { setReviewDismissed(true); return }
+    const dismissedMonth = localStorage.getItem(REVIEW_KEY)
+    setReviewDismissed(dismissedMonth === reviewMonth)
+  }, [reviewMonth])
+
+  async function handleStatusChange(kicker, status) {
+    setAllKickers(prev => prev.map(k => k.id === kicker.id ? { ...k, status, paidDate: status === 'Paid' ? new Date().toISOString().split('T')[0] : k.paidDate } : k))
+    await setKickerStatus(kicker, status)
+  }
+
+  async function approveQualifiedLastMonth() {
+    await Promise.all(qualifiedLastMonth.map(k => setKickerStatus(k, 'Approved')))
+    setAllKickers(prev => prev.map(k => qualifiedLastMonth.find(q => q.id === k.id) ? { ...k, status: 'Approved' } : k))
+    localStorage.setItem(REVIEW_KEY, reviewMonth)
+    setReviewDismissed(true)
+  }
+
+  function dismissReview() {
+    localStorage.setItem(REVIEW_KEY, reviewMonth)
+    setReviewDismissed(true)
   }
 
   const loadData = useCallback(async () => {
@@ -576,6 +687,10 @@ export default function AnnounceKicker() {
       targetRoles:  kicker.targetRoles || [],
       pinned:       kicker.pinned || false,
       slabs:        padded,
+      status:       kicker.status || 'Announced',
+      paidDate:     kicker.paidDate || '',
+      notes:        kicker.notes || '',
+      individualOverridesText: Object.entries(kicker.individualAmounts || {}).map(([e, a]) => `${e},${a}`).join('\n'),
     })
     setEditingId(kicker.id)
     setError('')
@@ -613,6 +728,13 @@ export default function AnnounceKicker() {
       payout:           Number(s.payout           || 0),
     }))
 
+    // Parse "email,amount" lines into an { email: amount } override map
+    const individualAmounts = {}
+    ;(form.individualOverridesText || '').split('\n').forEach(line => {
+      const [email, amt] = line.split(',').map(s => s.trim())
+      if (email && amt && !isNaN(Number(amt))) individualAmounts[email.toLowerCase()] = Number(amt)
+    })
+
     try {
       if (editingId) {
         await updateKicker(editingId, {
@@ -622,13 +744,13 @@ export default function AnnounceKicker() {
           MinSaleValue:Number(form.minSaleValue || 0),
           DateFrom:    form.dateFrom,
           DateTo:      form.dateTo,
-          Slabs:       JSON.stringify(cleanSlabs),
+          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts }),
           TargetTeams: JSON.stringify(form.targetTeams || ['ALL']),
           TargetRoles: JSON.stringify(form.targetRoles || []),
           Pinned:      form.pinned ? 'true' : 'false',
         })
       } else {
-        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0) }, activeUser.email, activeUser.role)
+        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0), individualAmounts }, activeUser.email, activeUser.role)
       }
       notifKickerAnnounced({ title: form.title, isEdit: !!editingId })
       notifyKickerAnnounced({
@@ -681,6 +803,38 @@ export default function AnnounceKicker() {
         </div>
       )}
 
+      {/* ── Monthly Review Banner ── */}
+      {!reviewDismissed && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-amber-100">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck size={16} className="text-amber-600" />
+              <p className="text-sm font-bold text-amber-800">Monthly Kicker Review — {reviewMonth}</p>
+            </div>
+            <button onClick={dismissReview} className="text-amber-400 hover:text-amber-600 text-sm">✕</button>
+          </div>
+          <div className="px-4 py-3">
+            {lastMonthKickers.length === 0 ? (
+              <p className="text-xs text-amber-700">No pending {reviewMonth} kickers to review. All settled or none announced.</p>
+            ) : (
+              <>
+                <p className="text-xs text-amber-700 mb-2">
+                  {qualifiedLastMonth.length} of {lastMonthKickers.length} {reviewMonth} kicker(s) have qualifying sales:
+                  {' '}{qualifiedLastMonth.map(k => `"${k.title}"`).join(', ') || 'none yet'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button onClick={approveQualifiedLastMonth} disabled={qualifiedLastMonth.length === 0}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500 text-white disabled:opacity-40 hover:bg-amber-600 transition-colors flex items-center gap-1.5">
+                    <BadgeCheck size={13} /> Approve Qualified Kickers
+                  </button>
+                  <button onClick={dismissReview} className="text-xs text-amber-600 hover:underline">Skip</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Manage existing kickers ── */}
       <div>
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -722,6 +876,7 @@ export default function AnnounceKicker() {
                   kicker={k}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onStatusChange={handleStatusChange}
                   progress={progressMap[k.id] ?? null}
                 />
               ))}
@@ -999,6 +1154,39 @@ export default function AnnounceKicker() {
               <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.pinned ? 'translate-x-5' : ''}`} />
             </button>
             <span className="text-sm text-gray-600 font-medium">📌 Pin this kicker to top</span>
+          </div>
+
+          {/* Status workflow */}
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Status</label>
+            <div className="flex gap-2">
+              {STATUSES.map(s => (
+                <button key={s} type="button" onClick={() => setField('status', s)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    form.status === s ? STATUS_COLORS[s] + ' border-transparent' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                  }`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">New kickers start as "Announced" — approve once qualification is confirmed, mark Paid once payroll processes it.</p>
+          </div>
+
+          {/* Individual overrides */}
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Individual Payout Overrides (optional)</label>
+            <textarea rows={3} value={form.individualOverridesText} onChange={e => setField('individualOverridesText', e.target.value)}
+              placeholder={'one per line: email,amount\ne.g. deepika.pal@airtribe.live,5000'}
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
+            <p className="text-[10px] text-gray-400 mt-1">Overrides the slab-derived payout for specific people — useful for one-off custom amounts.</p>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">Internal Notes (optional)</label>
+            <textarea rows={2} value={form.notes} onChange={e => setField('notes', e.target.value)}
+              placeholder="Any context for payroll/admin — not shown to agents the way the announcement message is"
+              className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none" />
           </div>
 
           {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{error}</div>}

@@ -54,6 +54,7 @@ function HatTrickCard({ deals, agentEmail, agentName }) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Approved</span>
               <span className="text-[10px] font-bold uppercase bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">🏏 Always Active</span>
               <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
               <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">👤 Individual Sales</span>
@@ -150,6 +151,7 @@ function PSCallsCard({ psSummary }) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Approved</span>
               <span className="text-[10px] font-bold uppercase bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full">📞 Always Active</span>
               <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>
               <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">👤 PreSales Only</span>
@@ -381,7 +383,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const past      = kickerIsPast(kicker)
   const origType  = kicker.type || 'sales'
   const type      = normalizeType(origType)
-  const progress  = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
+  let progress    = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
+
+  // Individual payout override — admin can set a custom amount for a specific
+  // person, taking precedence over the slab-derived payout once applied.
+  if (type !== 'collective' && !origType.startsWith('team_')) {
+    const override = (kicker.individualAmounts || {})[(agentEmail || '').toLowerCase()]
+    if (override != null) {
+      progress = { ...progress, activeSlab: { ...(progress.activeSlab || {}), payout: override } }
+    }
+  }
 
   // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
   useEffect(() => {
@@ -435,6 +446,13 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
         {/* Header row */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-1.5 mb-1.5">
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              kicker.status === 'Paid' ? 'bg-green-100 text-green-700' :
+              kicker.status === 'Approved' ? 'bg-indigo-100 text-indigo-700' :
+              'bg-amber-100 text-amber-700'
+            }`}>
+              {kicker.status === 'Paid' ? '💰 Paid' : kicker.status === 'Approved' ? '✓ Approved' : '⏳ Pending Approval'}
+            </span>
             {kicker.pinned && <span className="text-[10px] font-bold uppercase bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">📌 Pinned</span>}
             {active && !past && <span className="text-[10px] font-bold uppercase bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full animate-pulse">🟢 Live</span>}
             {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
@@ -674,6 +692,7 @@ export default function Kickers() {
   const [psSummary, setPsSummary] = useState(null)
   const [loading,   setLoading]   = useState(true)
   const [tab,        setTab]        = useState('active')
+  const [statusFilter, setStatusFilter] = useState('All') // oversight roles only
   const [manMode,    setManMode]    = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
   const isManager   = effectiveUser?.role === 'Manager'
@@ -721,7 +740,8 @@ export default function Kickers() {
 
   const active    = allVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
   const past      = allVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
-  const displayed = tab === 'active' ? active : past
+  const baseList  = tab === 'active' ? active : past
+  const displayed = isOversight && statusFilter !== 'All' ? baseList.filter(k => k.status === statusFilter) : baseList
 
   function dealsFor(k) {
     if (k.type?.startsWith('team_')) return deals
@@ -812,6 +832,20 @@ export default function Kickers() {
           Past ({past.length})
         </button>
       </div>
+
+      {/* Status filter — oversight roles only (Admin/SalesHead/VH) */}
+      {isOversight && (
+        <div className="flex gap-1.5">
+          {['All', 'Announced', 'Approved', 'Paid'].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Hat Trick Kicker — always shown on Active tab (not Past) */}
       {tab === 'active' && (!isManager || manMode === 'forMe') && (
