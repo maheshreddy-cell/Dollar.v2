@@ -96,8 +96,13 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 
   // Helper: does deal fall in date window + meet min value?
   function inWindow(d) {
-    const ts = d.Timestamp || d.PaymentDate
-    const t  = ts ? new Date(ts).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
+    // PaymentDate is pre-parsed to YYYY-MM-DD — safe for new Date().
+    // Timestamp is raw from the sheet in Indian DD/MM/YYYY which JS reads as M/D/YYYY (wrong month).
+    // So prefer PaymentDate, fall back to Timestamp, then Month as last resort.
+    const dateStr = d.PaymentDate || d.Timestamp
+    const t = dateStr
+      ? new Date(dateStr).getTime()
+      : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
     if (isNaN(t) || t < from || t > to) return false
     if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
     return true

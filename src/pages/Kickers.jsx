@@ -291,12 +291,14 @@ function computeProgress(kicker, allDeals, myEmail) {
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
   const inRange = allDeals.filter(d => {
-    const ts = d.Timestamp || d.PaymentDate
-    if (ts) {
-      const dt = new Date(ts)
-      if (!isNaN(dt.getTime())) return dt >= from && dt <= to
-    }
-    return false
+    // PaymentDate is pre-parsed to YYYY-MM-DD (safe for new Date()).
+    // Timestamp is raw from the sheet (DD/MM/YYYY in Indian locale) — JS parses it as
+    // M/D/YYYY which gives the wrong month, so only fall back to it if PaymentDate is empty.
+    const dateStr = d.PaymentDate || d.Timestamp
+    if (!dateStr) return false
+    const dt = new Date(dateStr)
+    if (isNaN(dt.getTime())) return false
+    return dt >= from && dt <= to
   })
 
   const minVal   = kicker.minSaleValue > 0 ? kicker.minSaleValue : 0
