@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
+import { getKickers, getDeals, getSubtree, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
@@ -265,6 +265,13 @@ function normalizeType(t) {
 // Roles that see all kickers (oversight view)
 const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH']
 
+function flatTree(node, acc = []) {
+  if (!node) return acc
+  acc.push(node)
+  ;(node.children || []).forEach(c => flatTree(c, acc))
+  return acc
+}
+
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 function kickerIsActive(k) {
   const now  = Date.now()
@@ -518,12 +525,13 @@ export default function Kickers() {
   const { user, effectiveUser } = useAuth()
   const { month } = useMonth()
 
-  const [kickers,   setKickers]   = useState([])
-  const [deals,     setDeals]     = useState([])
-  const [psSummary, setPsSummary] = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [tab,       setTab]       = useState('active')
-  const [manMode,   setManMode]   = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
+  const [kickers,    setKickers]    = useState([])
+  const [deals,      setDeals]      = useState([])
+  const [psSummary,  setPsSummary]  = useState(null)
+  const [teamEmails, setTeamEmails] = useState([]) // agent emails under this manager
+  const [loading,    setLoading]    = useState(true)
+  const [tab,        setTab]        = useState('active')
+  const [manMode,    setManMode]    = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
   const isManager   = effectiveUser?.role === 'Manager'
   const isPreSales  = effectiveUser?.role === 'PreSales'
@@ -545,12 +553,21 @@ export default function Kickers() {
     setLoading(true)
     try {
       const fetches = [getKickers(), getDeals(null, month)]
-      // Load PS summary in parallel for PreSales agents
       if (isPreSales) fetches.push(getPreSalesSummary(effectiveUser.email, month))
-      const [ks, ds, psData] = await Promise.all(fetches)
+      if (isManager)  fetches.push(getSubtree(effectiveUser.email).catch(() => null))
+      const [ks, ds, extra1, extra2] = await Promise.all(fetches)
       setKickers(ks)
       setDeals(ds)
+      const psData  = isPreSales ? extra1 : null
+      const tree    = isManager  ? (isPreSales ? extra2 : extra1) : null
       if (psData) setPsSummary(psData)
+      if (tree) {
+        const allNodes = flatTree(tree)
+        const agents   = allNodes
+          .filter(m => (m.Email || '').toLowerCase() !== (effectiveUser?.email || '').toLowerCase())
+          .map(m => (m.Email || '').toLowerCase())
+        setTeamEmails(agents)
+      }
     } catch { /* show empty */ }
     finally { setLoading(false) }
   }, [effectiveUser?.email, effectiveUser?.role, month])
@@ -574,6 +591,13 @@ export default function Kickers() {
 
   function dealsFor(k) {
     if (k.type?.startsWith('team_')) return deals
+    // Manager-targeted kicker: count the manager's TEAM sales, not personal sales
+    const targetsManagers = (k.targetRoles || []).includes('Manager') &&
+      !(k.targetRoles || []).includes('Agent') &&
+      !(k.targetRoles || []).includes('PreSales')
+    if (isManager && targetsManagers && teamEmails.length > 0) {
+      return deals.filter(d => teamEmails.includes((d.Email || '').toLowerCase()))
+    }
     return deals.filter(d => d.Email === effectiveUser?.email)
   }
 

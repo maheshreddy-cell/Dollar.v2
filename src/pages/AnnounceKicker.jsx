@@ -73,6 +73,10 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   const targetTeams = kicker.targetTeams || ['ALL']
   const allTeams    = targetTeams.includes('ALL')
 
+  // Is this kicker for managers (they earn based on their TEAM's sales, not personal)?
+  const targetingManagers = targetRoles.has('Manager') &&
+    !targetRoles.has('Agent') && !targetRoles.has('PreSales')
+
   const targetMembers = allMembers.filter(m => {
     if (!targetRoles.has(m.Role)) return false
     if (allTeams) return true
@@ -81,27 +85,58 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
     return false
   })
 
-  // Filter deals: date range + min sale value + target agents only
-  const targetEmails = new Set(targetMembers.map(m => (m.Email || '').toLowerCase()))
-  const rangeDeals   = allDeals.filter(d => {
-    if (!targetEmails.has(d.Email)) return false
+  // When targeting managers: build an agentEmail → managerEmail lookup
+  // so deals closed by agents are attributed to their manager's progress
+  const agentToManager = {}
+  const teamAgentEmails = new Set()
+  if (targetingManagers) {
+    const mgrEmailSet = new Set(targetMembers.map(m => (m.Email || '').toLowerCase()))
+    for (const m of allMembers) {
+      if (['Agent', 'PreSales'].includes(m.Role)) {
+        const mgrEmail = (m.ManagerEmail || '').toLowerCase()
+        if (mgrEmailSet.has(mgrEmail)) {
+          agentToManager[(m.Email || '').toLowerCase()] = mgrEmail
+          teamAgentEmails.add((m.Email || '').toLowerCase())
+        }
+      }
+    }
+  }
+
+  // Include team agents in the deal filter when targeting managers
+  const targetEmails = new Set([
+    ...targetMembers.map(m => (m.Email || '').toLowerCase()),
+    ...teamAgentEmails,
+  ])
+
+  const rangeDeals = allDeals.filter(d => {
+    if (!targetEmails.has((d.Email || '').toLowerCase())) return false
     const ts = d.Timestamp || d.PaymentDate
-    // Fallback: if no date field, use first day of the deal's month so it's still
-    // counted for kickers covering that month (fixes missing-timestamp deals)
     const t = ts ? new Date(ts).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
     if (isNaN(t) || t < from || t > to) return false
     if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
     return true
   })
 
-  // Build per-agent stats
+  // Build per-member stats (managers accumulate their team's deals)
   const stats = {}
   for (const m of targetMembers) {
     const key = (m.Email || '').toLowerCase()
     stats[key] = { name: m.Name || m.Email, email: m.Email, role: m.Role, sales: 0, revenue: 0 }
   }
   for (const d of rangeDeals) {
-    if (stats[d.Email]) { stats[d.Email].sales++; stats[d.Email].revenue += d.TotalValue || 0 }
+    const dealEmail = (d.Email || '').toLowerCase()
+    if (stats[dealEmail]) {
+      // Direct match (non-manager kicker — agent/VH doing their own sales)
+      stats[dealEmail].sales++
+      stats[dealEmail].revenue += d.TotalValue || 0
+    } else if (targetingManagers) {
+      // Attribute agent's deal to their manager
+      const mgrEmail = agentToManager[dealEmail]
+      if (mgrEmail && stats[mgrEmail]) {
+        stats[mgrEmail].sales++
+        stats[mgrEmail].revenue += d.TotalValue || 0
+      }
+    }
   }
 
   // Slabs sorted ascending (so we find highest hit via iteration)
