@@ -68,12 +68,12 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   const type      = normalizeType(origType)
   const isRevType = type === 'revenue'
 
-  // Filter members targeted by this kicker
   const targetRoles = new Set(kicker.targetRoles || [])
   const targetTeams = kicker.targetTeams || ['ALL']
   const allTeams    = targetTeams.includes('ALL')
 
-  // Is this kicker for managers (they earn based on their TEAM's sales, not personal)?
+  // Manager-targeted kicker: each manager earns based on their TEAM's sales
+  // (matched via d.Team column which stores values like "Team Kedar", "Team Swati")
   const targetingManagers = targetRoles.has('Manager') &&
     !targetRoles.has('Agent') && !targetRoles.has('PreSales')
 
@@ -85,56 +85,48 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
     return false
   })
 
-  // When targeting managers: build an agentEmail → managerEmail lookup
-  // so deals closed by agents are attributed to their manager's progress
-  const agentToManager = {}
-  const teamAgentEmails = new Set()
-  if (targetingManagers) {
-    const mgrEmailSet = new Set(targetMembers.map(m => (m.Email || '').toLowerCase()))
-    for (const m of allMembers) {
-      if (['Agent', 'PreSales'].includes(m.Role)) {
-        const mgrEmail = (m.ManagerEmail || '').toLowerCase()
-        if (mgrEmailSet.has(mgrEmail)) {
-          agentToManager[(m.Email || '').toLowerCase()] = mgrEmail
-          teamAgentEmails.add((m.Email || '').toLowerCase())
-        }
-      }
-    }
-  }
-
-  // Include team agents in the deal filter when targeting managers
-  const targetEmails = new Set([
-    ...targetMembers.map(m => (m.Email || '').toLowerCase()),
-    ...teamAgentEmails,
-  ])
-
-  const rangeDeals = allDeals.filter(d => {
-    if (!targetEmails.has((d.Email || '').toLowerCase())) return false
-    const ts = d.Timestamp || d.PaymentDate
-    const t = ts ? new Date(ts).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
-    if (isNaN(t) || t < from || t > to) return false
-    if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
-    return true
-  })
-
-  // Build per-member stats (managers accumulate their team's deals)
+  // Build per-member stats
   const stats = {}
   for (const m of targetMembers) {
     const key = (m.Email || '').toLowerCase()
-    stats[key] = { name: m.Name || m.Email, email: m.Email, role: m.Role, sales: 0, revenue: 0 }
+    stats[key] = { name: m.Name || m.Email, email: m.Email, role: m.Role, team: m.Team || '', sales: 0, revenue: 0 }
   }
-  for (const d of rangeDeals) {
-    const dealEmail = (d.Email || '').toLowerCase()
-    if (stats[dealEmail]) {
-      // Direct match (non-manager kicker — agent/VH doing their own sales)
-      stats[dealEmail].sales++
-      stats[dealEmail].revenue += d.TotalValue || 0
-    } else if (targetingManagers) {
-      // Attribute agent's deal to their manager
-      const mgrEmail = agentToManager[dealEmail]
+
+  // Helper: does deal fall in date window + meet min value?
+  function inWindow(d) {
+    const ts = d.Timestamp || d.PaymentDate
+    const t  = ts ? new Date(ts).getTime() : (d.Month ? new Date(d.Month + '-01').getTime() : NaN)
+    if (isNaN(t) || t < from || t > to) return false
+    if (minVal > 0 && (d.TotalValue || 0) < minVal) return false
+    return true
+  }
+
+  if (targetingManagers) {
+    // Build teamName → managerEmail map from each manager's Team field
+    const teamToMgr = {}
+    for (const m of targetMembers) {
+      if (m.Team) teamToMgr[(m.Team || '').trim().toLowerCase()] = (m.Email || '').toLowerCase()
+    }
+    const teamSet = new Set(Object.keys(teamToMgr))
+
+    for (const d of allDeals) {
+      if (!inWindow(d)) continue
+      const dTeam = (d.Team || '').trim().toLowerCase()
+      if (!teamSet.has(dTeam)) continue
+      const mgrEmail = teamToMgr[dTeam]
       if (mgrEmail && stats[mgrEmail]) {
         stats[mgrEmail].sales++
         stats[mgrEmail].revenue += d.TotalValue || 0
+      }
+    }
+  } else {
+    const targetEmails = new Set(targetMembers.map(m => (m.Email || '').toLowerCase()))
+    for (const d of allDeals) {
+      if (!inWindow(d)) continue
+      const dealEmail = (d.Email || '').toLowerCase()
+      if (targetEmails.has(dealEmail) && stats[dealEmail]) {
+        stats[dealEmail].sales++
+        stats[dealEmail].revenue += d.TotalValue || 0
       }
     }
   }
@@ -401,7 +393,7 @@ export default function AnnounceKicker() {
   }
 
   const [form,        setForm]        = useState(BLANK_FORM)
-  const [editingId,   setEditingId]   = useState(null)   // null = new, string = editing existing
+  const [editingId,   setEditingId]   = useState(null)
   const [managers,    setManagers]    = useState([])
   const [allKickers,  setAllKickers]  = useState([])
   const [allDeals,    setAllDeals]    = useState([])
@@ -410,6 +402,7 @@ export default function AnnounceKicker() {
   const [submitting,  setSubmitting]  = useState(false)
   const [error,       setError]       = useState('')
   const [success,     setSuccess]     = useState(false)
+  const [manageTab,   setManageTab]   = useState('live') // 'live' | 'past'
 
   // Use effectiveUser for role-scoping (respects Admin "view as" impersonation)
   const activeUser    = effectiveUser || user
@@ -614,33 +607,51 @@ export default function AnnounceKicker() {
 
       {/* ── Manage existing kickers ── */}
       <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Zap size={14} className="text-purple-500" />
-          <p className="text-sm font-bold text-gray-800">Your Kickers to Manage</p>
-          <span className="text-[10px] font-semibold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{manageable.length}</span>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-purple-500" />
+            <p className="text-sm font-bold text-gray-800">Your Kickers to Manage</p>
+            <span className="text-[10px] font-semibold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">{manageable.length}</span>
+          </div>
+          <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">
+            <button type="button" onClick={() => setManageTab('live')}
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors ${manageTab === 'live' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              🟢 Live
+            </button>
+            <button type="button" onClick={() => setManageTab('past')}
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors ${manageTab === 'past' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              Past
+            </button>
+          </div>
         </div>
 
         {loadingList ? (
           <div className="flex items-center justify-center h-16">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-600" />
           </div>
-        ) : manageable.length === 0 ? (
-          <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-6 text-center">
-            <p className="text-xs text-gray-400">No kickers yet. Create one below.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {manageable.sort((a, b) => new Date(b.announcedAt) - new Date(a.announcedAt)).map(k => (
-              <ManageCard
-                key={k.id}
-                kicker={k}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                progress={progressMap[k.id] ?? null}
-              />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          const filtered = manageable
+            .sort((a, b) => new Date(b.announcedAt) - new Date(a.announcedAt))
+            .filter(k => manageTab === 'live' ? !kickerIsPast(k) : kickerIsPast(k))
+          if (filtered.length === 0) return (
+            <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-6 text-center">
+              <p className="text-xs text-gray-400">{manageTab === 'live' ? 'No live kickers.' : 'No past kickers.'}</p>
+            </div>
+          )
+          return (
+            <div className="space-y-2">
+              {filtered.map(k => (
+                <ManageCard
+                  key={k.id}
+                  kicker={k}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  progress={progressMap[k.id] ?? null}
+                />
+              ))}
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Create / Edit form ── */}
@@ -739,26 +750,42 @@ export default function AnnounceKicker() {
             )}
           </div>
 
-          {/* Target Teams */}
-          <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Which Teams?</label>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => toggleTeam('ALL')}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                  form.targetTeams.includes('ALL') ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}>
-                All Teams
-              </button>
-              {managers.map(m => (
-                <button key={m.Email} type="button" onClick={() => toggleTeam(m.Email)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                    form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}>
-                  {m.Name || m.Email} {activeUser?.role === 'Manager' ? '' : `(${m.Role})`}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Target Teams — only shown when manager-level roles are selected */}
+          {form.targetRoles.some(r => ['Manager', 'VH', 'SalesHead'].includes(r)) && (() => {
+            const managerLevelRoles = ['Manager', 'VH', 'SalesHead']
+            const selectedMgrRoles  = form.targetRoles.filter(r => managerLevelRoles.includes(r))
+            const filteredManagers  = managers.filter(m => selectedMgrRoles.includes(m.Role))
+            const allLabel = selectedMgrRoles.length === 1
+              ? `All ${selectedMgrRoles[0]}s`
+              : 'All Selected'
+            return (
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
+                  Which {selectedMgrRoles.join(' / ')}s?
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => toggleTeam('ALL')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      form.targetTeams.includes('ALL') ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}>
+                    {allLabel}
+                  </button>
+                  {filteredManagers.map(m => (
+                    <button key={m.Email} type="button" onClick={() => toggleTeam(m.Email)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        form.targetTeams.includes(m.Email) ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}>
+                      {m.Name || m.Email}
+                      {selectedMgrRoles.length > 1 && <span className="ml-1 text-[10px] opacity-60">({m.Role})</span>}
+                    </button>
+                  ))}
+                  {filteredManagers.length === 0 && (
+                    <p className="text-xs text-gray-400">No {selectedMgrRoles.join('/')}s available.</p>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Slabs */}
           <div>
