@@ -289,8 +289,12 @@ function computeProgress(kicker, allDeals) {
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
   const inRange = allDeals.filter(d => {
-    const dt = new Date(d.Timestamp || d.PaymentDate || 0)
-    return dt >= from && dt <= to
+    const ts = d.Timestamp || d.PaymentDate
+    if (ts) {
+      const dt = new Date(ts)
+      if (!isNaN(dt.getTime())) return dt >= from && dt <= to
+    }
+    return false
   })
 
   const rawSales = inRange.length
@@ -346,7 +350,7 @@ function nudgeText(slab, type, progress) {
 }
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
-function KickerCard({ kicker, deals, agentEmail, agentName }) {
+function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
   const [expanded, setExpanded] = useState(false)
 
   const active    = kickerIsActive(kicker)
@@ -436,33 +440,38 @@ function KickerCard({ kicker, deals, agentEmail, agentName }) {
           </div>
         )}
 
-        {/* Live progress stats */}
-        {active && (
+        {/* Progress stats — show for both active and past */}
+        {(active || past) && (
           <div className="flex gap-2">
             {isSales && (
-              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-blue-50' : 'bg-indigo-50'}`}>
-                <p className="text-xl font-black text-blue-700">{progress.sales}</p>
-                <p className="text-[10px] text-blue-500 font-semibold">{isTeam ? 'Team' : 'Your'} Sales</p>
+              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
+                <p className="text-[10px] text-indigo-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Sales</p>
               </div>
             )}
             {isRev && (
-              <div className={`flex-1 rounded-xl px-3 py-2.5 text-center ${isTeam ? 'bg-green-50' : 'bg-teal-50'}`}>
-                <p className="text-sm font-black text-green-700">{formatINR(progress.revenue)}</p>
-                <p className="text-[10px] text-green-500 font-semibold">{isTeam ? 'Team' : 'Your'} Revenue</p>
+              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
               </div>
             )}
-            {progress.activeSlab && (
-              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-amber-50 border border-amber-200">
-                <p className="text-sm font-black text-amber-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                <p className="text-[10px] text-amber-600 font-semibold">🎉 Earned!</p>
+            {progress.activeSlab ? (
+              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+              </div>
+            ) : (
+              <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                <p className="text-sm font-black text-gray-400">—</p>
+                <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Slabs with progress bars */}
+        {/* Incentive Tiers */}
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Incentive Slabs</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Incentive Tiers</p>
           {progress.sorted.map((slab, i) => {
             const hitIdx = progress.activeSlab ? progress.sorted.indexOf(progress.activeSlab) : -1
             const isHit  = hitIdx >= i
@@ -470,37 +479,60 @@ function KickerCard({ kicker, deals, agentEmail, agentName }) {
             const barPct = slabBarPct(slab, type, progress)
             const nudge  = isNext && active ? nudgeText(slab, type, progress) : null
             const label  = slabLabel(slab, type)
+            const tierMedals  = ['🥉', '🥈', '🥇', '👑']
+            const tierOrdinal = ['1st', '2nd', '3rd', '4th', '5th', '6th']
+            const medal = tierMedals[i] ?? '🏅'
+            const ordinal = tierOrdinal[i] ?? `${i + 1}th`
 
             return (
               <div key={i} className={`rounded-xl border p-3 transition-all ${
-                isHit  ? 'bg-green-50 border-green-200' :
+                isHit  ? 'bg-green-50 border-green-200 shadow-sm' :
                 isNext ? 'bg-amber-50 border-amber-200' :
                          'bg-gray-50 border-gray-100'
               }`}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-bold ${isHit ? 'text-green-600' : isNext ? 'text-amber-500' : 'text-gray-400'}`}>
-                      {'①②③④⑤⑥'[i] ?? `${i + 1}`}
-                    </span>
-                    <span className="text-xs font-semibold text-gray-700">{label}</span>
+                {/* Tier header row */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base leading-none">{medal}</span>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      isHit  ? 'bg-green-100 text-green-700' :
+                      isNext ? 'bg-amber-100 text-amber-700' :
+                               'bg-gray-100 text-gray-500'
+                    }`}>{ordinal} Slab</span>
                   </div>
-                  <div className="flex gap-1">
-                    {isHit  && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">✓ Hit!</span>}
-                    {isNext && <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">↑ Next</span>}
+                  <div>
+                    {isHit  && <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✅ Slab Hit!</span>}
+                    {isNext && <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">⚡ Next Up</span>}
+                    {!isHit && !isNext && <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">🔒 Locked</span>}
                   </div>
                 </div>
 
-                {active && (
+                {/* Slab details */}
+                <p className={`text-xs font-semibold mb-2 ${isHit ? 'text-green-700' : isNext ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {label}
+                </p>
+
+                {/* Progress bar */}
+                {(active || past) && (
                   <>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-2 rounded-full overflow-hidden ${isHit ? 'bg-green-100' : isNext ? 'bg-amber-100' : 'bg-gray-200'}`}>
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${isHit ? 'bg-green-500' : isNext ? 'bg-amber-400' : 'bg-gray-300'}`}
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          isHit ? 'bg-green-500' : isNext ? 'bg-amber-400' : 'bg-gray-300'
+                        }`}
                         style={{ width: `${barPct}%` }}
                       />
                     </div>
                     <div className="flex justify-between items-center mt-1">
-                      {nudge && <p className="text-[10px] font-semibold text-amber-600">{nudge}</p>}
-                      <p className={`text-[10px] font-bold ml-auto ${isHit ? 'text-green-600' : isNext ? 'text-amber-500' : 'text-gray-400'}`}>{barPct.toFixed(0)}%</p>
+                      {nudge
+                        ? <p className="text-[10px] font-semibold text-amber-600">{nudge}</p>
+                        : isHit
+                          ? <p className="text-[10px] font-semibold text-green-600">🎉 Unlocked!</p>
+                          : <p className="text-[10px] text-gray-400">{barPct.toFixed(0)}% there</p>
+                      }
+                      <p className={`text-[10px] font-bold ml-2 ${isHit ? 'text-green-600' : isNext ? 'text-amber-500' : 'text-gray-400'}`}>
+                        {barPct.toFixed(0)}%
+                      </p>
                     </div>
                   </>
                 )}
@@ -544,7 +576,8 @@ export default function Kickers() {
     if (!effectiveUser?.email) return
     setLoading(true)
     try {
-      const fetches = [getKickers(), getDeals(null, month)]
+      // Load ALL deals (no month filter) so past kickers on different months still compute correctly
+      const fetches = [getKickers(), getDeals(null, null)]
       if (isPreSales) fetches.push(getPreSalesSummary(effectiveUser.email, month))
       const [ks, ds, psData] = await Promise.all(fetches)
       setKickers(ks)
@@ -577,11 +610,17 @@ export default function Kickers() {
     const targetsManagers = (k.targetRoles || []).includes('Manager') &&
       !(k.targetRoles || []).includes('Agent') &&
       !(k.targetRoles || []).includes('PreSales')
-    if (isManager && targetsManagers && effectiveUser?.team) {
-      const myTeam = (effectiveUser.team || '').trim().toLowerCase()
-      return deals.filter(d => (d.Team || '').trim().toLowerCase() === myTeam)
+    if (isManager && targetsManagers) {
+      const myTeam = (effectiveUser?.team || '').trim().toLowerCase()
+      // Fallback: "Team <FirstName>" if the team field isn't populated in the session
+      const firstName = (effectiveUser?.name || '').trim().split(' ')[0].toLowerCase()
+      const teamFallback = firstName ? `team ${firstName}` : ''
+      const teamToMatch = myTeam || teamFallback
+      if (teamToMatch) {
+        return deals.filter(d => (d.Team || '').trim().toLowerCase() === teamToMatch)
+      }
     }
-    return deals.filter(d => d.Email === effectiveUser?.email)
+    return deals.filter(d => (d.Email || '').toLowerCase() === (effectiveUser?.email || '').toLowerCase())
   }
 
   if (loading) return (
@@ -669,6 +708,7 @@ export default function Kickers() {
               deals={dealsFor(k)}
               agentEmail={effectiveUser?.email}
               agentName={effectiveUser?.name}
+              isManagerViewer={isManager && (k.targetRoles || []).includes('Manager') && !(k.targetRoles || []).includes('Agent')}
             />
           ))}
         </div>
