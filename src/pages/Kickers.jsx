@@ -6,15 +6,23 @@ import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, 
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
-function HatTrickCard({ deals, agentEmail, agentName }) {
-  // computeHatTrickEarnings now counts ALL deals (any status) — same logic for progress + earnings
-  const { amount, days, byDate } = computeHatTrickEarnings(deals)
+function HatTrickCard({ deals, agentEmail, agentName, month }) {
+  // computeHatTrickEarnings counts ALL deals across all time — we filter for display below
+  const { byDate } = computeHatTrickEarnings(deals)
 
   // Today's key (IST)
   const now    = new Date()
   const istNow = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
   const todayKey = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
   const todayMonth = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
+
+  // Filter hat trick days to the selected month only
+  const viewMonth = month || todayMonth
+  const monthEntries = Object.entries(byDate)
+    .filter(([date, n]) => n >= 3 && date.startsWith(viewMonth))
+    .sort(([a], [b]) => a.localeCompare(b))
+  const days   = monthEntries.length
+  const amount = days * 1000
 
   const todayCount = byDate[todayKey] || 0
   const todayPct   = Math.min((todayCount / 3) * 100, 100)
@@ -91,22 +99,20 @@ function HatTrickCard({ deals, agentEmail, agentName }) {
           </p>
         </div>
 
-        {/* Monthly hat trick log */}
-        {days > 0 && (
+        {/* Monthly hat trick log — filtered to selected month */}
+        {monthEntries.length > 0 && (
           <div className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Hat Trick Days This Month</p>
-            {Object.entries(byDate)
-              .filter(([, n]) => n >= 3)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([date, count]) => (
-                <div key={date} className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-                  <span className="text-xs font-semibold text-green-700">
-                    🏏 {new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} — {count} deals
-                  </span>
-                  <span className="text-xs font-bold text-green-600">+₹1,000</span>
-                </div>
-              ))
-            }
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Hat Trick Days — {new Date(viewMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+            </p>
+            {monthEntries.map(([date, count]) => (
+              <div key={date} className="flex items-center justify-between bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                <span className="text-xs font-semibold text-green-700">
+                  🏏 {new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} — {count} deals
+                </span>
+                <span className="text-xs font-bold text-green-600">+₹1,000</span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -853,6 +859,7 @@ export default function Kickers() {
           deals={deals.filter(d => d.Email === effectiveUser?.email)}
           agentEmail={effectiveUser?.email}
           agentName={effectiveUser?.name}
+          month={month}
         />
       )}
 
