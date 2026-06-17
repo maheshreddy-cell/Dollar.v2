@@ -403,9 +403,15 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
   ])
   const lowerUser = userEmail?.trim().toLowerCase()
   const target = latestTarget(targets, lowerUser, month)
-  if (!target) return {
-    totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0,
-    totalSaleValue: 0, totalDeals: 0, loanDocs: {}, slabInfo: null,
+  if (!target) {
+    // No commission target but kickers can still be earned — compute them separately
+    const agentDealsAll = deals.filter(d => d.Email === lowerUser && d.Month === month)
+    const totalKickers = computeKickerEarningsForAgent(userRole, agentDealsAll, allKickers, deals, lowerUser)
+    return {
+      totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0,
+      totalSaleValue: 0, totalDeals: 0, loanDocs: {}, slabInfo: null,
+      totalKickers, totalT2Amount: 0, totalMoneyMade: totalKickers,
+    }
   }
 
   // All deals for this agent+month (used for pipeline / loan docs breakdown)
