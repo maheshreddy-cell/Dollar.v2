@@ -744,8 +744,16 @@ export default function Kickers() {
       ? (manMode === 'forMe' ? forMeKickers : forMyTeamKickers)
       : kickers.filter(isVisible)
 
-  const active    = allVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
-  const past      = allVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
+  // Only show kickers whose date range overlaps the selected month
+  const monthStart = new Date(month + '-01')
+  const monthEnd   = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59)
+  const monthVisible = allVisible.filter(k => {
+    if (!k.dateFrom || !k.dateTo) return true
+    return new Date(k.dateFrom) <= monthEnd && new Date(k.dateTo) >= monthStart
+  })
+
+  const active    = monthVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
+  const past      = monthVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
   const baseList  = tab === 'active' ? active : past
   const displayed = isOversight && statusFilter !== 'All' ? baseList.filter(k => k.status === statusFilter) : baseList
 
