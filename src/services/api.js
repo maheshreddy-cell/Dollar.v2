@@ -86,10 +86,19 @@ function getStageCategory(loanDocValue) {
   return STAGE_MAP[key] ?? 'WIP'
 }
 
+function parseAnyDate(dateStr) {
+  if (!dateStr) return null
+  // Handle DD/MM/YYYY or DD/MM/YYYY HH:MM:SS from Indian-locale Google Sheets
+  const dmy = (dateStr + '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (dmy) return new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`)
+  const d = new Date(dateStr)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function workingDaysSince(dateStr) {
   if (!dateStr) return 0
-  const start = new Date(dateStr)
-  if (isNaN(start)) return 0
+  const start = parseAnyDate(dateStr)
+  if (!start) return 0
   const now = new Date()
   let count = 0
   const cur = new Date(start)

@@ -549,11 +549,9 @@ export default function Deals() {
                                       <div className="min-w-0">
                                         <p className="text-sm font-semibold text-gray-800 truncate">{deal.LeadName || '—'}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                          {deal.Timestamp
-                                            ? new Date(deal.Timestamp).toLocaleDateString('en-IN')
-                                            : deal.PaymentDate
-                                              ? new Date(deal.PaymentDate).toLocaleDateString('en-IN')
-                                              : '—'}
+                                          {deal.PaymentDate
+                                            ? new Date(deal.PaymentDate).toLocaleDateString('en-IN')
+                                            : deal.Timestamp || '—'}
                                           {isAllAgents && deal.Email && (
                                             <span className="ml-2 text-gray-400">
                                               · {teamAgents.find(a => a.email === deal.Email)?.name ?? deal.Email}

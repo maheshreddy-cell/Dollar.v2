@@ -54,7 +54,8 @@ export default function MyTargets() {
 
           const inRange = allDeals.filter(d => {
             if ((d.Email || '').trim().toLowerCase() !== email) return false
-            const dt = new Date(d.Timestamp || d.PaymentDate || 0).getTime()
+            const dt = d.PaymentDate ? new Date(d.PaymentDate).getTime()
+              : d.Month ? new Date(d.Month + '-01').getTime() : 0
             return dt >= from && dt <= to
           })
           const sales   = (k.minSaleValue > 0
