@@ -6,7 +6,7 @@ import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, 
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
-function HatTrickCard({ deals, agentEmail, agentName, month }) {
+function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
   // computeHatTrickEarnings counts ALL deals across all time — we filter for display below
   const { byDate } = computeHatTrickEarnings(deals)
 
@@ -27,6 +27,9 @@ function HatTrickCard({ deals, agentEmail, agentName, month }) {
   const todayCount = byDate[todayKey] || 0
   const todayPct   = Math.min((todayCount / 3) * 100, 100)
   const todayGap   = Math.max(3 - todayCount, 0)
+
+  // On Past tab — hide the card entirely if no achievements this month
+  if (tab === 'past' && monthEntries.length === 0) return null
 
   // Auto-log new hat trick achievements to Kickers sheet (dedup: track in sessionStorage)
   useEffect(() => {
@@ -77,27 +80,29 @@ function HatTrickCard({ deals, agentEmail, agentName, month }) {
           </div>
         </div>
 
-        {/* Today's progress */}
-        <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-orange-700">Today's progress</p>
-            <p className="text-xs font-bold text-orange-600">{todayCount} / 3 deals</p>
+        {/* Today's progress — only shown on Active tab */}
+        {tab !== 'past' && (
+          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-orange-700">Today's progress</p>
+              <p className="text-xs font-bold text-orange-600">{todayCount} / 3 deals</p>
+            </div>
+            <div className="h-2.5 bg-orange-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${todayPct >= 100 ? 'bg-green-500' : 'bg-orange-400'}`}
+                style={{ width: `${todayPct}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-orange-500 mt-1.5 font-medium">
+              {todayPct >= 100
+                ? '🎉 Hat trick unlocked today! ₹1,000 earned!'
+                : todayGap === 1
+                  ? '🔥 One more close today to unlock ₹1,000!'
+                  : `${todayGap} more paid deal${todayGap !== 1 ? 's' : ''} today to unlock ₹1,000`
+              }
+            </p>
           </div>
-          <div className="h-2.5 bg-orange-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${todayPct >= 100 ? 'bg-green-500' : 'bg-orange-400'}`}
-              style={{ width: `${todayPct}%` }}
-            />
-          </div>
-          <p className="text-[11px] text-orange-500 mt-1.5 font-medium">
-            {todayPct >= 100
-              ? '🎉 Hat trick unlocked today! ₹1,000 earned!'
-              : todayGap === 1
-                ? '🔥 One more close today to unlock ₹1,000!'
-                : `${todayGap} more paid deal${todayGap !== 1 ? 's' : ''} today to unlock ₹1,000`
-            }
-          </p>
-        </div>
+        )}
 
         {/* Monthly hat trick log — filtered to selected month */}
         {monthEntries.length > 0 && (
@@ -861,13 +866,14 @@ export default function Kickers() {
         </div>
       )}
 
-      {/* Hat Trick Kicker — always shown on Active tab (not Past) */}
-      {tab === 'active' && (!isManager || manMode === 'forMe') && (
+      {/* Hat Trick Kicker — always on Active; on Past only when achievements exist that month */}
+      {(!isManager || manMode === 'forMe') && (
         <HatTrickCard
           deals={deals.filter(d => d.Email === effectiveUser?.email)}
           agentEmail={effectiveUser?.email}
           agentName={effectiveUser?.name}
           month={month}
+          tab={tab}
         />
       )}
 
