@@ -859,14 +859,21 @@ export const getPreSalesSummary = async (email, month) => {
 export function computeHatTrickEarnings(agentDeals) {
   const byDate = {}
   for (const d of (agentDeals || [])) {
-    // Count ALL deals regardless of payment status
-    const raw = d.Timestamp || d.PaymentDate
+    // PaymentDate is YYYY-MM-DD (pre-normalised by parseSheetDate) — always parses correctly.
+    // Timestamp is raw DD/MM/YYYY HH:MM:SS from the sheet and misparses in JS — skip it.
+    const raw = d.PaymentDate || d.Month
     if (!raw) continue
-    const ts = new Date(raw)
-    if (isNaN(ts.getTime())) continue
-    // Convert to IST date key (UTC+5:30)
-    const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
-    const key = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`
+    let key
+    if (d.PaymentDate) {
+      // YYYY-MM-DD — parse as UTC then convert to IST date
+      const ts = new Date(d.PaymentDate)
+      if (isNaN(ts.getTime())) continue
+      const ist = new Date(ts.getTime() + 5.5 * 60 * 60 * 1000)
+      key = `${ist.getUTCFullYear()}-${String(ist.getUTCMonth()+1).padStart(2,'0')}-${String(ist.getUTCDate()).padStart(2,'0')}`
+    } else {
+      // No PaymentDate — fall back to Month (YYYY-MM), use 1st of month as key
+      key = d.Month + '-01'
+    }
     byDate[key] = (byDate[key] || 0) + 1
   }
   const hatTrickDays = Object.values(byDate).filter(n => n >= 3).length
