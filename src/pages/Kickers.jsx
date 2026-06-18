@@ -398,7 +398,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
   const past      = kickerIsPast(kicker)
   const origType  = kicker.type || 'sales'
   const type      = normalizeType(origType)
-  let progress    = computeProgress(kicker, deals, type === 'collective' ? agentEmail : undefined)
+
+  // IC kicker = targets Agent or PreSales. For these, dealsFor() passes ALL deals
+  // so we can build the earners list. We filter to own email for personal progress.
+  const isICKicker = (kicker.targetRoles || []).some(r => r === 'Agent' || r === 'PreSales')
+  const myOnlyDeals = (isICKicker && !isOversight && agentEmail)
+    ? deals.filter(d => (d.Email || '').toLowerCase() === agentEmail.toLowerCase())
+    : null
+
+  // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight
+  let progress = computeProgress(kicker, myOnlyDeals ?? deals, type === 'collective' ? agentEmail : undefined)
 
   // Individual payout override — admin can set a custom amount for a specific
   // person, taking precedence over the slab-derived payout once applied.
@@ -450,9 +459,18 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
       }).sort((a, b) => b.payout - a.payout || b.count - a.count)
     : []
 
-  // Per-agent earners list — oversight view of individual sales/revenue kickers
-  const agentEarners = (isOversight && !isCollective)
-    ? Object.entries(progress.contributorsMap || {}).map(([email, { count, revenue }]) => {
+  // Per-agent earners list — oversight OR any viewer of an IC kicker.
+  // For IC kicker non-oversight: contributorsMap is built from all deals (passed by dealsFor).
+  // For oversight: same, since dealsFor already returns all deals.
+  // We use progress.contributorsMap directly — it's always computed from the full deal set
+  // because myOnlyDeals is only used for the personal stats box above.
+  const allDealsProgress = myOnlyDeals
+    ? computeProgress(kicker, deals, undefined)
+    : null
+  const earnerContributorsMap = (allDealsProgress || progress).contributorsMap
+
+  const agentEarners = ((isOversight || isICKicker) && !isCollective)
+    ? Object.entries(earnerContributorsMap || {}).map(([email, { count, revenue }]) => {
         const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
         let hitSlab = null
         for (const slab of progress.sorted) {
@@ -645,19 +663,24 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                   )}
                 </div>
 
-                {/* Per-agent earners list — oversight only */}
-                {isOversight && agentEarners.length > 0 && (
+                {/* Per-agent earners list — oversight users and any viewer of an IC kicker */}
+                {(isOversight || isICKicker) && agentEarners.length > 0 && (
                   <div>
                     <button
                       onClick={() => setShowContributors(v => !v)}
                       className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
                     >
-                      <span>👥 {agentEarners.length} agent{agentEarners.length !== 1 ? 's' : ''} · {agentEarners.filter(a => a.hit).length} earned</span>
+                      <span>
+                        {isOversight
+                          ? `👥 ${agentEarners.length} agent${agentEarners.length !== 1 ? 's' : ''} · ${agentEarners.filter(a => a.hit).length} earned`
+                          : `🏆 ${agentEarners.filter(a => a.hit).length} agent${agentEarners.filter(a => a.hit).length !== 1 ? 's' : ''} earned this kicker`
+                        }
+                      </span>
                       {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     </button>
                     {showContributors && (
                       <div className="mt-2 space-y-1">
-                        {agentEarners.map((a, i) => (
+                        {agentEarners.filter(a => isOversight || a.hit).map((a, i) => (
                           <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
                             a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
                           }`}>
@@ -668,9 +691,14 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                                 {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
                               </span>
                             </div>
-                            <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
-                              {a.hit ? formatINR(a.payout) : '—'}
-                            </span>
+                            {isOversight && (
+                              <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                                {a.hit ? formatINR(a.payout) : '—'}
+                              </span>
+                            )}
+                            {!isOversight && a.hit && (
+                              <span className="font-bold text-green-700">✓</span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -869,6 +897,11 @@ export default function Kickers() {
 
     // Oversight (Admin/SalesHead/VH): show aggregate across all agents
     if (isOversight) return deals
+
+    // IC kicker (targets Agent/PreSales): pass all deals so KickerCard can
+    // show the earners list. The card filters to own email for personal progress.
+    const isICKicker = (k.targetRoles || []).some(r => r === 'Agent' || r === 'PreSales')
+    if (isICKicker) return deals
 
     // Collective: return all targeted agents' combined deals
     if (type === 'collective') {
