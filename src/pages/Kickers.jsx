@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Zap, ChevronDown, ChevronUp, Clock, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Zap, ChevronDown, ChevronUp, Clock, Users, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
@@ -391,6 +392,7 @@ function nudgeText(slab, type, progress) {
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
 function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight }) {
+  const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
   const [showContributors, setShowContributors] = useState(false)
 
@@ -506,7 +508,18 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
             {past && <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Ended</span>}
             <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{typeInfo?.label}</span>
           </div>
-          <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
+            {isOversight && (
+              <button
+                onClick={() => navigate('/announce-kicker', { state: { editKicker: kicker } })}
+                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                title="Edit kicker"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+          </div>
 
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users, ClipboardCheck, BadgeCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { announceKicker, getKickers, updateKicker, setKickerStatus, deleteKicker, getSubtree, getDeals, packSlabsCol } from '../services/api'
@@ -511,6 +511,7 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
 export default function AnnounceKicker() {
   const { user, effectiveUser } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Redirect PreSales/Agent — they cannot announce kickers (check actual login role)
   useEffect(() => {
@@ -648,6 +649,16 @@ export default function AnnounceKicker() {
   }, [activeUser?.email, activeUser?.role])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Auto-open edit mode when navigated from Kickers page with a kicker in state
+  useEffect(() => {
+    const kicker = location.state?.editKicker
+    if (!kicker) return
+    handleEdit(kicker)
+    // Clear state so back-navigation doesn't re-trigger
+    window.history.replaceState({}, '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.editKicker?.id])
 
   const setField = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
