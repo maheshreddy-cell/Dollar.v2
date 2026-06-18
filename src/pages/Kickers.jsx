@@ -771,17 +771,51 @@ export default function Kickers() {
   const [statusFilter, setStatusFilter] = useState('All') // oversight roles only
   const [manMode,    setManMode]    = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
 
-  const isManager   = effectiveUser?.role === 'Manager'
-  const isPreSales  = effectiveUser?.role === 'PreSales'
-  const isOversight = OVERSIGHT_ROLES.includes(effectiveUser?.role) && effectiveUser?.email === user?.email
+  const isManager      = effectiveUser?.role === 'Manager'
+  const isPreSales     = effectiveUser?.role === 'PreSales'
+  const isOversight    = OVERSIGHT_ROLES.includes(effectiveUser?.role) && effectiveUser?.email === user?.email
+  // Full oversight = Admin or SalesHead (see ALL kickers with no filtering)
+  const isFullOversight = (effectiveUser?.role === 'Admin' || effectiveUser?.role === 'SalesHead') && effectiveUser?.email === user?.email
 
   function isVisible(k) {
-    if (isOversight) return true
-    const roles = k.targetRoles || []
-    if (!roles.includes(effectiveUser?.role)) return false
-    const teams = k.targetTeams || []
+    const roles    = k.targetRoles || []
+    const teams    = k.targetTeams || []
+    const myEmail  = (effectiveUser?.email || '').toLowerCase()
+    const myRole   = effectiveUser?.role
+
+    const isICKicker      = roles.includes('Agent') || roles.includes('PreSales')
+    const isManagerKicker = !isICKicker && roles.includes('Manager')
+    const isVHKicker      = !isICKicker && !isManagerKicker && roles.includes('VH')
+
+    // Rule 1: IC kickers (targeted at Agent/PreSales) are visible to everyone
+    if (isICKicker) return true
+
+    // Rules 2 & 3: Manager kickers — not visible to Agent/PreSales
+    if (isManagerKicker) {
+      if (myRole === 'Agent' || myRole === 'PreSales') return false
+      if (myRole === 'Manager') {
+        if (teams.includes('ALL')) return true
+        if (teams.some(t => t.toLowerCase() === myEmail)) return true
+        if (teams.includes(effectiveUser?.managerEmail)) return true
+        return false
+      }
+      return true // Admin, SalesHead, VH see all manager kickers
+    }
+
+    // Rules 4 & 5: VH kickers — only that specific VH + Admin/SalesHead
+    if (isVHKicker) {
+      if (myRole === 'Admin' || myRole === 'SalesHead') return true
+      if (myRole === 'VH') {
+        if (teams.includes('ALL')) return true
+        return teams.some(t => t.toLowerCase() === myEmail)
+      }
+      return false
+    }
+
+    // Fallback for any other role combinations
+    if (!roles.includes(myRole)) return false
     if (teams.includes('ALL')) return true
-    if (teams.includes(effectiveUser?.email)) return true
+    if (teams.some(t => t.toLowerCase() === myEmail)) return true
     if (teams.includes(effectiveUser?.managerEmail)) return true
     return false
   }
@@ -808,7 +842,9 @@ export default function Kickers() {
   const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === effectiveUser?.email) : []
 
   // For oversight and non-manager roles: all visible kickers
-  const allVisible = isOversight
+  // isFullOversight (Admin/SalesHead) bypasses filtering; VH goes through isVisible so they
+  // only see their own VH kickers (not other VHs'), while still seeing IC + Manager kickers.
+  const allVisible = isFullOversight
     ? kickers
     : isManager
       ? (manMode === 'forMe' ? forMeKickers : forMyTeamKickers)
