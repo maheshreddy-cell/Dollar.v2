@@ -486,7 +486,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
       kicker.pinned ? 'border-yellow-300 ring-2 ring-yellow-100' : 'border-gray-200'
-    } ${past ? 'opacity-60' : ''}`}>
+    }`}>
       {/* Top accent */}
       <div className={`h-1.5 ${past ? 'bg-gray-300' : 'bg-gradient-to-r from-brand-500 via-purple-500 to-pink-400'}`} />
 
