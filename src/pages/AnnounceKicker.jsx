@@ -69,6 +69,9 @@ function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date
 
 // Can the current user manage (edit/delete) this kicker?
 function canManage(kicker, user) {
+  if (!user) return false
+  // VH and Admin (HOS) can edit all kickers regardless of who announced them
+  if (user.role === 'Admin' || user.role === 'VH' || user.role === 'SalesHead') return true
   if (kicker.announcedBy === user?.email) return true
   const announcerIdx = ROLE_HIERARCHY.indexOf(kicker.announcedByRole)
   const userIdx      = ROLE_HIERARCHY.indexOf(user?.role)
@@ -392,7 +395,7 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
       : <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">Upcoming</span>
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden ${past ? 'opacity-70' : ''}`}>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className={`h-1 ${past ? 'bg-gray-200' : 'bg-gradient-to-r from-brand-500 via-purple-500 to-pink-400'}`} />
       <div className="px-4 py-3">
         <div className="flex items-start justify-between gap-3">
