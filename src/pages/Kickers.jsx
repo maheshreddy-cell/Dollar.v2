@@ -331,12 +331,16 @@ function computeProgress(kicker, allDeals, myEmail) {
       }).length
     : 0
 
-  // Per-agent contribution map — used for "who is eligible" list on collective kickers
+  // Per-agent contribution map — count + revenue per agent, used for contributor lists
   const contributorsMap = {}
   for (const d of inRange) {
     if (minVal > 0 && (d.TotalValue || 0) < minVal) continue
     const email = (d.Email || '').toLowerCase()
-    if (email) contributorsMap[email] = (contributorsMap[email] || 0) + 1
+    if (email) {
+      if (!contributorsMap[email]) contributorsMap[email] = { count: 0, revenue: 0 }
+      contributorsMap[email].count++
+      contributorsMap[email].revenue += d.TotalValue || 0
+    }
   }
 
   const type   = normalizeType(kicker.type || 'sales')
@@ -386,7 +390,7 @@ function nudgeText(slab, type, progress) {
 }
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
-function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
+function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight }) {
   const [expanded, setExpanded] = useState(false)
   const [showContributors, setShowContributors] = useState(false)
 
@@ -438,11 +442,26 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
 
   // Sorted contributors list for collective kickers — payout is per-sale × slabRate
   const contributors = isCollective
-    ? Object.entries(progress.contributorsMap || {}).map(([email, count]) => {
+    ? Object.entries(progress.contributorsMap || {}).map(([email, { count }]) => {
         const earns = !!(progress.activeSlab && count > 0)
         const payout = earns ? count * Number(progress.activeSlab.payout) : 0
         const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
         return { email, count, earns, payout, displayName }
+      }).sort((a, b) => b.payout - a.payout || b.count - a.count)
+    : []
+
+  // Per-agent earners list — oversight view of individual sales/revenue kickers
+  const agentEarners = (isOversight && !isCollective)
+    ? Object.entries(progress.contributorsMap || {}).map(([email, { count, revenue }]) => {
+        const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+        let hitSlab = null
+        for (const slab of progress.sorted) {
+          const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+          if (isRev ? revenue >= t : count >= t) hitSlab = slab
+        }
+        const override = (kicker.individualAmounts || {})[email]
+        const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
+        return { email, displayName, count, revenue, payout, hit: !!hitSlab || override != null }
       }).sort((a, b) => b.payout - a.payout || b.count - a.count)
     : []
 
@@ -588,28 +607,74 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer }) {
               </div>
             ) : (
               /* Individual / manager / revenue */
-              <div className="flex gap-2">
-                {(isSales || isTeam) && (
-                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                    <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
-                    <p className="text-[10px] text-indigo-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Sales</p>
-                  </div>
-                )}
-                {isRev && (
-                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
-                    <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
-                    <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
-                  </div>
-                )}
-                {progress.activeSlab ? (
-                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                    <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                    <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
-                  </div>
-                ) : (
-                  <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
-                    <p className="text-sm font-black text-gray-400">—</p>
-                    <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {(isSales || isTeam) && (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                      <p className="text-xl font-black text-indigo-700">{isOversight ? agentEarners.length : progress.sales}</p>
+                      <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Agents Active' : isManagerViewer ? 'Team' : 'Your'} {isOversight ? '' : 'Sales'}</p>
+                    </div>
+                  )}
+                  {isRev && !isOversight && (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                      <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                      <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
+                    </div>
+                  )}
+                  {isOversight ? (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                      <p className="text-xl font-black text-green-700">{agentEarners.filter(a => a.hit).length}</p>
+                      <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
+                    </div>
+                  ) : progress.activeSlab ? (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                      <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                      <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                      <p className="text-sm font-black text-gray-400">—</p>
+                      <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                    </div>
+                  )}
+                  {isOversight && (
+                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                      <p className="text-sm font-black text-purple-700">{formatINR(agentEarners.reduce((s, a) => s + a.payout, 0))}</p>
+                      <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Per-agent earners list — oversight only */}
+                {isOversight && agentEarners.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowContributors(v => !v)}
+                      className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
+                    >
+                      <span>👥 {agentEarners.length} agent{agentEarners.length !== 1 ? 's' : ''} · {agentEarners.filter(a => a.hit).length} earned</span>
+                      {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                    {showContributors && (
+                      <div className="mt-2 space-y-1">
+                        {agentEarners.map((a, i) => (
+                          <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                            a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400 font-mono w-4 text-right">{i + 1}</span>
+                              <span className={`font-semibold ${a.hit ? 'text-green-700' : 'text-gray-600'}`}>{a.displayName}</span>
+                              <span className="text-gray-400">
+                                {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
+                              </span>
+                            </div>
+                            <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                              {a.hit ? formatINR(a.payout) : '—'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -907,6 +972,7 @@ export default function Kickers() {
               agentEmail={effectiveUser?.email}
               agentName={effectiveUser?.name}
               isManagerViewer={isManager && (k.targetRoles || []).includes('Manager') && !(k.targetRoles || []).includes('Agent')}
+              isOversight={isOversight}
             />
           ))}
         </div>
