@@ -691,14 +691,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                                 {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
                               </span>
                             </div>
-                            {isOversight && (
-                              <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
-                                {a.hit ? formatINR(a.payout) : '—'}
-                              </span>
-                            )}
-                            {!isOversight && a.hit && (
-                              <span className="font-bold text-green-700">✓</span>
-                            )}
+                            <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                              {a.hit ? formatINR(a.payout) : '—'}
+                            </span>
                           </div>
                         ))}
                       </div>
