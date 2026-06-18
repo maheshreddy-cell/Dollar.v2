@@ -766,6 +766,9 @@ export default function Kickers() {
     if (k.type?.startsWith('team_')) return deals
     const type = normalizeType(k.type || 'sales')
 
+    // Oversight (Admin/SalesHead/VH): show aggregate across all agents
+    if (isOversight) return deals
+
     // Collective: return all targeted agents' combined deals
     if (type === 'collective') {
       const targetTeams = k.targetTeams || ['ALL']
