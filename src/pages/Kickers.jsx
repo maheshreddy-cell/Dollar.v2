@@ -442,11 +442,13 @@ function nudgeText(slab, type, progress) {
 function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight, teamMap }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
-  // Auto-expand for manager kickers in oversight so team stats are immediately visible
-  const isInitiallyExpanded = isOversight &&
-    (kicker.targetRoles || []).includes('Manager') &&
-    !(kicker.targetRoles || []).includes('Agent') &&
-    !(kicker.targetRoles || []).includes('PreSales')
+  // Auto-expand manager kickers (oversight) and IC kickers (everyone) so leaderboard is immediately visible
+  const _roles = kicker.targetRoles || []
+  const _isICKickerEarly = _roles.some(r => r === 'Agent' || r === 'PreSales')
+  const _isManagerKicker = !_isICKickerEarly && _roles.includes('Manager')
+  const isInitiallyExpanded =
+    (_isICKickerEarly) ||
+    (isOversight && _isManagerKicker)
   const [showContributors, setShowContributors] = useState(isInitiallyExpanded)
 
   const active    = kickerIsActive(kicker)
