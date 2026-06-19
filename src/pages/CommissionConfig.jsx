@@ -8,9 +8,10 @@ import { AGENT_TARGET_PRESETS, PRESALES_TARGET_PRESETS } from '../utils/targetPr
 const INITIAL_FORM = { slabName: '', maxTarget: '', commissionPct: '' }
 
 const AGENT_PRESET_COLORS = {
-  basic:   { badge: 'bg-blue-100 text-blue-700',   header: 'bg-blue-50 border-blue-200',   accent: 'text-blue-700'   },
-  average: { badge: 'bg-green-100 text-green-700', header: 'bg-green-50 border-green-200', accent: 'text-green-700' },
+  basic:   { badge: 'bg-blue-100 text-blue-700',     header: 'bg-blue-50 border-blue-200',     accent: 'text-blue-700'     },
+  average: { badge: 'bg-green-100 text-green-700',   header: 'bg-green-50 border-green-200',   accent: 'text-green-700'   },
   pro:     { badge: 'bg-purple-100 text-purple-700', header: 'bg-purple-50 border-purple-200', accent: 'text-purple-700' },
+  genai:   { badge: 'bg-emerald-100 text-emerald-700', header: 'bg-emerald-50 border-emerald-200', accent: 'text-emerald-700' },
 }
 
 const PS_PRESET_COLORS = {
