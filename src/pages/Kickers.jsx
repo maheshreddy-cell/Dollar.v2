@@ -442,13 +442,11 @@ function nudgeText(slab, type, progress) {
 function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight, teamMap }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
-  // Auto-expand manager kickers (oversight) and IC kickers (everyone) so leaderboard is immediately visible
-  const _roles = kicker.targetRoles || []
-  const _isICKickerEarly = _roles.some(r => r === 'Agent' || r === 'PreSales')
-  const _isManagerKicker = !_isICKickerEarly && _roles.includes('Manager')
-  const isInitiallyExpanded =
-    (_isICKickerEarly) ||
-    (isOversight && _isManagerKicker)
+  // Auto-expand for manager kickers in oversight so team stats are immediately visible
+  const isInitiallyExpanded = isOversight &&
+    (kicker.targetRoles || []).includes('Manager') &&
+    !(kicker.targetRoles || []).includes('Agent') &&
+    !(kicker.targetRoles || []).includes('PreSales')
   const [showContributors, setShowContributors] = useState(isInitiallyExpanded)
 
   const active    = kickerIsActive(kicker)
@@ -463,8 +461,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     ? deals.filter(d => (d.Email || '').toLowerCase() === agentEmail.toLowerCase())
     : null
 
-  // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight
-  let progress = computeProgress(kicker, myOnlyDeals ?? deals, type === 'collective' ? agentEmail : undefined)
+  // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight.
+  // Collective kickers always use all deals so the full contributors map is visible to every agent.
+  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined)
 
   // Individual payout override — admin can set a custom amount for a specific
   // person, taking precedence over the slab-derived payout once applied.
