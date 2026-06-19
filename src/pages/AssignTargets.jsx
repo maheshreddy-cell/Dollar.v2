@@ -55,6 +55,7 @@ const PRESET_STYLES = {
   basic:        { card: 'border-blue-300 bg-blue-50 text-blue-800',      table: 'text-blue-700' },
   average:      { card: 'border-green-300 bg-green-50 text-green-800',    table: 'text-green-700' },
   pro:          { card: 'border-purple-300 bg-purple-50 text-purple-800', table: 'text-purple-700' },
+  genai:        { card: 'border-emerald-300 bg-emerald-50 text-emerald-800', table: 'text-emerald-700' },
   'ps-basic':   { card: 'border-teal-300 bg-teal-50 text-teal-800',      table: 'text-teal-700' },
   'ps-warm-up': { card: 'border-cyan-300 bg-cyan-50 text-cyan-800',      table: 'text-cyan-700' },
   'ps-mob':     { card: 'border-orange-300 bg-orange-50 text-orange-800', table: 'text-orange-700' },
