@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, ChevronDown, ChevronUp, Clock, Users, Pencil } from 'lucide-react'
+import { Zap, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
@@ -726,15 +726,14 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Kickers() {
   const { user, effectiveUser } = useAuth()
-  const { month } = useMonth()
+  const { month, setMonth } = useMonth()
 
-  const [kickers,   setKickers]   = useState([])
-  const [deals,     setDeals]     = useState([])
-  const [psSummary, setPsSummary] = useState(null)
-  const [loading,   setLoading]   = useState(true)
-  const [tab,        setTab]        = useState('active')
-  const [statusFilter, setStatusFilter] = useState('All') // oversight roles only
-  const [manMode,    setManMode]    = useState('forMe') // 'forMe' | 'forMyTeam' — Manager only
+  const [kickers,      setKickers]      = useState([])
+  const [deals,        setDeals]        = useState([])
+  const [psSummary,    setPsSummary]    = useState(null)
+  const [loading,      setLoading]      = useState(true)
+  const [roleFilter,   setRoleFilter]   = useState('All')   // 'All' | 'Agents' | 'Managers' | 'VHs'
+  const [statusFilter, setStatusFilter] = useState('All')   // oversight only
 
   const isManager      = effectiveUser?.role === 'Manager'
   const isPreSales     = effectiveUser?.role === 'PreSales'
@@ -802,20 +801,10 @@ export default function Kickers() {
 
   useEffect(() => { load() }, [load])
 
-  // For Manager: split into "For Me" (received) and "For My Team" (announced)
-  const forMeKickers     = isManager ? kickers.filter(isVisible) : []
-  const forMyTeamKickers = isManager ? kickers.filter(k => k.announcedBy === effectiveUser?.email) : []
+  // All kickers visible to this user (VH scoped via isVisible; Admin/SalesHead see all)
+  const allVisible = isFullOversight ? kickers : kickers.filter(isVisible)
 
-  // For oversight and non-manager roles: all visible kickers
-  // isFullOversight (Admin/SalesHead) bypasses filtering; VH goes through isVisible so they
-  // only see their own VH kickers (not other VHs'), while still seeing IC + Manager kickers.
-  const allVisible = isFullOversight
-    ? kickers
-    : isManager
-      ? (manMode === 'forMe' ? forMeKickers : forMyTeamKickers)
-      : kickers.filter(isVisible)
-
-  // Only show kickers whose date range overlaps the selected month
+  // Filter to kickers whose date range overlaps the selected month
   const monthStart = new Date(month + '-01')
   const monthEnd   = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59)
   const monthVisible = allVisible.filter(k => {
@@ -823,10 +812,19 @@ export default function Kickers() {
     return new Date(k.dateFrom) <= monthEnd && new Date(k.dateTo) >= monthStart
   })
 
-  const active    = monthVisible.filter(k => kickerIsActive(k) && !kickerIsPast(k)).sort((a, b) => b.pinned - a.pinned)
-  const past      = monthVisible.filter(k => kickerIsPast(k)).sort((a, b) => new Date(b.dateTo) - new Date(a.dateTo))
-  const baseList  = tab === 'active' ? active : past
-  const displayed = isOversight && statusFilter !== 'All' ? baseList.filter(k => k.status === statusFilter) : baseList
+  // Role category filter
+  function matchesRoleFilter(k) {
+    const roles = k.targetRoles || []
+    if (roleFilter === 'Agents')   return roles.includes('Agent') || roles.includes('PreSales')
+    if (roleFilter === 'Managers') return roles.includes('Manager') && !roles.includes('Agent') && !roles.includes('PreSales')
+    if (roleFilter === 'VHs')      return roles.includes('VH')
+    return true
+  }
+
+  const displayed = monthVisible
+    .filter(matchesRoleFilter)
+    .filter(k => isOversight && statusFilter !== 'All' ? k.status === statusFilter : true)
+    .sort((a, b) => new Date(b.dateFrom) - new Date(a.dateFrom))
 
   function dealsFor(k) {
     if (k.type?.startsWith('team_')) return deals
@@ -885,88 +883,69 @@ export default function Kickers() {
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
 
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
-          <Zap size={18} className="text-purple-600" />
+      {/* Header + month picker */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center">
+            <Zap size={18} className="text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Kickers</h2>
+            <p className="text-xs text-gray-400">Incentives announced for the month</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-base font-bold text-gray-900">My Kickers</h2>
-          <p className="text-xs text-gray-400">Your active incentives & bonus opportunities</p>
+        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+          <span className="text-[11px] text-gray-500 font-medium">Month</span>
+          <input
+            type="month"
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="text-xs bg-transparent border-0 focus:outline-none text-gray-800 font-semibold cursor-pointer"
+          />
         </div>
       </div>
 
-      {/* Manager mode toggle */}
-      {isManager && (
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit border">
-          <button onClick={() => { setManMode('forMe'); setTab('active') }}
-            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMe' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            <Zap size={13} className="text-purple-500" />
-            For Me ({forMeKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
+      {/* Role category filter */}
+      <div className="flex flex-wrap gap-1.5">
+        {['All', 'Agents', 'Managers', 'VHs'].map(f => (
+          <button key={f} onClick={() => setRoleFilter(f)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+              roleFilter === f ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+            }`}>
+            {f}
           </button>
-          <button onClick={() => { setManMode('forMyTeam'); setTab('active') }}
-            className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${manMode === 'forMyTeam' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            <Users size={13} className="text-brand-500" />
-            For My Team ({forMyTeamKickers.filter(k => kickerIsActive(k) && !kickerIsPast(k)).length} active)
-          </button>
-        </div>
-      )}
-
-      {/* Active/Past tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        <button onClick={() => setTab('active')}
-          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'active' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-          <Zap size={13} className="text-purple-500" />
-          Active ({active.length})
-        </button>
-        <button onClick={() => setTab('past')}
-          className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${tab === 'past' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-          <Clock size={13} />
-          Past ({past.length})
-        </button>
+        ))}
+        {/* Status filter — oversight roles only */}
+        {isOversight && (
+          <>
+            <span className="self-center text-gray-200 select-none">|</span>
+            {['Announced', 'Approved', 'Paid'].map(s => (
+              <button key={s} onClick={() => setStatusFilter(prev => prev === s ? 'All' : s)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                  statusFilter === s ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}>
+                {s}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
-      {/* Status filter — oversight roles only (Admin/SalesHead/VH) */}
-      {isOversight && (
-        <div className="flex gap-1.5">
-          {['All', 'Announced', 'Approved', 'Paid'].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-                statusFilter === s ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-              }`}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Hat Trick & PreSales always-on cards */}
+      <HatTrickCard
+        deals={deals.filter(d => d.Email === effectiveUser?.email)}
+        agentEmail={effectiveUser?.email}
+        agentName={effectiveUser?.name}
+        month={month}
+        tab="active"
+      />
+      {isPreSales && <PSCallsCard psSummary={psSummary} />}
 
-      {/* Hat Trick Kicker — always on Active; on Past only when achievements exist that month */}
-      {(!isManager || manMode === 'forMe') && (
-        <HatTrickCard
-          deals={deals.filter(d => d.Email === effectiveUser?.email)}
-          agentEmail={effectiveUser?.email}
-          agentName={effectiveUser?.name}
-          month={month}
-          tab={tab}
-        />
-      )}
-
-      {/* PreSales Calls + Sales slab card — shown for PreSales agents only */}
-      {tab === 'active' && isPreSales && (
-        <PSCallsCard psSummary={psSummary} />
-      )}
-
-      {/* Regular kicker cards */}
+      {/* Kicker cards */}
       {displayed.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 p-10 flex flex-col items-center gap-3 text-center">
           <Zap size={32} className="text-gray-200" />
-          <p className="text-sm font-semibold text-gray-400">
-            {tab === 'active'
-              ? isManager && manMode === 'forMyTeam'
-                ? 'No active kickers announced to your team yet.'
-                : 'No other active kickers right now. Stay tuned!'
-              : 'No past kickers to show.'}
-          </p>
+          <p className="text-sm font-semibold text-gray-400">No kickers for this month.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
