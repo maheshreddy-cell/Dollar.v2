@@ -307,7 +307,10 @@ export default function Metrics() {
           if (isSalesOrRev) {
             const tS = Number(slab.salesThreshold || 0)
             const tR = Number(slab.revenueThreshold || 0)
-            slabHit = (tS > 0 && stats.count >= tS) || (tR > 0 && stats.revenue >= tR)
+            const op = slab.operator === 'AND' ? 'AND' : 'OR'
+            slabHit = op === 'AND'
+              ? (tS > 0 ? stats.count >= tS : true) && (tR > 0 ? stats.revenue >= tR : true)
+              : (tS > 0 && stats.count >= tS) || (tR > 0 && stats.revenue >= tR)
           } else {
             const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
             slabHit = isRev ? stats.revenue >= t : stats.count >= t

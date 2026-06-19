@@ -364,7 +364,10 @@ function computeProgress(kicker, allDeals, myEmail) {
     if (isSalesOrRev) {
       const tS = Number(slab.salesThreshold || 0)
       const tR = Number(slab.revenueThreshold || 0)
-      hit = (tS > 0 && sales >= tS) || (tR > 0 && revenue >= tR)
+      const op = slab.operator === 'AND' ? 'AND' : 'OR'
+      hit = op === 'AND'
+        ? (tS > 0 ? sales >= tS : true) && (tR > 0 ? revenue >= tR : true)
+        : (tS > 0 && sales >= tS) || (tR > 0 && revenue >= tR)
     } else {
       const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
       hit = isRev ? revenue >= t : sales >= t
@@ -382,7 +385,8 @@ function slabLabel(slab, type) {
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 0)
     const tR = Number(slab.revenueThreshold || 0)
-    return `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)} → ${formatINR(Number(slab.payout))}`
+    const op = slab.operator === 'AND' ? 'AND' : 'OR'
+    return `${tS} sale${tS !== 1 ? 's' : ''} ${op} ${formatINR(tR)} → ${formatINR(Number(slab.payout))}`
   }
   const threshold = Number(slab.threshold || (t === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 0)
   if (t === 'revenue') return `${formatINR(threshold)} revenue → ${formatINR(Number(slab.payout))}`
@@ -409,10 +413,17 @@ function nudgeText(slab, type, progress) {
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 0)
     const tR = Number(slab.revenueThreshold || 0)
-    const gapS = tS > 0 ? tS - progress.sales   : Infinity
-    const gapR = tR > 0 ? tR - progress.revenue : Infinity
+    const op = slab.operator === 'AND' ? 'AND' : 'OR'
+    const gapS = tS > 0 ? tS - progress.sales   : 0
+    const gapR = tR > 0 ? tR - progress.revenue : 0
+    if (op === 'AND') {
+      const parts = []
+      if (gapS > 0) parts.push(`${gapS} more sale${gapS > 1 ? 's' : ''}`)
+      if (gapR > 0) parts.push(`${formatINR(gapR)} more revenue`)
+      if (!parts.length) return null
+      return `Need ${parts.join(' AND ')} to unlock ${formatINR(Number(slab.payout))}`
+    }
     if (gapS <= 0 || gapR <= 0) return null
-    // show whichever is closer (as a fraction of threshold)
     const pctS = tS > 0 ? progress.sales   / tS : 0
     const pctR = tR > 0 ? progress.revenue / tR : 0
     if (pctS >= pctR)
@@ -523,7 +534,10 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           if (isSalesOrRev) {
             const tS = Number(slab.salesThreshold || 0)
             const tR = Number(slab.revenueThreshold || 0)
-            slabHit = (tS > 0 && count >= tS) || (tR > 0 && revenue >= tR)
+            const op = slab.operator === 'AND' ? 'AND' : 'OR'
+            slabHit = op === 'AND'
+              ? (tS > 0 ? count >= tS : true) && (tR > 0 ? revenue >= tR : true)
+              : (tS > 0 && count >= tS) || (tR > 0 && revenue >= tR)
           } else {
             const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
             slabHit = isRev ? revenue >= t : count >= t
@@ -899,7 +913,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                 if (isSalesOrRev) {
                   const tS = Number(slab.salesThreshold || 0)
                   const tR = Number(slab.revenueThreshold || 0)
-                  label = `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)}`
+                  const op = slab.operator === 'AND' ? 'AND' : 'OR'
+                  label = `${tS} sale${tS !== 1 ? 's' : ''} ${op} ${formatINR(tR)}`
                 } else {
                   const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
                   label = isRev ? formatINR(t) : `${t} sale${t !== 1 ? 's' : ''}`

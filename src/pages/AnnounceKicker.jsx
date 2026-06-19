@@ -51,7 +51,7 @@ const ROLE_HIERARCHY = ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Admi
 
 const TODAY = new Date().toISOString().split('T')[0]
 
-const EMPTY_SLAB = { threshold: '', salesThreshold: '', revenueThreshold: '', payout: '' }
+const EMPTY_SLAB = { threshold: '', salesThreshold: '', revenueThreshold: '', payout: '', operator: 'OR' }
 function emptySlabs() { return [{ ...EMPTY_SLAB }, { ...EMPTY_SLAB }] }
 
 function flatTree(node, acc = []) {
@@ -466,9 +466,10 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
               const nt = normalizeType(kicker.type)
               let desc
               if (nt === 'sales_or_revenue') {
-                const tS = Number(s.salesThreshold || 0)
-                const tR = Number(s.revenueThreshold || 0)
-                desc = `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)} → ${formatINR(Number(s.payout))}`
+                const tS  = Number(s.salesThreshold || 0)
+                const tR  = Number(s.revenueThreshold || 0)
+                const op  = s.operator === 'AND' ? 'AND' : 'OR'
+                desc = `${tS} sale${tS !== 1 ? 's' : ''} ${op} ${formatINR(tR)} → ${formatINR(Number(s.payout))}`
               } else if (nt === 'revenue') {
                 desc = `${formatINR(Number(s.threshold || s.revenueThreshold || 0))} → ${formatINR(Number(s.payout))}`
               } else {
@@ -758,6 +759,7 @@ export default function AnnounceKicker() {
       salesThreshold:   Number(s.salesThreshold   || 0),
       revenueThreshold: Number(s.revenueThreshold || 0),
       payout:           Number(s.payout           || 0),
+      operator:         s.operator === 'AND' ? 'AND' : 'OR',
     }))
 
     // Parse "email,amount" lines into an { email: amount } override map
@@ -1154,6 +1156,7 @@ export default function AnnounceKicker() {
                     {form.type === 'sales_or_revenue' ? (
                       <>
                         <th className="px-3 py-2 text-left">Sales Count</th>
+                        <th className="px-2 py-2 text-center w-16">AND/OR</th>
                         <th className="px-3 py-2 text-left">Revenue (₹)</th>
                       </>
                     ) : (
@@ -1175,6 +1178,19 @@ export default function AnnounceKicker() {
                             <input type="number" value={s.salesThreshold} onChange={e => setSlab(i, 'salesThreshold', e.target.value)}
                               placeholder="e.g. 3"
                               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setSlab(i, 'operator', s.operator === 'AND' ? 'OR' : 'AND')}
+                              className={`px-2 py-1 rounded-full text-[10px] font-bold border transition-colors ${
+                                s.operator === 'AND'
+                                  ? 'bg-orange-100 text-orange-700 border-orange-300'
+                                  : 'bg-blue-100 text-blue-700 border-blue-300'
+                              }`}
+                            >
+                              {s.operator === 'AND' ? 'AND' : 'OR'}
+                            </button>
                           </td>
                           <td className="px-2 py-2">
                             <input type="number" value={s.revenueThreshold} onChange={e => setSlab(i, 'revenueThreshold', e.target.value)}
