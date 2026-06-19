@@ -43,6 +43,19 @@ export const AGENT_TARGET_PRESETS = [
       { targetAmount: 1550000, commissionPct: 6   },
     ],
   },
+  {
+    id: 'genai',
+    label: 'GenAI',
+    description: 'GenAI Team commission rates',
+    slabs: [
+      { targetAmount: 600000,  commissionPct: 0.5 },
+      { targetAmount: 700000,  commissionPct: 1   },
+      { targetAmount: 800000,  commissionPct: 2   },
+      { targetAmount: 900000,  commissionPct: 3   },
+      { targetAmount: 1100000, commissionPct: 4   },
+      { targetAmount: 1300000, commissionPct: 6   },
+    ],
+  },
 ]
 
 // Pre-Sales specific presets — 3-phase ramp-up journey.
