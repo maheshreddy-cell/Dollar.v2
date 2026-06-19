@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getTargets, getDeals, getKickers } from '../services/api'
+import { getTargets, getDeals, getKickers, calcTieredCommission } from '../services/api'
 import SlabDisplay from '../components/SlabDisplay'
 import DaysLeftBadge from '../components/DaysLeftBadge'
-import { formatINR, calculateCommission, getAchievementPct } from '../utils/commission'
+import { formatINR, getAchievementPct } from '../utils/commission'
 import { AGENT_TARGET_PRESETS } from '../utils/targetPresets'
 import { Target, Calendar, Award, Zap } from 'lucide-react'
 
@@ -124,7 +124,7 @@ export default function MyTargets() {
   }))
 
   const commissionPct = target.CommissionPct ?? target.commissionPct ?? 0
-  const commissionEarned = calculateCommission(clearedAmount, commissionPct)
+  const commissionEarned = calcTieredCommission(clearedAmount, target)
 
   // Resolve preset label ("Pro Tier") when CommissionPct is a preset ID
   const presetMatch = AGENT_TARGET_PRESETS.find(

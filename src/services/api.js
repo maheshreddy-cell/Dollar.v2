@@ -1154,7 +1154,7 @@ function getSlabInfo(achieved, target) {
   }
 }
 
-function calcTieredCommission(achieved, target) {
+export function calcTieredCommission(achieved, target) {
   if (!achieved || achieved <= 0) return 0
 
   // 1. Check if CommissionPct is a preset ID ("basic","average","pro")
