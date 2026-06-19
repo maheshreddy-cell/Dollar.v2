@@ -92,7 +92,7 @@ class PageErrorBoundary extends Component {
 
 function AppLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-ios-bg">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--t-bg)' }}>
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />

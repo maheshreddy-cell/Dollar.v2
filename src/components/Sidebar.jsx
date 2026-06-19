@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { ROLE_COLORS } from '../utils/roles'
 import { getUnreadCount } from '../services/notifications'
 
@@ -67,6 +68,8 @@ const NAV_BASE = [
 export default function Sidebar() {
   const { user, effectiveUser, isRole } = useAuth()
   const { can } = usePermissions()
+  const { theme } = useTheme()
+  const isDark = theme === 'dark' || theme === 'ocean'
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
 
   const [unread, setUnread] = useState(0)
@@ -124,7 +127,9 @@ export default function Sidebar() {
                       `flex items-center gap-3 px-3 py-2 rounded-xl text-[13.5px] font-medium transition-all duration-150 ${
                         isActive
                           ? 'bg-brand-50 text-brand-600'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          : isDark
+                            ? 'text-[--t-text-2] hover:bg-[--t-surface-2]'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                       }`
                     }
                   >
@@ -132,16 +137,20 @@ export default function Sidebar() {
                       <>
                         <span
                           className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150 ${isActive ? 'bg-brand-500 shadow-sm' : ''}`}
-                          style={isActive ? {} : { backgroundColor: color[0] }}
+                          style={isActive ? {} : isDark
+                            ? { backgroundColor: 'var(--t-surface-3)' }
+                            : { backgroundColor: color[0] }}
                         >
                           <Icon
                             size={14}
                             strokeWidth={2}
                             className={isActive ? 'text-white' : ''}
-                            style={isActive ? {} : { color: color[1] }}
+                            style={isActive ? {} : isDark
+                              ? { color: 'var(--t-brand)' }
+                              : { color: color[1] }}
                           />
                         </span>
-                        <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : 'text-gray-700'}`}>
+                        <span className={`flex-1 ${isActive ? 'text-brand-600 font-semibold' : isDark ? 'text-[--t-text-2]' : 'text-gray-700'}`}>
                           {label}
                         </span>
                         {showBadge && unread > 0 && (

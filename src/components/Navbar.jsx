@@ -3,9 +3,40 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Eye, X, Bell } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { getAllUsers } from '../services/api'
 import { getUnreadCount } from '../services/notifications'
 import { useNotificationSound } from '../hooks/useNotificationSound'
+
+const THEME_OPTIONS = [
+  {
+    id: 'light',
+    label: 'Light',
+    icon: '☀️',
+    tip: 'Light theme',
+    ring: 'ring-gray-300',
+    bg: 'bg-[#F2F2F7]',
+    dot: 'bg-white border border-gray-300',
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    icon: '🌙',
+    tip: 'Dark theme',
+    ring: 'ring-slate-600',
+    bg: 'bg-[#1E293B]',
+    dot: 'bg-[#0F172A] border border-slate-600',
+  },
+  {
+    id: 'ocean',
+    label: 'Ocean',
+    icon: '🌊',
+    tip: 'Ocean theme',
+    ring: 'ring-cyan-500',
+    bg: 'bg-[#0A2040]',
+    dot: 'bg-[#051525] border border-cyan-700',
+  },
+]
 
 const PAGE_TITLES = {
   '/dashboard':        'Dashboard',
@@ -51,6 +82,7 @@ export default function Navbar() {
   // Sound plays ONLY when a new notification arrives (unreadCount goes up)
   useNotificationSound(unreadCount)
 
+  const { theme, setTheme } = useTheme()
   const title = PAGE_TITLES[location.pathname] ?? 'Dollar.v2'
 
   return (
@@ -91,6 +123,24 @@ export default function Navbar() {
               onChange={e => setMonth(e.target.value)}
               className="text-[12px] bg-transparent border-0 focus:outline-none text-gray-800 font-medium cursor-pointer"
             />
+          </div>
+
+          {/* Theme picker */}
+          <div className="flex items-center gap-1 bg-ios-gray6 rounded-full px-1.5 py-1">
+            {THEME_OPTIONS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                title={t.tip}
+                className={`relative w-7 h-7 rounded-full flex items-center justify-center text-[13px] transition-all duration-200 ${
+                  theme === t.id
+                    ? `${t.bg} ring-2 ${t.ring} ring-offset-1 scale-110 shadow-md`
+                    : 'hover:scale-105 opacity-60 hover:opacity-90'
+                }`}
+              >
+                {t.icon}
+              </button>
+            ))}
           </div>
 
           {/* Notifications bell */}
