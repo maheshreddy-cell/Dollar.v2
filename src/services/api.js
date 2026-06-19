@@ -1343,9 +1343,9 @@ export function calcManagerCommissionInfo(teamMetric, slabs) {
   if (activeSlab) {
     return { commission: teamMetric * Number(activeSlab.commissionPct) / 100, isPartial: false, activeSlab, nextSlab, gapToNext, slabIdx }
   }
-  // Below slab 1 — show proportional preview at slab 1 rate (provisional)
+  // Below slab 1 — no commission until first threshold is hit
   const s0 = sorted[0]
-  return { commission: teamMetric * Number(s0.commissionPct) / 100, isPartial: true, activeSlab: null, nextSlab: s0, gapToNext, slabIdx: -1 }
+  return { commission: 0, isPartial: true, activeSlab: null, nextSlab: s0, gapToNext, slabIdx: -1 }
 }
 
 export function calcManagerCommission(teamMetric, slabs) {

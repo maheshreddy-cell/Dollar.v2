@@ -129,18 +129,13 @@ function SlabTable({ slabs, teamMetric, accentColor = 'blue' }) {
 
       {/* Commission footer */}
       <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${
-        info.isPartial ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'
+        info.isPartial ? 'bg-gray-50 border-gray-200' : 'bg-green-50 border-green-200'
       }`}>
         <div>
           {info.isPartial ? (
-            <>
-              <p className="text-xs font-semibold text-amber-700">
-                Provisional · {Number(info.nextSlab?.commissionPct)}% rate applied
-              </p>
-              <p className="text-xs text-amber-600 mt-0.5">
-                {formatINR(info.gapToNext)} more to lock in Slab 1
-              </p>
-            </>
+            <p className="text-xs text-gray-500">
+              {formatINR(info.gapToNext)} more to reach Slab 1
+            </p>
           ) : (
             <>
               <p className="text-xs font-semibold text-green-700">
@@ -155,12 +150,9 @@ function SlabTable({ slabs, teamMetric, accentColor = 'blue' }) {
           )}
         </div>
         <div className="text-right">
-          <p className={`text-xl font-bold ${info.isPartial ? 'text-amber-600' : 'text-green-700'}`}>
+          <p className={`text-xl font-bold ${info.isPartial ? 'text-gray-400' : 'text-green-700'}`}>
             {formatINR(info.commission)}
           </p>
-          {info.isPartial && (
-            <p className="text-[9px] text-amber-500 uppercase tracking-wide font-semibold">provisional</p>
-          )}
         </div>
       </div>
     </div>
@@ -186,7 +178,7 @@ function IntelligenceRow({ projSlabs, realSlabs, teamSaleValue, teamAchieved, wd
       rows: [
         { label: 'Daily rate',   value: formatINR(projRate),                  color: 'text-gray-800' },
         { label: 'Proj. month-end', value: formatINR(projRate * (elapsed + remaining)), color: projRate * (elapsed + remaining) >= projNext ? 'text-green-600' : 'text-orange-500' },
-        { label: 'Commission',   value: formatINR(projInfo.commission),        color: projInfo.isPartial ? 'text-amber-600' : 'text-green-700' },
+        { label: 'Commission',   value: formatINR(projInfo.commission),        color: projInfo.isPartial ? 'text-gray-400' : 'text-green-700' },
         { label: projInfo.isPartial ? 'Gap to Slab 1' : 'Gap to next slab', value: projInfo.gapToNext > 0 ? formatINR(projInfo.gapToNext) : '—', color: 'text-gray-600' },
       ],
     },
@@ -199,21 +191,21 @@ function IntelligenceRow({ projSlabs, realSlabs, teamSaleValue, teamAchieved, wd
       rows: [
         { label: 'Daily rate',   value: formatINR(realRate),                  color: 'text-gray-800' },
         { label: 'Proj. month-end', value: formatINR(realRate * (elapsed + remaining)), color: realRate * (elapsed + remaining) >= realNext ? 'text-green-600' : 'text-orange-500' },
-        { label: 'Commission',   value: formatINR(realInfo.commission),        color: realInfo.isPartial ? 'text-amber-600' : 'text-green-700' },
+        { label: 'Commission',   value: formatINR(realInfo.commission),        color: realInfo.isPartial ? 'text-gray-400' : 'text-green-700' },
         { label: realInfo.isPartial ? 'Gap to Slab 1' : 'Gap to next slab', value: realInfo.gapToNext > 0 ? formatINR(realInfo.gapToNext) : '—', color: 'text-gray-600' },
       ],
     },
     {
       key: 'total',
-      icon: <TrendingUp size={15} className={totalIsPartial ? 'text-amber-500' : 'text-purple-500'} />,
+      icon: <TrendingUp size={15} className="text-purple-500" />,
       label: 'Total Commission',
-      bg: totalIsPartial ? 'bg-amber-50 border-amber-100' : 'bg-purple-50 border-purple-100',
-      labelColor: totalIsPartial ? 'text-amber-700' : 'text-purple-700',
+      bg: 'bg-purple-50 border-purple-100',
+      labelColor: 'text-purple-700',
       rows: [
-        { label: 'Projected',    value: `${formatINR(projInfo.commission)}${projInfo.isPartial ? ' est.' : ''}`, color: projInfo.isPartial ? 'text-amber-600' : 'text-green-700' },
-        { label: 'Realised',     value: `${formatINR(realInfo.commission)}${realInfo.isPartial ? ' est.' : ''}`, color: realInfo.isPartial ? 'text-amber-600' : 'text-green-700' },
-        { label: 'Combined',     value: formatINR(totalCommission),            color: totalIsPartial ? 'text-amber-700 font-extrabold' : 'text-purple-700 font-extrabold' },
-        { label: totalIsPartial ? 'Status' : 'Status', value: totalIsPartial ? 'provisional' : 'confirmed', color: totalIsPartial ? 'text-amber-500' : 'text-green-600' },
+        { label: 'Projected',    value: formatINR(projInfo.commission), color: projInfo.isPartial ? 'text-gray-400' : 'text-green-700' },
+        { label: 'Realised',     value: formatINR(realInfo.commission), color: realInfo.isPartial ? 'text-gray-400' : 'text-green-700' },
+        { label: 'Combined',     value: formatINR(totalCommission),     color: 'text-purple-700 font-extrabold' },
+        { label: 'Gap to Slab 1', value: realInfo.gapToNext > 0 ? formatINR(realInfo.gapToNext) : '—', color: 'text-gray-600' },
       ],
     },
     {
@@ -430,10 +422,10 @@ export default function ManagerTargets() {
           </div>
           <div className="text-center">
             <p className="text-xs text-gray-400 mb-1">Commission</p>
-            <p className={`text-lg font-bold ${totalIsPartial ? 'text-amber-600' : 'text-purple-700'}`}>
+            <p className={`text-lg font-bold ${totalIsPartial ? 'text-gray-400' : 'text-purple-700'}`}>
               {formatINR(totalCommission)}
             </p>
-            <p className="text-[10px] text-gray-400">{totalIsPartial ? 'provisional estimate' : 'Proj + Realised'}</p>
+            <p className="text-[10px] text-gray-400">{totalIsPartial ? 'below first slab' : 'Proj + Realised'}</p>
           </div>
           <div className="text-center">
             <p className="text-xs text-gray-400 mb-1">Kicker Earnings</p>
@@ -445,7 +437,7 @@ export default function ManagerTargets() {
         {/* Total Money Made strip */}
         <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4 flex-wrap text-sm text-gray-500">
-            <span>Commission <span className={`font-semibold ${totalIsPartial ? 'text-amber-600' : 'text-purple-700'}`}>{formatINR(totalCommission)}</span></span>
+            <span>Commission <span className={`font-semibold ${totalIsPartial ? 'text-gray-400' : 'text-purple-700'}`}>{formatINR(totalCommission)}</span></span>
             <span className="text-gray-300">+</span>
             <span>Kickers <span className={`font-semibold ${kickerEarnings > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>{formatINR(kickerEarnings)}</span></span>
           </div>
@@ -554,7 +546,6 @@ export default function ManagerTargets() {
               {tComm > 0 && (
                 <span className="ml-auto text-xs font-bold text-gray-700">
                   Commission: {formatINR(tComm)}
-                  {tPartial && <span className="text-amber-500 font-normal"> est.</span>}
                 </span>
               )}
             </div>
