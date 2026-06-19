@@ -248,24 +248,7 @@ export default function Metrics() {
       .finally(() => setLoading(false))
   }, [month, user?.email, tick])
 
-  // ── Loading / error states ──────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
-      </div>
-    )
-  }
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
-    )
-  }
-
-  // ── Kicker earnings per agent ─────────────────────────────────────────────────
-  // For each IC kicker overlapping the selected month, compute which agents earned.
+  // ── Kicker earnings per agent (must be before early returns — Rules of Hooks) ──
   const kickersByAgent = useMemo(() => {
     if (!kickers.length || !deals.length) return {}
     const monthStart = new Date(month + '-01')
@@ -327,6 +310,22 @@ export default function Metrics() {
     }
     return map
   }, [kickers, deals, month])
+
+  // ── Loading / error states ──────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+        {error}
+      </div>
+    )
+  }
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const achievedPct  = summary ? getAchievementPct(summary.totalTarget, summary.totalAchieved) : 0
