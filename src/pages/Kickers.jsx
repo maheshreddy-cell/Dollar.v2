@@ -1152,9 +1152,14 @@ export default function Kickers() {
         </div>
       </div>
 
-      {/* Role category filter */}
+      {/* Role category filter — scope options to what the viewer can actually see */}
       <div className="flex flex-wrap gap-1.5">
-        {['All', 'Agents', 'Managers', 'VHs'].map(f => (
+        {(isOversight
+          ? ['All', 'Agents', 'Managers', 'VHs']
+          : isManager
+            ? ['All', 'Agents', 'Managers']
+            : ['All', 'Agents']
+        ).map(f => (
           <button key={f} onClick={() => setRoleFilter(f)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
               roleFilter === f ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
