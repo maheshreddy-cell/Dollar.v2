@@ -394,7 +394,12 @@ function nudgeText(slab, type, progress) {
 function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight, teamMap }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
-  const [showContributors, setShowContributors] = useState(false)
+  // Auto-expand for manager kickers in oversight so team stats are immediately visible
+  const isInitiallyExpanded = isOversight &&
+    (kicker.targetRoles || []).includes('Manager') &&
+    !(kicker.targetRoles || []).includes('Agent') &&
+    !(kicker.targetRoles || []).includes('PreSales')
+  const [showContributors, setShowContributors] = useState(isInitiallyExpanded)
 
   const active    = kickerIsActive(kicker)
   const past      = kickerIsPast(kicker)
@@ -707,39 +712,63 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                     </>
                   ) : (
                     <>
-                      {(isSales || isTeam) && (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                          <p className="text-xl font-black text-indigo-700">{isOversight ? (managerEarners ?? agentEarners).length : progress.sales}</p>
-                          <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Active' : 'Your'} {isOversight ? '' : 'Sales'}</p>
-                        </div>
-                      )}
-                      {isRev && !isOversight && (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
-                          <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
-                          <p className="text-[10px] text-teal-500 font-semibold">Your Revenue</p>
-                        </div>
-                      )}
-                      {isOversight ? (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                          <p className="text-xl font-black text-green-700">{(managerEarners ?? agentEarners).filter(a => a.hit).length}</p>
-                          <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
-                        </div>
-                      ) : progress.activeSlab ? (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                          <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                          <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
-                        </div>
+                      {isOversight && managerEarners ? (
+                        /* Oversight on manager kicker: show aggregate team sales + revenue + slab hits */
+                        <>
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                            <p className="text-xl font-black text-indigo-700">{managerEarners.reduce((s, a) => s + a.count, 0)}</p>
+                            <p className="text-[10px] text-indigo-500 font-semibold">Team Sales</p>
+                          </div>
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                            <p className="text-sm font-black text-teal-700">{formatINR(managerEarners.reduce((s, a) => s + a.revenue, 0))}</p>
+                            <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
+                          </div>
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                            <p className="text-xl font-black text-green-700">{managerEarners.filter(a => a.hit).length}</p>
+                            <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
+                          </div>
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                            <p className="text-sm font-black text-purple-700">{formatINR(managerEarners.reduce((s, a) => s + a.payout, 0))}</p>
+                            <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
+                          </div>
+                        </>
                       ) : (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
-                          <p className="text-sm font-black text-gray-400">—</p>
-                          <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
-                        </div>
-                      )}
-                      {isOversight && (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
-                          <p className="text-sm font-black text-purple-700">{formatINR((managerEarners ?? agentEarners).reduce((s, a) => s + a.payout, 0))}</p>
-                          <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
-                        </div>
+                        <>
+                          {(isSales || isTeam) && (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                              <p className="text-xl font-black text-indigo-700">{isOversight ? agentEarners.length : progress.sales}</p>
+                              <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Active' : 'Your'}{isOversight ? '' : ' Sales'}</p>
+                            </div>
+                          )}
+                          {isRev && !isOversight && (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                              <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                              <p className="text-[10px] text-teal-500 font-semibold">Your Revenue</p>
+                            </div>
+                          )}
+                          {isOversight ? (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                              <p className="text-xl font-black text-green-700">{agentEarners.filter(a => a.hit).length}</p>
+                              <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
+                            </div>
+                          ) : progress.activeSlab ? (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                              <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                              <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                            </div>
+                          ) : (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                              <p className="text-sm font-black text-gray-400">—</p>
+                              <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                            </div>
+                          )}
+                          {isOversight && (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                              <p className="text-sm font-black text-purple-700">{formatINR(agentEarners.reduce((s, a) => s + a.payout, 0))}</p>
+                              <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}
@@ -773,14 +802,19 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                             <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
                               a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
                             }`}>
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-400 font-mono w-4 text-right">{i + 1}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-gray-400 font-mono w-4 text-right shrink-0">{i + 1}</span>
                                 <span className={`font-semibold ${a.hit ? 'text-green-700' : 'text-gray-600'}`}>{a.displayName}</span>
-                                <span className="text-gray-400">
-                                  {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
-                                </span>
+                                {isTeamList ? (
+                                  /* Manager kicker: always show both count + revenue */
+                                  <span className="text-gray-400">{a.count} deal{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
+                                ) : (
+                                  <span className="text-gray-400">
+                                    {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
+                                  </span>
+                                )}
                               </div>
-                              <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                              <span className={`font-bold shrink-0 ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
                                 {a.hit ? formatINR(a.payout) : '—'}
                               </span>
                             </div>
