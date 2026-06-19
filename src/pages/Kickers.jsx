@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals, getAllUsers, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { formatINR } from '../utils/commission'
+import { useRefresh } from '../hooks/useRefresh'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
 function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
@@ -927,6 +928,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
 export default function Kickers() {
   const { user, effectiveUser } = useAuth()
   const { month, setMonth } = useMonth()
+  const tick = useRefresh()
 
   const [kickers,      setKickers]      = useState([])
   const [deals,        setDeals]        = useState([])
@@ -999,7 +1001,7 @@ export default function Kickers() {
       if (psData) setPsSummary(psData)
     } catch { /* show empty */ }
     finally { setLoading(false) }
-  }, [effectiveUser?.email, effectiveUser?.role, month])
+  }, [effectiveUser?.email, effectiveUser?.role, month, tick])
 
   useEffect(() => { load() }, [load])
 
