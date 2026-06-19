@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, Component } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -66,6 +66,30 @@ function PageLoader() {
   )
 }
 
+class PageErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 max-w-md w-full">
+            <p className="text-sm font-semibold text-red-700 mb-1">Something went wrong on this page</p>
+            <p className="text-xs text-red-500 font-mono break-all">{this.state.error?.message}</p>
+            <button
+              className="mt-3 text-xs text-red-600 underline"
+              onClick={() => this.setState({ error: null })}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-ios-bg">
@@ -73,9 +97,11 @@ function AppLayout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
         <main className="flex-1 overflow-y-auto p-6">
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
+          <PageErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Outlet />
+            </Suspense>
+          </PageErrorBoundary>
         </main>
       </div>
     </div>
