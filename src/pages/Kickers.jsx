@@ -805,21 +805,24 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                         <div className="mt-2 space-y-1">
                           {earners.filter(a => isOversight || isTeamList || a.hit).map((a, i) => (
                             <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
-                              a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                              a.hit
+                                ? 'bg-green-50 border border-green-100'
+                                : isTeamList
+                                  ? 'bg-red-50 border border-red-100'
+                                  : 'bg-gray-50 border border-gray-100'
                             }`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-gray-400 font-mono w-4 text-right shrink-0">{i + 1}</span>
-                                <span className={`font-semibold ${a.hit ? 'text-green-700' : 'text-gray-600'}`}>{a.displayName}</span>
+                                <span className={`font-semibold ${a.hit ? 'text-green-700' : isTeamList ? 'text-red-600' : 'text-gray-600'}`}>{a.displayName}</span>
                                 {isTeamList ? (
-                                  /* Manager kicker: always show both count + revenue */
-                                  <span className="text-gray-400">{a.count} deal{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
+                                  <span className={a.hit ? 'text-green-600' : 'text-red-400'}>{a.count} deal{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
                                 ) : (
                                   <span className="text-gray-400">
                                     {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
                                   </span>
                                 )}
                               </div>
-                              <span className={`font-bold shrink-0 ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                              <span className={`font-bold shrink-0 ${a.hit ? 'text-green-700' : isTeamList ? 'text-red-400' : 'text-gray-400'}`}>
                                 {a.hit ? formatINR(a.payout) : '—'}
                               </span>
                             </div>
