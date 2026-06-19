@@ -991,10 +991,13 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
       if (hit) earnedSlab = slab
     }
     if (earnedSlab) {
-      // Collective: payout is per contributing sale (agentContrib × slabPayout)
-      total += type === 'collective'
-        ? agentContrib * Number(earnedSlab.payout || 0)
-        : Number(earnedSlab.payout || 0)
+      if (type === 'collective') {
+        total += k.collectiveMode === 'per_agent'
+          ? (agentContrib > 0 ? Number(earnedSlab.payout || 0) : 0)
+          : agentContrib * Number(earnedSlab.payout || 0)
+      } else {
+        total += Number(earnedSlab.payout || 0)
+      }
     }
   }
   return total
@@ -1367,16 +1370,18 @@ function unpackSlabsCol(raw) {
     paidDate:          parsed.paidDate          || '',
     notes:             parsed.notes             || '',
     individualAmounts: parsed.individualAmounts || {},
+    collectiveMode:    parsed.collectiveMode    || 'per_sale',
   }
 }
 
-export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts }) {
+export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts, collectiveMode }) {
   return JSON.stringify({
     slabs:             slabs || [],
     status:            status || 'Announced',
     paidDate:          paidDate || '',
     notes:             notes || '',
     individualAmounts: individualAmounts || {},
+    collectiveMode:    collectiveMode || 'per_sale',
   })
 }
 
@@ -1396,6 +1401,7 @@ function parseKickerRow(r) {
     paidDate:          extra.paidDate,
     notes:             extra.notes,
     individualAmounts: extra.individualAmounts,  // { email: customAmount }
+    collectiveMode:    extra.collectiveMode,     // 'per_sale' | 'per_agent'
     targetTeams:       safeArr('TargetTeams'),
     targetRoles:       safeArr('TargetRoles'),
     pinned:            r.Pinned === 'true' || r.Pinned === true,
@@ -1427,6 +1433,7 @@ export async function announceKicker(data, announcerEmail, announcerRole) {
       status: data.status || 'Announced',
       notes: data.notes || '',
       individualAmounts: data.individualAmounts || {},
+      collectiveMode: data.collectiveMode || 'per_sale',
     }),
     JSON.stringify(data.targetTeams || ['ALL']),
     JSON.stringify(data.targetRoles || []),

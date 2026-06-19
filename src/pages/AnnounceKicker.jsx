@@ -536,6 +536,7 @@ export default function AnnounceKicker() {
     targetTeams: ['ALL'], targetRoles: [],
     pinned: false, slabs: emptySlabs(),
     status: 'Announced', paidDate: '', notes: '', individualOverridesText: '',
+    collectiveMode: 'per_sale',
   }
 
   const [form,        setForm]        = useState(BLANK_FORM)
@@ -724,6 +725,7 @@ export default function AnnounceKicker() {
       paidDate:     kicker.paidDate || '',
       notes:        kicker.notes || '',
       individualOverridesText: Object.entries(kicker.individualAmounts || {}).map(([e, a]) => `${e},${a}`).join('\n'),
+      collectiveMode: kicker.collectiveMode || 'per_sale',
     })
     setEditingId(kicker.id)
     setError('')
@@ -778,7 +780,7 @@ export default function AnnounceKicker() {
           MinSaleValue:Number(form.minSaleValue || 0),
           DateFrom:    form.dateFrom,
           DateTo:      form.dateTo,
-          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts }),
+          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts, collectiveMode: form.collectiveMode }),
           TargetTeams: JSON.stringify(form.targetTeams || ['ALL']),
           TargetRoles: JSON.stringify(form.targetRoles || []),
           Pinned:      form.pinned ? 'true' : 'false',
@@ -971,6 +973,33 @@ export default function AnnounceKicker() {
               ))}
             </div>
           </div>
+
+          {/* Collective payout mode — only shown when collective is selected */}
+          {form.type === 'collective' && (
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">How is the payout calculated? *</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setField('collectiveMode', 'per_sale')}
+                  className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                    form.collectiveMode === 'per_sale'
+                      ? 'border-brand-400 bg-brand-50 text-brand-800 font-semibold'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  <p className="font-semibold">💰 Per Sale</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Agent earns payout × number of sales they contributed (3 sales = 3× payout)</p>
+                </button>
+                <button type="button" onClick={() => setField('collectiveMode', 'per_agent')}
+                  className={`text-left px-3 py-2.5 rounded-xl border text-xs transition-all ${
+                    form.collectiveMode === 'per_agent'
+                      ? 'border-brand-400 bg-brand-50 text-brand-800 font-semibold'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}>
+                  <p className="font-semibold">🧑 Per Agent</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Every contributing agent gets 1× payout, regardless of how many sales they made</p>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Min sale value — required */}
           <div>
