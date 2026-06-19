@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users, ClipboardCheck, BadgeCheck } from 'lucide-react'
+import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users, ClipboardCheck, BadgeCheck, Plus, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { announceKicker, getKickers, updateKicker, setKickerStatus, deleteKicker, getSubtree, getDeals, packSlabsCol } from '../services/api'
 import { formatINR } from '../utils/commission'
@@ -50,7 +50,7 @@ const ROLE_HIERARCHY = ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Admi
 const TODAY = new Date().toISOString().split('T')[0]
 
 const EMPTY_SLAB = { threshold: '', salesThreshold: '', revenueThreshold: '', payout: '' }
-function emptySlabs() { return [{ ...EMPTY_SLAB }, { ...EMPTY_SLAB }, { ...EMPTY_SLAB }, { ...EMPTY_SLAB }] }
+function emptySlabs() { return [{ ...EMPTY_SLAB }, { ...EMPTY_SLAB }] }
 
 function flatTree(node, acc = []) {
   if (!node) return acc
@@ -685,11 +685,15 @@ export default function AnnounceKicker() {
   function setSlab(i, field, val) {
     setForm(p => ({ ...p, slabs: p.slabs.map((s, idx) => idx === i ? { ...s, [field]: val } : s) }))
   }
+  function addSlab() {
+    setForm(p => ({ ...p, slabs: [...p.slabs, { ...EMPTY_SLAB }] }))
+  }
+  function removeSlab(i) {
+    setForm(p => ({ ...p, slabs: p.slabs.filter((_, idx) => idx !== i) }))
+  }
 
   function handleEdit(kicker) {
-    // Pad slabs to 4 rows
-    const padded = [...kicker.slabs]
-    while (padded.length < 4) padded.push({ ...EMPTY_SLAB })
+    const padded = [...(kicker.slabs || []).filter(s => s.payout !== '' && Number(s.payout) > 0), { ...EMPTY_SLAB }]
     setForm({
       title:        kicker.title,
       message:      kicker.message,
@@ -1127,7 +1131,7 @@ export default function AnnounceKicker() {
 
           {/* Slabs */}
           <div>
-            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs (up to 4)</label>
+            <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs</label>
             <div className="rounded-xl overflow-hidden border border-gray-200">
               <table className="w-full text-xs">
                 <thead>
@@ -1137,6 +1141,7 @@ export default function AnnounceKicker() {
                       {typeInfo.unit === 'revenue' ? 'Revenue (₹)' : form.type === 'collective' ? 'Combined Team Sales' : 'Sales Count'}
                     </th>
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
+                    <th className="w-8" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1154,10 +1159,24 @@ export default function AnnounceKicker() {
                           placeholder="e.g. 1000" className="w-full border border-green-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />
                         {s.payout && <p className="text-[10px] text-green-600 mt-0.5 font-semibold">{formatINR(Number(s.payout))}</p>}
                       </td>
+                      <td className="px-2 py-2 text-right">
+                        {form.slabs.length > 1 && (
+                          <button type="button" onClick={() => removeSlab(i)}
+                            className="p-1 text-gray-300 hover:text-red-400 transition-colors rounded">
+                            <X size={13} />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <div className="border-t border-gray-100">
+                <button type="button" onClick={addSlab}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-brand-600 hover:bg-brand-50 transition-colors">
+                  <Plus size={13} /> Add Slab
+                </button>
+              </div>
             </div>
           </div>
 
