@@ -279,7 +279,8 @@ export default function Metrics() {
       const kTo   = new Date(k.dateTo); kTo.setHours(23, 59, 59)
       if (kFrom > monthEnd || kTo < monthStart) continue
 
-      const isRev  = (k.type === 'revenue' || k.type === 'team_revenue' || k.type === 'individual_revenue')
+      const isRev        = (k.type === 'revenue' || k.type === 'team_revenue' || k.type === 'individual_revenue')
+      const isSalesOrRev = k.type === 'sales_or_revenue'
       const minVal = Number(k.minSaleValue || 0)
       const slabs  = [...(k.slabs || [])].filter(s => Number(s.payout) > 0)
         .sort((a, b) => Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0) -
@@ -302,8 +303,16 @@ export default function Metrics() {
       for (const [email, stats] of Object.entries(byAgent)) {
         let hitSlab = null
         for (const slab of slabs) {
-          const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
-          if (isRev ? stats.revenue >= t : stats.count >= t) hitSlab = slab
+          let slabHit
+          if (isSalesOrRev) {
+            const tS = Number(slab.salesThreshold || 0)
+            const tR = Number(slab.revenueThreshold || 0)
+            slabHit = (tS > 0 && stats.count >= tS) || (tR > 0 && stats.revenue >= tR)
+          } else {
+            const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+            slabHit = isRev ? stats.revenue >= t : stats.count >= t
+          }
+          if (slabHit) hitSlab = slab
         }
         const override = (k.individualAmounts || {})[email]
         const payout   = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)

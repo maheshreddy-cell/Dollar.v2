@@ -24,14 +24,16 @@ const REVIEW_KEY = 'dv2_kicker_reviewed_month'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',      label: '🎯 Kicker on Sales',        desc: 'Each person independently hits X sales → earns payout',                     unit: 'sales'   },
-  { value: 'revenue',    label: '💰 Kicker on Revenue',      desc: 'Each person hits X revenue amount → earns payout',                           unit: 'revenue' },
-  { value: 'collective', label: '🤝 Collective Team Kicker', desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
+  { value: 'sales',            label: '🎯 Kicker on Sales',          desc: 'Each person independently hits X sales → earns payout',                     unit: 'sales'   },
+  { value: 'revenue',          label: '💰 Kicker on Revenue',        desc: 'Each person hits X revenue amount → earns payout',                           unit: 'revenue' },
+  { value: 'collective',       label: '🤝 Collective Team Kicker',   desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
+  { value: 'sales_or_revenue', label: '⚡ Sales OR Revenue',         desc: 'Hit either X sales count OR Y revenue — whichever is reached first earns the payout', unit: 'both' },
 ]
 
 // Normalize old 6-type values to the new type system (for existing DB records)
 function normalizeType(t) {
   if (t === 'collective') return 'collective'
+  if (t === 'sales_or_revenue') return 'sales_or_revenue'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales' // covers 'sales', 'team_sales', 'individual_sales', 'individual_or', 'individual_and', null
 }
@@ -461,10 +463,17 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
           <div className="mt-3 space-y-1 border-t border-gray-100 pt-2">
             <p className="text-[10px] font-bold uppercase text-gray-400 mb-1">Slabs</p>
             {kicker.slabs.map((s, i) => {
-              const isRev = normalizeType(kicker.type) === 'revenue'
-              const desc = isRev
-                ? `${formatINR(Number(s.threshold || s.revenueThreshold || 0))} → ${formatINR(Number(s.payout))}`
-                : `${s.threshold || s.salesThreshold || 0} sales → ${formatINR(Number(s.payout))}`
+              const nt = normalizeType(kicker.type)
+              let desc
+              if (nt === 'sales_or_revenue') {
+                const tS = Number(s.salesThreshold || 0)
+                const tR = Number(s.revenueThreshold || 0)
+                desc = `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)} → ${formatINR(Number(s.payout))}`
+              } else if (nt === 'revenue') {
+                desc = `${formatINR(Number(s.threshold || s.revenueThreshold || 0))} → ${formatINR(Number(s.payout))}`
+              } else {
+                desc = `${s.threshold || s.salesThreshold || 0} sales → ${formatINR(Number(s.payout))}`
+              }
               return <p key={i} className="text-[10px] text-gray-600">S{i+1}: {desc}</p>
             })}
             {Object.keys(kicker.individualAmounts || {}).length > 0 && (
@@ -1142,9 +1151,16 @@ export default function AnnounceKicker() {
                 <thead>
                   <tr className="text-[10px] font-bold uppercase bg-brand-50 text-brand-600">
                     <th className="px-3 py-2 text-left w-8">#</th>
-                    <th className="px-3 py-2 text-left">
-                      {typeInfo.unit === 'revenue' ? 'Revenue (₹)' : form.type === 'collective' ? 'Combined Team Sales' : 'Sales Count'}
-                    </th>
+                    {form.type === 'sales_or_revenue' ? (
+                      <>
+                        <th className="px-3 py-2 text-left">Sales Count</th>
+                        <th className="px-3 py-2 text-left">Revenue (₹)</th>
+                      </>
+                    ) : (
+                      <th className="px-3 py-2 text-left">
+                        {typeInfo.unit === 'revenue' ? 'Revenue (₹)' : form.type === 'collective' ? 'Combined Team Sales' : 'Sales Count'}
+                      </th>
+                    )}
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
                     <th className="w-8" />
                   </tr>
@@ -1153,12 +1169,28 @@ export default function AnnounceKicker() {
                   {form.slabs.map((s, i) => (
                     <tr key={i}>
                       <td className="px-3 py-2 font-bold text-gray-400">S{i + 1}</td>
-                      <td className="px-2 py-2">
-                        <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
-                          placeholder={typeInfo.unit === 'revenue' ? 'e.g. 1250000' : 'e.g. 15'}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                        {s.threshold && typeInfo.unit === 'revenue' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
-                      </td>
+                      {form.type === 'sales_or_revenue' ? (
+                        <>
+                          <td className="px-2 py-2">
+                            <input type="number" value={s.salesThreshold} onChange={e => setSlab(i, 'salesThreshold', e.target.value)}
+                              placeholder="e.g. 3"
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                          </td>
+                          <td className="px-2 py-2">
+                            <input type="number" value={s.revenueThreshold} onChange={e => setSlab(i, 'revenueThreshold', e.target.value)}
+                              placeholder="e.g. 180000"
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                            {s.revenueThreshold && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.revenueThreshold))}</p>}
+                          </td>
+                        </>
+                      ) : (
+                        <td className="px-2 py-2">
+                          <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
+                            placeholder={typeInfo.unit === 'revenue' ? 'e.g. 1250000' : 'e.g. 15'}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
+                          {s.threshold && typeInfo.unit === 'revenue' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
+                        </td>
+                      )}
                       <td className="px-2 py-2">
                         <input type="number" value={s.payout} onChange={e => setSlab(i, 'payout', e.target.value)}
                           placeholder="e.g. 1000" className="w-full border border-green-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400" />

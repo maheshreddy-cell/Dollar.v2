@@ -267,13 +267,15 @@ function PSCallsCard({ psSummary }) {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',      label: '🎯 Kicker on Sales',        unit: 'sales'   },
-  { value: 'revenue',    label: '💰 Kicker on Revenue',      unit: 'revenue' },
-  { value: 'collective', label: '🤝 Collective Team Kicker', unit: 'sales'   },
+  { value: 'sales',           label: '🎯 Kicker on Sales',          unit: 'sales'   },
+  { value: 'revenue',         label: '💰 Kicker on Revenue',        unit: 'revenue' },
+  { value: 'sales_or_revenue',label: '⚡ Sales OR Revenue',          unit: 'both'    },
+  { value: 'collective',      label: '🤝 Collective Team Kicker',   unit: 'sales'   },
 ]
 
 function normalizeType(t) {
   if (t === 'collective') return 'collective'
+  if (t === 'sales_or_revenue') return 'sales_or_revenue'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales'
 }
@@ -344,8 +346,9 @@ function computeProgress(kicker, allDeals, myEmail) {
     }
   }
 
-  const type   = normalizeType(kicker.type || 'sales')
-  const isRev  = type === 'revenue'
+  const type         = normalizeType(kicker.type || 'sales')
+  const isRev        = type === 'revenue'
+  const isSalesOrRev = type === 'sales_or_revenue'
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
     const at = Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0)
     const bt = Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
@@ -356,18 +359,30 @@ function computeProgress(kicker, allDeals, myEmail) {
   let nextSlab   = null
 
   for (const slab of sorted) {
-    const t   = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
-    const hit = isRev ? revenue >= t : sales >= t
+    let hit
+    if (isSalesOrRev) {
+      const tS = Number(slab.salesThreshold || 0)
+      const tR = Number(slab.revenueThreshold || 0)
+      hit = (tS > 0 && sales >= tS) || (tR > 0 && revenue >= tR)
+    } else {
+      const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+      hit = isRev ? revenue >= t : sales >= t
+    }
     if (hit) activeSlab = slab
     else if (!nextSlab) nextSlab = slab
   }
 
-  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap }
+  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap, isSalesOrRev }
 }
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
 function slabLabel(slab, type) {
   const t = normalizeType(type)
+  if (t === 'sales_or_revenue') {
+    const tS = Number(slab.salesThreshold || 0)
+    const tR = Number(slab.revenueThreshold || 0)
+    return `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)} → ${formatINR(Number(slab.payout))}`
+  }
   const threshold = Number(slab.threshold || (t === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 0)
   if (t === 'revenue') return `${formatINR(threshold)} revenue → ${formatINR(Number(slab.payout))}`
   return `${threshold} sales → ${formatINR(Number(slab.payout))}`
@@ -375,6 +390,14 @@ function slabLabel(slab, type) {
 
 function slabBarPct(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'sales_or_revenue') {
+    const tS = Number(slab.salesThreshold || 1)
+    const tR = Number(slab.revenueThreshold || 1)
+    return Math.max(
+      Math.min((progress.sales   / Math.max(tS, 1)) * 100, 100),
+      Math.min((progress.revenue / Math.max(tR, 1)) * 100, 100),
+    )
+  }
   const threshold = Number(slab.threshold || (t === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 1)
   if (t === 'revenue') return Math.min((progress.revenue / Math.max(threshold, 1)) * 100, 100)
   return Math.min((progress.sales / Math.max(threshold, 1)) * 100, 100)
@@ -382,6 +405,19 @@ function slabBarPct(slab, type, progress) {
 
 function nudgeText(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'sales_or_revenue') {
+    const tS = Number(slab.salesThreshold || 0)
+    const tR = Number(slab.revenueThreshold || 0)
+    const gapS = tS > 0 ? tS - progress.sales   : Infinity
+    const gapR = tR > 0 ? tR - progress.revenue : Infinity
+    if (gapS <= 0 || gapR <= 0) return null
+    // show whichever is closer (as a fraction of threshold)
+    const pctS = tS > 0 ? progress.sales   / tS : 0
+    const pctR = tR > 0 ? progress.revenue / tR : 0
+    if (pctS >= pctR)
+      return `${gapS} more sale${gapS > 1 ? 's' : ''} to unlock ${formatINR(Number(slab.payout))}`
+    return `${formatINR(gapR)} more revenue to unlock ${formatINR(Number(slab.payout))}`
+  }
   if (t === 'revenue') {
     const gap = Number(slab.threshold || slab.revenueThreshold || 0) - progress.revenue
     return gap > 0 ? `${formatINR(gap)} more revenue to unlock ${formatINR(Number(slab.payout))}` : null
@@ -453,6 +489,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
   const typeInfo     = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]
   const isSales      = type === 'sales'
   const isRev        = type === 'revenue'
+  const isSalesOrRev = type === 'sales_or_revenue'
   const isCollective = type === 'collective'
   const isTeam       = origType.startsWith('team_')
 
@@ -481,8 +518,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
         const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
         let hitSlab = null
         for (const slab of progress.sorted) {
-          const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
-          if (isRev ? revenue >= t : count >= t) hitSlab = slab
+          let slabHit
+          if (isSalesOrRev) {
+            const tS = Number(slab.salesThreshold || 0)
+            const tR = Number(slab.revenueThreshold || 0)
+            slabHit = (tS > 0 && count >= tS) || (tR > 0 && revenue >= tR)
+          } else {
+            const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+            slabHit = isRev ? revenue >= t : count >= t
+          }
+          if (slabHit) hitSlab = slab
         }
         const override = (kicker.individualAmounts || {})[email]
         const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
@@ -739,13 +784,13 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                         </>
                       ) : (
                         <>
-                          {(isSales || isTeam) && (
+                          {(isSales || isTeam || isSalesOrRev) && (
                             <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
                               <p className="text-xl font-black text-indigo-700">{isOversight ? agentEarners.length : progress.sales}</p>
                               <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Active' : 'Your'}{isOversight ? '' : ' Sales'}</p>
                             </div>
                           )}
-                          {isRev && !isOversight && (
+                          {(isRev || isSalesOrRev) && !isOversight && (
                             <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
                               <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
                               <p className="text-[10px] text-teal-500 font-semibold">Your Revenue</p>
@@ -843,16 +888,24 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Reward Tiers</p>
             <div className="space-y-1">
               {progress.sorted.map((slab, i) => {
-                const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
                 const payout = Number(slab.payout)
                 const hit = progress.activeSlab
                   ? progress.sorted.indexOf(progress.activeSlab) >= i
                   : false
+                let label
+                if (isSalesOrRev) {
+                  const tS = Number(slab.salesThreshold || 0)
+                  const tR = Number(slab.revenueThreshold || 0)
+                  label = `${tS} sale${tS !== 1 ? 's' : ''} OR ${formatINR(tR)}`
+                } else {
+                  const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+                  label = isRev ? formatINR(t) : `${t} sale${t !== 1 ? 's' : ''}`
+                }
                 return (
                   <div key={i} className={`flex items-center justify-between text-xs rounded-lg px-3 py-1.5 ${
                     hit ? 'bg-green-100 text-green-700 font-semibold' : 'text-gray-500'
                   }`}>
-                    <span>{isRev ? formatINR(t) : `${t} sale${t !== 1 ? 's' : ''}`}</span>
+                    <span>{label}</span>
                     <span className={`font-bold ${hit ? 'text-green-700' : 'text-gray-700'}`}>
                       {hit ? '✓ ' : ''}{formatINR(payout)}
                     </span>
