@@ -861,6 +861,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                                 <span className={`font-semibold ${a.hit ? 'text-green-700' : isTeamList ? 'text-red-600' : 'text-gray-600'}`}>{a.displayName}</span>
                                 {isTeamList ? (
                                   <span className={a.hit ? 'text-green-600' : 'text-red-400'}>{a.count} deal{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
+                                ) : isSalesOrRev ? (
+                                  <span className="text-gray-400">{a.count} sale{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
                                 ) : (
                                   <span className="text-gray-400">
                                     {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
