@@ -499,9 +499,12 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
 
   const managerEarners = (isOversight && isManagerKicker && teamMap && Object.keys(teamMap).length > 0)
     ? (() => {
-        const from   = new Date(kicker.dateFrom)
-        const to     = new Date(kicker.dateTo); to.setHours(23, 59, 59)
-        const minVal = Number(kicker.minSaleValue || 0)
+        const from        = new Date(kicker.dateFrom)
+        const to          = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+        const minVal      = Number(kicker.minSaleValue || 0)
+        const targetTeams = kicker.targetTeams || ['ALL']
+        const allTeams    = targetTeams.includes('ALL')
+        const targetSet   = new Set(targetTeams.map(e => e.toLowerCase()))
         const byMgr  = {}
         for (const d of deals) {
           if (d.PaymentDate) {
@@ -515,6 +518,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           const teamName = (d.Team || '').trim().toLowerCase()
           const mgr = teamMap[teamName]
           if (!mgr) continue
+          // Only include managers explicitly targeted by this kicker
+          if (!allTeams && !targetSet.has(mgr.email)) continue
           if (!byMgr[mgr.email]) byMgr[mgr.email] = { email: mgr.email, displayName: mgr.name, count: 0, revenue: 0 }
           byMgr[mgr.email].count++
           byMgr[mgr.email].revenue += d.TotalValue || 0
