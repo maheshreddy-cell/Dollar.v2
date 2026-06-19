@@ -203,7 +203,7 @@ export default function Metrics() {
     if (tick === 0) setLoading(true)   // full spinner only on first load
 
     const promises = isAgent
-      ? [getSummary(user.email, month), Promise.resolve([]), Promise.resolve(null), Promise.resolve([]), Promise.resolve([])]
+      ? [getSummary(user.email, month, user.role), Promise.resolve([]), Promise.resolve(null), Promise.resolve([]), Promise.resolve([])]
       : [
           getLeaderboard(user.email, month),
           getTeamSalesAnalytics(user.email, month, user.role === 'Admin'),
@@ -592,14 +592,14 @@ export default function Metrics() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-default">
               <p className="text-xs text-gray-500">{orgLabel} Revenue ({month})</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">{formatINR(analytics.totalAchieved)}</p>
+              <p className="text-2xl font-bold text-gray-800 mt-1">{formatINR(analytics.totalAchieved ?? 0)}</p>
               <p className="text-xs text-blue-500 mt-0.5">Pipeline: {formatINR(analytics.totalSaleValue ?? 0)}</p>
             </div>
             <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md transition-shadow cursor-default">
               <p className="text-xs text-gray-500">{orgLabel} Deals ({month})</p>
-              <p className="text-2xl font-bold text-gray-800 mt-1">{analytics.totalDeals.toLocaleString('en-IN')}</p>
+              <p className="text-2xl font-bold text-gray-800 mt-1">{(analytics.totalDeals ?? 0).toLocaleString('en-IN')}</p>
               <p className="text-xs text-gray-400 mt-0.5">
-                Avg TSV: {analytics.totalDeals > 0 ? formatINR(Math.round((analytics.totalSaleValue ?? 0) / analytics.totalDeals)) : '—'} / deal
+                Avg TSV: {(analytics.totalDeals ?? 0) > 0 ? formatINR(Math.round((analytics.totalSaleValue ?? 0) / analytics.totalDeals)) : '—'} / deal
               </p>
             </div>
           </div>
