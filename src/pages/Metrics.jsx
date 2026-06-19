@@ -230,7 +230,8 @@ export default function Metrics() {
           const teamAchieved  = res2?.totalAchieved  ?? lb.reduce((s, r) => s + r.achieved,             0)
           const teamSaleValue = res2?.totalSaleValue ?? lb.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
           const teamT2Amount  = res2?.totalT2Amount  ?? lb.reduce((s, r) => s + (r.totalT2Amount  ?? 0), 0)
-          const teamMoneyMade = teamCommission + teamT2Amount
+          const teamKickers   = lb.reduce((s, r) => s + (r.kickerEarnings ?? 0), 0)
+          const teamMoneyMade = teamCommission + teamT2Amount + teamKickers
           setSummary({
             totalTarget:     teamTarget,
             totalAchieved:   teamAchieved,
@@ -779,6 +780,8 @@ export default function Metrics() {
                       ? Math.min(999, ((row.totalSaleValue ?? 0) / row.target) * 100)
                       : 0
                     const agentKickers = kickersByAgent[(row.email || '').toLowerCase()] || []
+                    const agentKickersTotal = agentKickers.reduce((s, k) => s + k.payout, 0)
+                    const displayMoneyMade = (row.commission ?? 0) + (row.totalT2Amount ?? 0) + agentKickersTotal
                     return (
                       <tr
                         key={row.email ?? i}
@@ -804,7 +807,7 @@ export default function Metrics() {
                         <td className="px-5 py-3 text-right text-gray-600">{row.dealsCount ?? 0}</td>
                         <td className="px-5 py-3 text-right text-purple-600 font-medium">{formatINR(row.commission ?? 0)}</td>
                         <td className="px-5 py-3 text-right text-blue-600 text-sm">{formatINR(row.totalT2Amount ?? 0)}</td>
-                        <td className="px-5 py-3 text-right font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</td>
+                        <td className="px-5 py-3 text-right font-bold text-purple-700">{formatINR(displayMoneyMade)}</td>
                         <td className="px-5 py-3 text-center"><EligibilityBadge slabInfo={row.slabInfo} /></td>
                         <td className="px-5 py-3">
                           {agentKickers.length > 0 ? (
