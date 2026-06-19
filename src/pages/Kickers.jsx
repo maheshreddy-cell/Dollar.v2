@@ -682,39 +682,66 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
               /* Individual / manager / revenue */
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  {(isSales || isTeam) && (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                      <p className="text-xl font-black text-indigo-700">{isOversight ? agentEarners.length : progress.sales}</p>
-                      <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Agents Active' : isManagerViewer ? 'Team' : 'Your'} {isOversight ? '' : 'Sales'}</p>
-                    </div>
-                  )}
-                  {isRev && !isOversight && (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
-                      <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
-                      <p className="text-[10px] text-teal-500 font-semibold">{isManagerViewer ? 'Team' : 'Your'} Revenue</p>
-                    </div>
-                  )}
-                  {isOversight ? (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                      <p className="text-xl font-black text-green-700">{agentEarners.filter(a => a.hit).length}</p>
-                      <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
-                    </div>
-                  ) : progress.activeSlab ? (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                      <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                      <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
-                    </div>
+                  {isManagerViewer ? (
+                    /* Manager view: always show both team sales count + team revenue */
+                    <>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                        <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
+                        <p className="text-[10px] text-indigo-500 font-semibold">Team Sales</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                        <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                        <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
+                      </div>
+                      {progress.activeSlab ? (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                          <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                          <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                        </div>
+                      ) : (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                          <p className="text-sm font-black text-gray-400">—</p>
+                          <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
-                      <p className="text-sm font-black text-gray-400">—</p>
-                      <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
-                    </div>
-                  )}
-                  {isOversight && (
-                    <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
-                      <p className="text-sm font-black text-purple-700">{formatINR(agentEarners.reduce((s, a) => s + a.payout, 0))}</p>
-                      <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
-                    </div>
+                    <>
+                      {(isSales || isTeam) && (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                          <p className="text-xl font-black text-indigo-700">{isOversight ? (managerEarners ?? agentEarners).length : progress.sales}</p>
+                          <p className="text-[10px] text-indigo-500 font-semibold">{isOversight ? 'Active' : 'Your'} {isOversight ? '' : 'Sales'}</p>
+                        </div>
+                      )}
+                      {isRev && !isOversight && (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                          <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                          <p className="text-[10px] text-teal-500 font-semibold">Your Revenue</p>
+                        </div>
+                      )}
+                      {isOversight ? (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                          <p className="text-xl font-black text-green-700">{(managerEarners ?? agentEarners).filter(a => a.hit).length}</p>
+                          <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
+                        </div>
+                      ) : progress.activeSlab ? (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                          <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                          <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                        </div>
+                      ) : (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                          <p className="text-sm font-black text-gray-400">—</p>
+                          <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                        </div>
+                      )}
+                      {isOversight && (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                          <p className="text-sm font-black text-purple-700">{formatINR((managerEarners ?? agentEarners).reduce((s, a) => s + a.payout, 0))}</p>
+                          <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
