@@ -1162,7 +1162,7 @@ function calcTieredCommission(achieved, target) {
   const preset   = ALL_TARGET_PRESETS.find(p => p.id === presetId)
   if (preset) {
     const sorted = [...preset.slabs].sort((a, b) => a.targetAmount - b.targetAmount)
-    let rate = sorted[0]?.commissionPct ?? 0
+    let rate = 0
     for (const slab of sorted) {
       if (achieved >= slab.targetAmount) rate = slab.commissionPct
     }
@@ -1174,7 +1174,7 @@ function calcTieredCommission(achieved, target) {
     const { slabs } = parseSlabsField(tf(target, 'CommissionEndDate'))
     if (slabs.length > 0) {
       const sorted = [...slabs].sort((a, b) => Number(a.targetAmount) - Number(b.targetAmount))
-      let rate = Number(sorted[0]?.commissionPct ?? 0)
+      let rate = 0
       for (const slab of sorted) {
         if (achieved >= Number(slab.targetAmount)) rate = Number(slab.commissionPct)
       }
