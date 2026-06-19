@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
-import { getKickers, getDeals, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
+import { getKickers, getDeals, getAllUsers, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
 import { formatINR } from '../utils/commission'
 
 // ── Hat Trick Card (permanent always-on default kicker) ───────────────────────
@@ -391,7 +391,7 @@ function nudgeText(slab, type, progress) {
 }
 
 // ── KickerCard (view-only) ────────────────────────────────────────────────────
-function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight }) {
+function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isOversight, teamMap }) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
   const [showContributors, setShowContributors] = useState(false)
@@ -484,6 +484,48 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
         return { email, displayName, count, revenue, payout, hit: !!hitSlab || override != null }
       }).sort((a, b) => b.payout - a.payout || b.revenue - a.revenue || b.count - a.count)
     : []
+
+  // Manager kicker earners — group deals by d.Team (column AA) → map to manager
+  // Used by oversight viewers so each manager row shows their TEAM's combined sales
+  const isManagerKicker = !isICKicker && !isCollective &&
+    (kicker.targetRoles || []).includes('Manager') &&
+    !(kicker.targetRoles || []).includes('Agent') &&
+    !(kicker.targetRoles || []).includes('PreSales')
+
+  const managerEarners = (isOversight && isManagerKicker && teamMap && Object.keys(teamMap).length > 0)
+    ? (() => {
+        const from   = new Date(kicker.dateFrom)
+        const to     = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+        const minVal = Number(kicker.minSaleValue || 0)
+        const byMgr  = {}
+        for (const d of deals) {
+          if (d.PaymentDate) {
+            const dt = new Date(d.PaymentDate)
+            if (isNaN(dt) || dt < from || dt > to) continue
+          } else if (d.Month) {
+            const km = kicker.dateFrom?.substring(0, 7)
+            if (!km || d.Month !== km) continue
+          } else continue
+          if (minVal > 0 && (d.TotalValue || 0) < minVal) continue
+          const teamName = (d.Team || '').trim().toLowerCase()
+          const mgr = teamMap[teamName]
+          if (!mgr) continue
+          if (!byMgr[mgr.email]) byMgr[mgr.email] = { email: mgr.email, displayName: mgr.name, count: 0, revenue: 0 }
+          byMgr[mgr.email].count++
+          byMgr[mgr.email].revenue += d.TotalValue || 0
+        }
+        return Object.values(byMgr).map(m => {
+          let hitSlab = null
+          for (const slab of progress.sorted) {
+            const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+            if (isRev ? m.revenue >= t : m.count >= t) hitSlab = slab
+          }
+          const override = (kicker.individualAmounts || {})[m.email]
+          const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
+          return { ...m, payout, hit: !!hitSlab || override != null }
+        }).sort((a, b) => b.payout - a.payout || b.revenue - a.revenue || b.count - a.count)
+      })()
+    : null
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
@@ -676,43 +718,51 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                   )}
                 </div>
 
-                {/* Per-agent earners list — oversight users and any viewer of an IC kicker */}
-                {(isOversight || isICKicker) && agentEarners.length > 0 && (
-                  <div>
-                    <button
-                      onClick={() => setShowContributors(v => !v)}
-                      className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
-                    >
-                      <span>
-                        {isOversight
-                          ? `👥 ${agentEarners.length} agent${agentEarners.length !== 1 ? 's' : ''} · ${agentEarners.filter(a => a.hit).length} earned`
-                          : `🏆 ${agentEarners.filter(a => a.hit).length} agent${agentEarners.filter(a => a.hit).length !== 1 ? 's' : ''} earned this kicker`
-                        }
-                      </span>
-                      {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
-                    {showContributors && (
-                      <div className="mt-2 space-y-1">
-                        {agentEarners.filter(a => isOversight || a.hit).map((a, i) => (
-                          <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
-                            a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 font-mono w-4 text-right">{i + 1}</span>
-                              <span className={`font-semibold ${a.hit ? 'text-green-700' : 'text-gray-600'}`}>{a.displayName}</span>
-                              <span className="text-gray-400">
-                                {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
+                {/* Earners list — manager kickers show per-manager team totals; IC kickers show per-agent */}
+                {(() => {
+                  const earners = managerEarners ?? (((isOversight || isICKicker) && agentEarners.length > 0) ? agentEarners : null)
+                  if (!earners || earners.length === 0) return null
+                  const isTeamList = !!managerEarners
+                  const earnedCount = earners.filter(a => a.hit).length
+                  return (
+                    <div>
+                      <button
+                        onClick={() => setShowContributors(v => !v)}
+                        className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1"
+                      >
+                        <span>
+                          {isTeamList
+                            ? `👥 ${earners.length} manager${earners.length !== 1 ? 's' : ''} · ${earnedCount} earned`
+                            : isOversight
+                              ? `👥 ${earners.length} agent${earners.length !== 1 ? 's' : ''} · ${earnedCount} earned`
+                              : `🏆 ${earnedCount} agent${earnedCount !== 1 ? 's' : ''} earned this kicker`
+                          }
+                        </span>
+                        {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      </button>
+                      {showContributors && (
+                        <div className="mt-2 space-y-1">
+                          {earners.filter(a => isOversight || isTeamList || a.hit).map((a, i) => (
+                            <div key={a.email} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                              a.hit ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400 font-mono w-4 text-right">{i + 1}</span>
+                                <span className={`font-semibold ${a.hit ? 'text-green-700' : 'text-gray-600'}`}>{a.displayName}</span>
+                                <span className="text-gray-400">
+                                  {isRev ? formatINR(a.revenue) : `${a.count} sale${a.count !== 1 ? 's' : ''}`}
+                                </span>
+                              </div>
+                              <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
+                                {a.hit ? formatINR(a.payout) : '—'}
                               </span>
                             </div>
-                            <span className={`font-bold ${a.hit ? 'text-green-700' : 'text-gray-400'}`}>
-                              {a.hit ? formatINR(a.payout) : '—'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </>
@@ -756,6 +806,7 @@ export default function Kickers() {
 
   const [kickers,      setKickers]      = useState([])
   const [deals,        setDeals]        = useState([])
+  const [users,        setUsers]        = useState([])
   const [psSummary,    setPsSummary]    = useState(null)
   const [loading,      setLoading]      = useState(true)
   const [roleFilter,   setRoleFilter]   = useState('All')   // 'All' | 'Agents' | 'Managers' | 'VHs'
@@ -815,17 +866,37 @@ export default function Kickers() {
     setLoading(true)
     try {
       // Load ALL deals (no month filter) so past kickers on different months still compute correctly
-      const fetches = [getKickers(), getDeals(null, null)]
+      const fetches = [getKickers(), getDeals(null, null), getAllUsers()]
       if (isPreSales) fetches.push(getPreSalesSummary(effectiveUser.email, month))
-      const [ks, ds, psData] = await Promise.all(fetches)
+      const [ks, ds, us, psData] = await Promise.all(fetches)
       setKickers(ks)
       setDeals(ds)
+      setUsers(us || [])
       if (psData) setPsSummary(psData)
     } catch { /* show empty */ }
     finally { setLoading(false) }
   }, [effectiveUser?.email, effectiveUser?.role, month])
 
   useEffect(() => { load() }, [load])
+
+  // teamMap: lowercase team name → { email, name } for all managers
+  // Used by KickerCard to aggregate manager-targeted kickers by team (d.Team column AA)
+  const teamMap = useMemo(() => {
+    const map = {}
+    for (const u of users) {
+      if (u.Role !== 'Manager') continue
+      const email = (u.Email || '').toLowerCase()
+      const name  = u.Name || u.Email || ''
+      // Use stored Team field if present, else derive from first name
+      let teamName = (u.Team || '').trim().toLowerCase()
+      if (!teamName) {
+        const firstName = name.trim().split(' ')[0].toLowerCase()
+        if (firstName) teamName = `team ${firstName}`
+      }
+      if (teamName) map[teamName] = { email, name }
+    }
+    return map
+  }, [users])
 
   // All kickers visible to this user (VH scoped via isVisible; Admin/SalesHead see all)
   const allVisible = isFullOversight ? kickers : kickers.filter(isVisible)
@@ -984,6 +1055,7 @@ export default function Kickers() {
               agentName={effectiveUser?.name}
               isManagerViewer={isManager && (k.targetRoles || []).includes('Manager') && !(k.targetRoles || []).includes('Agent')}
               isOversight={isOversight}
+              teamMap={teamMap}
             />
           ))}
         </div>
