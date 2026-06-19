@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Target, TrendingUp, DollarSign, Percent, BarChart2,
-  Users, Activity, CheckCircle, AlertTriangle, ClipboardCheck,
+  Users, Activity, CheckCircle, AlertTriangle, ClipboardCheck, Award,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -203,7 +203,7 @@ export default function Metrics() {
     if (tick === 0) setLoading(true)   // full spinner only on first load
 
     const promises = isAgent
-      ? [getSummary(user.email, month, user.role), Promise.resolve([]), Promise.resolve(null), Promise.resolve([]), Promise.resolve([])]
+      ? [getSummary(user.email, month, user.role), Promise.resolve([]), Promise.resolve(null), getKickers().catch(() => []), getDeals(null, null).catch(() => [])]
       : [
           getLeaderboard(user.email, month),
           getTeamSalesAnalytics(user.email, month, user.role === 'Admin'),
@@ -581,6 +581,44 @@ export default function Metrics() {
               </div>
             </FadeIn>
           )}
+          {/* Kicker Earnings — agent view */}
+          {(() => {
+            const myKickers = kickersByAgent[(user?.email || '').toLowerCase()] || []
+            const total = myKickers.reduce((s, k) => s + k.payout, 0)
+            return (
+              <FadeIn delay={200}>
+                <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 bg-yellow-50 border-b border-yellow-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Award size={15} className="text-yellow-600" />
+                      <p className="text-sm font-bold text-yellow-800">Kicker Earnings</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${total > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400'}`}>
+                      {formatINR(total)}
+                    </span>
+                  </div>
+                  <div className="px-5 py-4">
+                    {myKickers.length > 0 ? (
+                      <div className="space-y-2">
+                        {myKickers.map((k, i) => (
+                          <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                            <p className="text-sm text-gray-700">{k.title}</p>
+                            <span className="text-sm font-bold text-yellow-700">{formatINR(k.payout)}</span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between pt-2">
+                          <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Total Kicker Earnings</p>
+                          <p className="text-base font-bold text-yellow-700">{formatINR(total)}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No kicker slabs hit yet this month.</p>
+                    )}
+                  </div>
+                </div>
+              </FadeIn>
+            )
+          })()}
         </>
       )}
 
