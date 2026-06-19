@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Target, TrendingUp, DollarSign, Percent, BarChart2,
   Users, Activity, CheckCircle, AlertTriangle, ClipboardCheck,
@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import { useMonth }    from '../contexts/MonthContext'
 import { useAuth }     from '../contexts/AuthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getKickers, getDeals } from '../services/api'
 import MetricsCard     from '../components/MetricsCard'
 import FadeIn          from '../components/FadeIn'
 import LiveBadge       from '../components/LiveBadge'
@@ -190,6 +190,8 @@ export default function Metrics() {
   const [summary,     setSummary]     = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
   const [analytics,   setAnalytics]   = useState(null)
+  const [kickers,     setKickers]     = useState([])
+  const [deals,       setDeals]       = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState('')
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -201,20 +203,24 @@ export default function Metrics() {
     if (tick === 0) setLoading(true)   // full spinner only on first load
 
     const promises = isAgent
-      ? [getSummary(user.email, month), Promise.resolve([]), Promise.resolve(null)]
+      ? [getSummary(user.email, month), Promise.resolve([]), Promise.resolve(null), Promise.resolve([]), Promise.resolve([])]
       : [
           getLeaderboard(user.email, month),
           getTeamSalesAnalytics(user.email, month, user.role === 'Admin'),
           Promise.resolve(null),
+          getKickers().catch(() => []),
+          getDeals(null, null).catch(() => []),
         ]
 
     Promise.all(promises)
-      .then(([res1, res2]) => {
+      .then(([res1, res2, , ks, ds]) => {
         if (isAgent) {
           setSummary(res1)
           setLeaderboard([])
           setAnalytics(null)
         } else {
+          setKickers(ks || [])
+          setDeals(ds || [])
           const lb = [...(res1 ?? [])].sort((a, b) => b.achieved - a.achieved)
           setLeaderboard(lb)
           const teamTarget     = lb.reduce((s, r) => s + r.target,               0)
@@ -257,6 +263,58 @@ export default function Metrics() {
       </div>
     )
   }
+
+  // ── Kicker earnings per agent ─────────────────────────────────────────────────
+  // For each IC kicker overlapping the selected month, compute which agents earned.
+  const kickersByAgent = useMemo(() => {
+    if (!kickers.length || !deals.length) return {}
+    const monthStart = new Date(month + '-01')
+    const monthEnd   = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59)
+    const map = {}
+
+    for (const k of kickers) {
+      const roles = k.targetRoles || []
+      if (!roles.includes('Agent') && !roles.includes('PreSales')) continue
+      const kFrom = new Date(k.dateFrom)
+      const kTo   = new Date(k.dateTo); kTo.setHours(23, 59, 59)
+      if (kFrom > monthEnd || kTo < monthStart) continue
+
+      const isRev  = (k.type === 'revenue' || k.type === 'team_revenue' || k.type === 'individual_revenue')
+      const minVal = Number(k.minSaleValue || 0)
+      const slabs  = [...(k.slabs || [])].filter(s => Number(s.payout) > 0)
+        .sort((a, b) => Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0) -
+                        Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0))
+      if (!slabs.length) continue
+
+      const byAgent = {}
+      for (const d of deals) {
+        if (!d.PaymentDate) continue
+        const dt = new Date(d.PaymentDate)
+        if (isNaN(dt) || dt < kFrom || dt > kTo) continue
+        if (minVal > 0 && (d.TotalValue || 0) < minVal) continue
+        const email = (d.Email || '').toLowerCase()
+        if (!email) continue
+        if (!byAgent[email]) byAgent[email] = { count: 0, revenue: 0 }
+        byAgent[email].count++
+        byAgent[email].revenue += d.TotalValue || 0
+      }
+
+      for (const [email, stats] of Object.entries(byAgent)) {
+        let hitSlab = null
+        for (const slab of slabs) {
+          const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+          if (isRev ? stats.revenue >= t : stats.count >= t) hitSlab = slab
+        }
+        const override = (k.individualAmounts || {})[email]
+        const payout   = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
+        if (hitSlab || override != null) {
+          if (!map[email]) map[email] = []
+          map[email].push({ title: k.title, payout })
+        }
+      }
+    }
+    return map
+  }, [kickers, deals, month])
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const achievedPct  = summary ? getAchievementPct(summary.totalTarget, summary.totalAchieved) : 0
@@ -701,13 +759,15 @@ export default function Metrics() {
                     <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">T+2</th>
                     <th className="text-right  px-5 py-3 text-xs font-medium text-gray-500 uppercase">Money Made</th>
                     <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="text-left   px-5 py-3 text-xs font-medium text-gray-500 uppercase">Kickers</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {leaderboard.map((row, i) => {
-                    const rowProj = row.target > 0
+                    const rowProj    = row.target > 0
                       ? Math.min(999, ((row.totalSaleValue ?? 0) / row.target) * 100)
                       : 0
+                    const agentKickers = kickersByAgent[(row.email || '').toLowerCase()] || []
                     return (
                       <tr
                         key={row.email ?? i}
@@ -735,6 +795,22 @@ export default function Metrics() {
                         <td className="px-5 py-3 text-right text-blue-600 text-sm">{formatINR(row.totalT2Amount ?? 0)}</td>
                         <td className="px-5 py-3 text-right font-bold text-purple-700">{formatINR(row.moneyMade ?? 0)}</td>
                         <td className="px-5 py-3 text-center"><EligibilityBadge slabInfo={row.slabInfo} /></td>
+                        <td className="px-5 py-3">
+                          {agentKickers.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              {agentKickers.map((k, j) => (
+                                <div key={j} className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                    {formatINR(k.payout)}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 truncate max-w-[120px]" title={k.title}>{k.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
