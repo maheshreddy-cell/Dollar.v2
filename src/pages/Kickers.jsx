@@ -718,6 +718,32 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           </>
         )}
 
+        {/* Slab summary */}
+        {progress.sorted.length > 0 && (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Reward Tiers</p>
+            <div className="space-y-1">
+              {progress.sorted.map((slab, i) => {
+                const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+                const payout = Number(slab.payout)
+                const hit = progress.activeSlab
+                  ? progress.sorted.indexOf(progress.activeSlab) >= i
+                  : false
+                return (
+                  <div key={i} className={`flex items-center justify-between text-xs rounded-lg px-3 py-1.5 ${
+                    hit ? 'bg-green-100 text-green-700 font-semibold' : 'text-gray-500'
+                  }`}>
+                    <span>{isRev ? formatINR(t) : `${t} sale${t !== 1 ? 's' : ''}`}</span>
+                    <span className={`font-bold ${hit ? 'text-green-700' : 'text-gray-700'}`}>
+                      {hit ? '✓ ' : ''}{formatINR(payout)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   )
@@ -948,7 +974,7 @@ export default function Kickers() {
           <p className="text-sm font-semibold text-gray-400">No kickers for this month.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4">
           {displayed.map(k => (
             <KickerCard
               key={k.id}
