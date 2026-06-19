@@ -482,7 +482,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
         const override = (kicker.individualAmounts || {})[email]
         const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
         return { email, displayName, count, revenue, payout, hit: !!hitSlab || override != null }
-      }).sort((a, b) => b.payout - a.payout || b.count - a.count)
+      }).sort((a, b) => b.payout - a.payout || b.revenue - a.revenue || b.count - a.count)
     : []
 
   return (
