@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Megaphone, CheckCircle, ArrowLeft, Pencil, Trash2, ChevronDown, ChevronUp, Zap, BarChart2, Users, ClipboardCheck, BadgeCheck, Plus, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { announceKicker, getKickers, updateKicker, setKickerStatus, deleteKicker, getSubtree, getDeals, packSlabsCol } from '../services/api'
+import { announceKicker, getKickers, updateKicker, setKickerStatus, deleteKicker, getSubtree, getAllUsers, getDeals, packSlabsCol } from '../services/api'
 import { formatINR } from '../utils/commission'
 import { notifKickerAnnounced } from '../services/notifications'
 import { notifyKickerAnnounced } from '../services/slack'
@@ -621,20 +621,25 @@ export default function AnnounceKicker() {
     if (!rootEmail) return
     setLoadingList(true)
     try {
-      const [ks, tree, deals] = await Promise.all([
+      // Admin/SalesHead/VH can target anyone — fetch all users instead of just their subtree
+      const isOrgWide = ['Admin', 'SalesHead', 'VH'].includes(activeUser?.role)
+      const [ks, membersRaw, deals] = await Promise.all([
         getKickers(),
-        getSubtree(rootEmail).catch(() => null),
+        isOrgWide
+          ? getAllUsers().catch(() => null)
+          : getSubtree(rootEmail).catch(() => null),
         getDeals().catch(() => []),
       ])
       setAllKickers(ks)
       setAllDeals(deals)
 
-      const allMembers = flatTree(tree).filter(m => (m.Email || '').toLowerCase() !== rootEmail.toLowerCase())
+      const allMembers = isOrgWide
+        ? (membersRaw || []).filter(m => (m.Email || '').toLowerCase() !== rootEmail.toLowerCase())
+        : flatTree(membersRaw).filter(m => (m.Email || '').toLowerCase() !== rootEmail.toLowerCase())
       setSubtreeAll(allMembers)
 
       // "Which Teams?" form field — scope to the effective user's role
       if (activeUser?.role === 'Manager') {
-        // Manager targets their own direct agents
         setManagers(allMembers.filter(m => (m.ManagerEmail || '').toLowerCase() === rootEmail.toLowerCase()))
       } else {
         const managerRoles = activeUser?.role === 'VH'
