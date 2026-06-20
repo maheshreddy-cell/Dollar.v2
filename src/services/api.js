@@ -1371,10 +1371,11 @@ function unpackSlabsCol(raw) {
     notes:             parsed.notes             || '',
     individualAmounts: parsed.individualAmounts || {},
     collectiveMode:    parsed.collectiveMode    || 'per_sale',
+    weeklyTargets:     parsed.weeklyTargets     || {},
   }
 }
 
-export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts, collectiveMode }) {
+export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts, collectiveMode, weeklyTargets }) {
   return JSON.stringify({
     slabs:             slabs || [],
     status:            status || 'Announced',
@@ -1382,6 +1383,7 @@ export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts
     notes:             notes || '',
     individualAmounts: individualAmounts || {},
     collectiveMode:    collectiveMode || 'per_sale',
+    weeklyTargets:     weeklyTargets || {},
   })
 }
 
@@ -1402,6 +1404,7 @@ function parseKickerRow(r) {
     notes:             extra.notes,
     individualAmounts: extra.individualAmounts,  // { email: customAmount }
     collectiveMode:    extra.collectiveMode,     // 'per_sale' | 'per_agent'
+    weeklyTargets:     extra.weeklyTargets,      // { email: weeklyRevenueTarget }
     targetTeams:       safeArr('TargetTeams'),
     targetRoles:       safeArr('TargetRoles'),
     pinned:            r.Pinned === 'true' || r.Pinned === true,
@@ -1434,6 +1437,7 @@ export async function announceKicker(data, announcerEmail, announcerRole) {
       notes: data.notes || '',
       individualAmounts: data.individualAmounts || {},
       collectiveMode: data.collectiveMode || 'per_sale',
+      weeklyTargets: data.weeklyTargets || {},
     }),
     JSON.stringify(data.targetTeams || ['ALL']),
     JSON.stringify(data.targetRoles || []),

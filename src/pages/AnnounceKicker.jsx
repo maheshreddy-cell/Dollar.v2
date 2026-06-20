@@ -24,16 +24,31 @@ const REVIEW_KEY = 'dv2_kicker_reviewed_month'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',            label: '🎯 Kicker on Sales',          desc: 'Each person independently hits X sales → earns payout',                     unit: 'sales'   },
-  { value: 'revenue',          label: '💰 Kicker on Revenue',        desc: 'Each person hits X revenue amount → earns payout',                           unit: 'revenue' },
-  { value: 'collective',       label: '🤝 Collective Team Kicker',   desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
-  { value: 'sales_or_revenue', label: '⚡ Sales OR Revenue',         desc: 'Hit either X sales count OR Y revenue — whichever is reached first earns the payout', unit: 'both' },
+  { value: 'sales',              label: '🎯 Kicker on Sales',            desc: 'Each person independently hits X sales → earns payout',                     unit: 'sales'   },
+  { value: 'revenue',            label: '💰 Kicker on Revenue',          desc: 'Each person hits X revenue amount → earns payout',                           unit: 'revenue' },
+  { value: 'collective',         label: '🤝 Collective Team Kicker',     desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
+  { value: 'sales_or_revenue',   label: '⚡ Sales OR Revenue',           desc: 'Hit either X sales count OR Y revenue — whichever is reached first earns the payout', unit: 'both' },
+  { value: 'weekly_target_pct',  label: '📊 Weekly % Target (Managers)', desc: 'Managers earn based on % of their weekly payment target achieved (Sun–Sat). Each manager can have a different target.', unit: 'pct' },
 ]
+
+// Returns the Sunday of the week containing `date`
+function getWeekSunday(date = new Date()) {
+  const d = new Date(date)
+  d.setDate(d.getDate() - d.getDay())
+  return d.toISOString().split('T')[0]
+}
+// Returns the Saturday of the week containing `date`
+function getWeekSaturday(date = new Date()) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + (6 - d.getDay()))
+  return d.toISOString().split('T')[0]
+}
 
 // Normalize old 6-type values to the new type system (for existing DB records)
 function normalizeType(t) {
   if (t === 'collective') return 'collective'
   if (t === 'sales_or_revenue') return 'sales_or_revenue'
+  if (t === 'weekly_target_pct') return 'weekly_target_pct'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales' // covers 'sales', 'team_sales', 'individual_sales', 'individual_or', 'individual_and', null
 }
@@ -168,11 +183,21 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
     .filter(s => Number(s.payout) > 0)
     .sort((a, b) => Number(a.threshold || a.salesThreshold || 0) - Number(b.threshold || b.salesThreshold || 0))
 
-  function getSlabHit(sales, revenue) {
+  const isWeeklyPct = type === 'weekly_target_pct'
+  const weeklyTargets = kicker.weeklyTargets || {}
+
+  function getSlabHit(sales, revenue, email) {
     let best = null
     for (const s of slabs) {
-      const t = Number(s.threshold || (isRevType ? s.revenueThreshold : s.salesThreshold) || 0)
-      const hit = isRevType ? revenue >= t : sales >= t
+      let hit
+      if (isWeeklyPct) {
+        const weeklyTarget = Number(weeklyTargets[(email || '').toLowerCase()] || 0)
+        const pct = weeklyTarget > 0 ? (revenue / weeklyTarget) * 100 : 0
+        hit = pct >= Number(s.threshold || 0)
+      } else {
+        const t = Number(s.threshold || (isRevType ? s.revenueThreshold : s.salesThreshold) || 0)
+        hit = isRevType ? revenue >= t : sales >= t
+      }
       if (hit) best = s
     }
     return best
@@ -181,6 +206,18 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   const agentList = Object.values(stats)
 
   const isCollective = type === 'collective'
+
+  // Weekly % target — each manager is evaluated independently based on their own weekly target
+  if (isWeeklyPct) {
+    const agents = agentList.map(a => {
+      const weeklyTarget = Number(weeklyTargets[(a.email || '').toLowerCase()] || 0)
+      const pct = weeklyTarget > 0 ? Math.round((a.revenue / weeklyTarget) * 100) : 0
+      const sh = getSlabHit(a.sales, a.revenue, a.email)
+      return { ...a, weeklyTarget, pct, slabHit: sh, payout: sh ? Number(sh.payout) : 0 }
+    })
+    const eligible = agents.filter(a => a.slabHit)
+    return { kind: 'weekly_pct', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
+  }
 
   if (isTeam || isCollective) {
     const totals  = agentList.reduce((acc, a) => { acc.sales += a.sales; acc.revenue += a.revenue; return acc }, { sales: 0, revenue: 0 })
@@ -201,7 +238,7 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
   } else {
     const overrides = kicker.individualAmounts || {}
     const agents   = agentList.map(a => {
-      const sh = getSlabHit(a.sales, a.revenue)
+      const sh = getSlabHit(a.sales, a.revenue, a.email)
       const override = overrides[(a.email || '').toLowerCase()]
       const payout = override != null ? Number(override) : (sh ? Number(sh.payout) : 0)
       return { ...a, slabHit: sh, payout, hasOverride: override != null }
@@ -214,6 +251,58 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
 // ── ProgressPanel ─────────────────────────────────────────────────────────────
 function ProgressPanel({ kicker, progress }) {
   const isRevType = normalizeType(kicker.type) === 'revenue'
+
+  if (progress.kind === 'weekly_pct') {
+    const { agents, eligible, totalPayout, slabs } = progress
+    return (
+      <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{eligible} eligible</span>
+          <span className="text-gray-400">{agents.length - eligible} not yet</span>
+          {totalPayout > 0 && <span className="ml-auto font-bold text-gray-700">Total payout: {formatINR(totalPayout)}</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left pb-1 font-semibold">Manager</th>
+                <th className="text-right pb-1 font-semibold">Target</th>
+                <th className="text-right pb-1 font-semibold">Revenue</th>
+                <th className="text-right pb-1 font-semibold">%</th>
+                <th className="text-right pb-1 font-semibold">Payout</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[...agents].sort((a, b) => b.pct - a.pct).map(a => {
+                const nextSlab = slabs.find(s => Number(s.threshold) > a.pct)
+                const barPct   = Math.min(a.pct, nextSlab ? Number(nextSlab.threshold) : (a.slabHit ? 100 : 0))
+                const barMax   = nextSlab ? Number(nextSlab.threshold) : 100
+                const barWidth = barMax > 0 ? Math.min((a.pct / barMax) * 100, 100) : 0
+                return (
+                  <tr key={a.email} className={a.slabHit ? 'bg-green-50/40' : ''}>
+                    <td className="py-1.5 text-gray-700 font-medium">{a.name}</td>
+                    <td className="py-1 text-right text-gray-500">{a.weeklyTarget > 0 ? formatINR(a.weeklyTarget) : '—'}</td>
+                    <td className="py-1 text-right text-gray-600">{formatINR(a.revenue)}</td>
+                    <td className="py-1 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${a.slabHit ? 'bg-green-500' : 'bg-brand-400'}`} style={{ width: `${barWidth}%` }} />
+                        </div>
+                        <span className={`font-semibold ${a.pct >= 100 ? 'text-green-600' : 'text-gray-600'}`}>{a.pct}%</span>
+                      </div>
+                    </td>
+                    <td className="py-1 text-right font-semibold text-green-700">
+                      {a.payout > 0 ? formatINR(a.payout) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
 
   function slabLabel(s, idx) {
     if (isRevType) return `S${idx+1}: ${formatINR(Number(s.threshold || s.revenueThreshold || 0))}`
@@ -465,7 +554,9 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
             {kicker.slabs.map((s, i) => {
               const nt = normalizeType(kicker.type)
               let desc
-              if (nt === 'sales_or_revenue') {
+              if (nt === 'weekly_target_pct') {
+                desc = `${s.threshold || 0}% of weekly target → ${formatINR(Number(s.payout))}`
+              } else if (nt === 'sales_or_revenue') {
                 const tS  = Number(s.salesThreshold || 0)
                 const tR  = Number(s.revenueThreshold || 0)
                 const op  = s.operator === 'AND' ? 'AND' : 'OR'
@@ -499,8 +590,8 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
               className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-brand-600 hover:text-brand-800 transition-colors"
             >
               {showProgress ? <ChevronUp size={12} /> : <BarChart2 size={12} />}
-              {showProgress ? 'Hide Progress' : 'View Agent Progress'}
-              {progress.kind === 'individual' && progress.eligible > 0 && (
+              {showProgress ? 'Hide Progress' : 'View Progress'}
+              {(progress.kind === 'individual' || progress.kind === 'weekly_pct') && progress.eligible > 0 && (
                 <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
                   {progress.eligible} eligible
                 </span>
@@ -537,6 +628,7 @@ export default function AnnounceKicker() {
     pinned: false, slabs: emptySlabs(),
     status: 'Announced', paidDate: '', notes: '', individualOverridesText: '',
     collectiveMode: 'per_sale',
+    weeklyTargets: {},  // { email: weeklyRevenueTarget } for weekly_target_pct type
   }
 
   const [form,        setForm]        = useState(BLANK_FORM)
@@ -726,6 +818,7 @@ export default function AnnounceKicker() {
       notes:        kicker.notes || '',
       individualOverridesText: Object.entries(kicker.individualAmounts || {}).map(([e, a]) => `${e},${a}`).join('\n'),
       collectiveMode: kicker.collectiveMode || 'per_sale',
+      weeklyTargets:  kicker.weeklyTargets  || {},
     })
     setEditingId(kicker.id)
     setError('')
@@ -750,7 +843,7 @@ export default function AnnounceKicker() {
     e.preventDefault()
     if (!form.title.trim())                    { setError('Title is required.'); return }
     if (!form.dateFrom || !form.dateTo)        { setError('Date range is required.'); return }
-    if (!form.minSaleValue || Number(form.minSaleValue) <= 0) { setError('Minimum Sale Value is required.'); return }
+    if (form.type !== 'weekly_target_pct' && (!form.minSaleValue || Number(form.minSaleValue) <= 0)) { setError('Minimum Sale Value is required.'); return }
     if (form.targetRoles.length === 0)         { setError('Select at least one target role.'); return }
     const filledSlabs = form.slabs.filter(s => s.payout !== '')
     if (!filledSlabs.length)            { setError('Add at least one slab.'); return }
@@ -780,13 +873,13 @@ export default function AnnounceKicker() {
           MinSaleValue:Number(form.minSaleValue || 0),
           DateFrom:    form.dateFrom,
           DateTo:      form.dateTo,
-          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts, collectiveMode: form.collectiveMode }),
+          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts, collectiveMode: form.collectiveMode, weeklyTargets: form.weeklyTargets }),
           TargetTeams: JSON.stringify(form.targetTeams || ['ALL']),
           TargetRoles: JSON.stringify(form.targetRoles || []),
           Pinned:      form.pinned ? 'true' : 'false',
         })
       } else {
-        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0), individualAmounts }, activeUser.email, activeUser.role)
+        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0), individualAmounts, weeklyTargets: form.weeklyTargets }, activeUser.email, activeUser.role)
       }
       notifKickerAnnounced({ title: form.title, isEdit: !!editingId })
       notifyKickerAnnounced({
@@ -1023,6 +1116,12 @@ export default function AnnounceKicker() {
                 className="text-xs text-brand-600 font-semibold border border-brand-200 bg-brand-50 px-2.5 py-2 rounded-xl hover:bg-brand-100 whitespace-nowrap">
                 Today Only
               </button>
+              {form.type === 'weekly_target_pct' && (
+                <button type="button" onClick={() => { setField('dateFrom', getWeekSunday()); setField('dateTo', getWeekSaturday()) }}
+                  className="text-xs text-purple-700 font-semibold border border-purple-200 bg-purple-50 px-2.5 py-2 rounded-xl hover:bg-purple-100 whitespace-nowrap">
+                  This Week
+                </button>
+              )}
             </div>
             {form.dateFrom && form.dateTo && (() => {
               const days = Math.round((new Date(form.dateTo) - new Date(form.dateFrom)) / 86400000) + 1
@@ -1174,6 +1273,58 @@ export default function AnnounceKicker() {
             )
           })()}
 
+          {/* Weekly target per manager — only for weekly_target_pct type */}
+          {form.type === 'weekly_target_pct' && form.targetRoles.includes('Manager') && (() => {
+            const targetedManagers = managers.filter(m => m.Role === 'Manager' && (
+              form.targetTeams.includes('ALL') ||
+              form.targetTeams.some(t => t.toLowerCase() === (m.Email || '').toLowerCase())
+            ))
+            if (targetedManagers.length === 0) return null
+            return (
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
+                  Weekly Revenue Target per Manager *
+                </label>
+                <p className="text-[11px] text-gray-400 mb-2">Set each manager's weekly payment collection target (₹). Their % achievement of this determines which slab they hit.</p>
+                <div className="rounded-xl overflow-hidden border border-purple-200">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-[10px] font-bold uppercase bg-purple-50 text-purple-700">
+                        <th className="px-3 py-2 text-left">Manager</th>
+                        <th className="px-3 py-2 text-left">Weekly Target (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-purple-50">
+                      {targetedManagers.map(m => {
+                        const email = (m.Email || '').toLowerCase()
+                        return (
+                          <tr key={email}>
+                            <td className="px-3 py-2 text-gray-700 font-medium">{m.Name || m.Email}</td>
+                            <td className="px-2 py-2">
+                              <input
+                                type="number"
+                                value={form.weeklyTargets[email] ?? ''}
+                                onChange={e => setForm(p => ({
+                                  ...p,
+                                  weeklyTargets: { ...p.weeklyTargets, [email]: e.target.value === '' ? '' : Number(e.target.value) }
+                                }))}
+                                placeholder="e.g. 500000"
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400"
+                              />
+                              {form.weeklyTargets[email] > 0 && (
+                                <p className="text-[10px] text-purple-600 mt-0.5 font-semibold">{formatINR(Number(form.weeklyTargets[email]))}</p>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Slabs */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs</label>
@@ -1190,7 +1341,10 @@ export default function AnnounceKicker() {
                       </>
                     ) : (
                       <th className="px-3 py-2 text-left">
-                        {typeInfo.unit === 'revenue' ? 'Revenue (₹)' : form.type === 'collective' ? 'Combined Team Sales' : 'Sales Count'}
+                        {form.type === 'weekly_target_pct' ? '% of Weekly Target'
+                          : typeInfo.unit === 'revenue' ? 'Revenue (₹)'
+                          : form.type === 'collective' ? 'Combined Team Sales'
+                          : 'Sales Count'}
                       </th>
                     )}
                     <th className="px-3 py-2 text-left">Payout (₹)</th>
@@ -1231,9 +1385,10 @@ export default function AnnounceKicker() {
                       ) : (
                         <td className="px-2 py-2">
                           <input type="number" value={s.threshold} onChange={e => setSlab(i, 'threshold', e.target.value)}
-                            placeholder={typeInfo.unit === 'revenue' ? 'e.g. 1250000' : 'e.g. 15'}
+                            placeholder={form.type === 'weekly_target_pct' ? 'e.g. 70' : typeInfo.unit === 'revenue' ? 'e.g. 1250000' : 'e.g. 15'}
                             className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                          {s.threshold && typeInfo.unit === 'revenue' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
+                          {s.threshold && form.type === 'weekly_target_pct' && <p className="text-[10px] text-purple-600 mt-0.5 font-semibold">{s.threshold}% of target</p>}
+                          {s.threshold && typeInfo.unit === 'revenue' && form.type !== 'weekly_target_pct' && <p className="text-[10px] text-gray-400 mt-0.5">{formatINR(Number(s.threshold))}</p>}
                         </td>
                       )}
                       <td className="px-2 py-2">

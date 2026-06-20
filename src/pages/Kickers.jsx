@@ -268,15 +268,17 @@ function PSCallsCard({ psSummary }) {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const KICKER_TYPES = [
-  { value: 'sales',           label: '🎯 Kicker on Sales',          unit: 'sales'   },
-  { value: 'revenue',         label: '💰 Kicker on Revenue',        unit: 'revenue' },
-  { value: 'sales_or_revenue',label: '⚡ Sales OR Revenue',          unit: 'both'    },
-  { value: 'collective',      label: '🤝 Collective Team Kicker',   unit: 'sales'   },
+  { value: 'sales',             label: '🎯 Kicker on Sales',            unit: 'sales'   },
+  { value: 'revenue',           label: '💰 Kicker on Revenue',          unit: 'revenue' },
+  { value: 'sales_or_revenue',  label: '⚡ Sales OR Revenue',           unit: 'both'    },
+  { value: 'collective',        label: '🤝 Collective Team Kicker',     unit: 'sales'   },
+  { value: 'weekly_target_pct', label: '📊 Weekly % Target',            unit: 'pct'     },
 ]
 
 function normalizeType(t) {
   if (t === 'collective') return 'collective'
   if (t === 'sales_or_revenue') return 'sales_or_revenue'
+  if (t === 'weekly_target_pct') return 'weekly_target_pct'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales'
 }
@@ -303,7 +305,7 @@ function countdown(k) {
 }
 
 // ── Progress calculation ──────────────────────────────────────────────────────
-function computeProgress(kicker, allDeals, myEmail) {
+function computeProgress(kicker, allDeals, myEmail, weeklyTarget) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
@@ -350,18 +352,26 @@ function computeProgress(kicker, allDeals, myEmail) {
   const type         = normalizeType(kicker.type || 'sales')
   const isRev        = type === 'revenue'
   const isSalesOrRev = type === 'sales_or_revenue'
+  const isWeeklyPct  = type === 'weekly_target_pct'
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
     const at = Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0)
     const bt = Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
     return at - bt
   })
 
+  // Weekly % target — compare pct achieved vs slab threshold (a percentage)
+  const achievedPct = isWeeklyPct && weeklyTarget > 0
+    ? Math.round((revenue / weeklyTarget) * 100)
+    : 0
+
   let activeSlab = null
   let nextSlab   = null
 
   for (const slab of sorted) {
     let hit
-    if (isSalesOrRev) {
+    if (isWeeklyPct) {
+      hit = achievedPct >= Number(slab.threshold || 0)
+    } else if (isSalesOrRev) {
       const tS = Number(slab.salesThreshold || 0)
       const tR = Number(slab.revenueThreshold || 0)
       const op = slab.operator === 'AND' ? 'AND' : 'OR'
@@ -376,12 +386,13 @@ function computeProgress(kicker, allDeals, myEmail) {
     else if (!nextSlab) nextSlab = slab
   }
 
-  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap, isSalesOrRev }
+  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap, isSalesOrRev, isWeeklyPct, achievedPct, weeklyTarget: weeklyTarget || 0 }
 }
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
 function slabLabel(slab, type) {
   const t = normalizeType(type)
+  if (t === 'weekly_target_pct') return `${slab.threshold || 0}% of weekly target → ${formatINR(Number(slab.payout))}`
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 0)
     const tR = Number(slab.revenueThreshold || 0)
@@ -395,6 +406,10 @@ function slabLabel(slab, type) {
 
 function slabBarPct(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'weekly_target_pct') {
+    const threshold = Number(slab.threshold || 1)
+    return Math.min((progress.achievedPct / Math.max(threshold, 1)) * 100, 100)
+  }
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 1)
     const tR = Number(slab.revenueThreshold || 1)
@@ -410,6 +425,17 @@ function slabBarPct(slab, type, progress) {
 
 function nudgeText(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'weekly_target_pct') {
+    const tPct = Number(slab.threshold || 0)
+    const gap  = tPct - progress.achievedPct
+    if (gap <= 0) return null
+    const revenueNeeded = progress.weeklyTarget > 0
+      ? Math.ceil((tPct / 100) * progress.weeklyTarget) - progress.revenue
+      : 0
+    return revenueNeeded > 0
+      ? `${formatINR(revenueNeeded)} more to reach ${tPct}% → unlock ${formatINR(Number(slab.payout))}`
+      : `${gap}% more to unlock ${formatINR(Number(slab.payout))}`
+  }
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 0)
     const tR = Number(slab.revenueThreshold || 0)
@@ -461,9 +487,14 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     ? deals.filter(d => (d.Email || '').toLowerCase() === agentEmail.toLowerCase())
     : null
 
+  // For weekly_target_pct: look up this manager's weekly target from kicker.weeklyTargets
+  const myWeeklyTarget = (type === 'weekly_target_pct' && agentEmail)
+    ? Number((kicker.weeklyTargets || {})[(agentEmail || '').toLowerCase()] || 0)
+    : 0
+
   // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight.
   // Collective kickers always use all deals so the full contributors map is visible to every agent.
-  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined)
+  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined, myWeeklyTarget)
 
   // Individual payout override — admin can set a custom amount for a specific
   // person, taking precedence over the slab-derived payout once applied.
@@ -590,15 +621,26 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           byMgr[mgr.email].count++
           byMgr[mgr.email].revenue += d.TotalValue || 0
         }
+        const weeklyTargets = kicker.weeklyTargets || {}
         return Object.values(byMgr).map(m => {
           let hitSlab = null
           for (const slab of progress.sorted) {
-            const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
-            if (isRev ? m.revenue >= t : m.count >= t) hitSlab = slab
+            let slabHit
+            if (type === 'weekly_target_pct') {
+              const wt = Number(weeklyTargets[m.email] || 0)
+              const pct = wt > 0 ? (m.revenue / wt) * 100 : 0
+              slabHit = pct >= Number(slab.threshold || 0)
+            } else {
+              const t = Number(slab.threshold || (isRev ? slab.revenueThreshold : slab.salesThreshold) || 0)
+              slabHit = isRev ? m.revenue >= t : m.count >= t
+            }
+            if (slabHit) hitSlab = slab
           }
+          const wt = Number(weeklyTargets[m.email] || 0)
+          const pct = (type === 'weekly_target_pct' && wt > 0) ? Math.round((m.revenue / wt) * 100) : null
           const override = (kicker.individualAmounts || {})[m.email]
           const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
-          return { ...m, payout, hit: !!hitSlab || override != null }
+          return { ...m, payout, hit: !!hitSlab || override != null, weeklyTarget: wt, pct }
         }).sort((a, b) => b.payout - a.payout || b.revenue - a.revenue || b.count - a.count)
       })()
     : null
@@ -762,43 +804,75 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
               <div className="space-y-2">
                 <div className="flex gap-2">
                   {isManagerViewer ? (
-                    /* Manager view: always show both team sales count + team revenue */
-                    <>
-                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                        <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
-                        <p className="text-[10px] text-indigo-500 font-semibold">Team Sales</p>
-                      </div>
-                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
-                        <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
-                        <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
-                      </div>
-                      {progress.activeSlab ? (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                          <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
-                          <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                    /* Manager view */
+                    progress.isWeeklyPct ? (
+                      /* Weekly % target kicker: show % achieved + revenue + target + earned */
+                      <>
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                          <p className="text-xl font-black text-purple-700">{progress.achievedPct}%</p>
+                          <p className="text-[10px] text-purple-500 font-semibold">% Achieved</p>
                         </div>
-                      ) : (
-                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
-                          <p className="text-sm font-black text-gray-400">—</p>
-                          <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                          <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                          <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
                         </div>
-                      )}
-                    </>
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                          <p className="text-sm font-black text-indigo-700">{myWeeklyTarget > 0 ? formatINR(myWeeklyTarget) : '—'}</p>
+                          <p className="text-[10px] text-indigo-500 font-semibold">Weekly Target</p>
+                        </div>
+                        {progress.activeSlab ? (
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                            <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                            <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                          </div>
+                        ) : (
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                            <p className="text-sm font-black text-gray-400">—</p>
+                            <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* Normal manager view: team sales + team revenue + payout */
+                      <>
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                          <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
+                          <p className="text-[10px] text-indigo-500 font-semibold">Team Sales</p>
+                        </div>
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                          <p className="text-sm font-black text-teal-700">{formatINR(progress.revenue)}</p>
+                          <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
+                        </div>
+                        {progress.activeSlab ? (
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                            <p className="text-sm font-black text-green-700">{formatINR(Number(progress.activeSlab.payout))}</p>
+                            <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                          </div>
+                        ) : (
+                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                            <p className="text-sm font-black text-gray-400">—</p>
+                            <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                          </div>
+                        )}
+                      </>
+                    )
                   ) : (
                     <>
                       {isOversight && managerEarners ? (
-                        /* Oversight on manager kicker: show aggregate team sales + revenue + slab hits */
+                        /* Oversight on manager kicker */
                         <>
-                          <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
-                            <p className="text-xl font-black text-indigo-700">{managerEarners.reduce((s, a) => s + a.count, 0)}</p>
-                            <p className="text-[10px] text-indigo-500 font-semibold">Team Sales</p>
-                          </div>
+                          {type !== 'weekly_target_pct' && (
+                            <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                              <p className="text-xl font-black text-indigo-700">{managerEarners.reduce((s, a) => s + a.count, 0)}</p>
+                              <p className="text-[10px] text-indigo-500 font-semibold">Total Sales</p>
+                            </div>
+                          )}
                           <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
                             <p className="text-sm font-black text-teal-700">{formatINR(managerEarners.reduce((s, a) => s + a.revenue, 0))}</p>
-                            <p className="text-[10px] text-teal-500 font-semibold">Team Revenue</p>
+                            <p className="text-[10px] text-teal-500 font-semibold">Total Revenue</p>
                           </div>
                           <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
-                            <p className="text-xl font-black text-green-700">{managerEarners.filter(a => a.hit).length}</p>
+                            <p className="text-xl font-black text-green-700">{managerEarners.filter(a => a.hit).length}<span className="text-sm font-semibold text-green-500">/{managerEarners.length}</span></p>
                             <p className="text-[10px] text-green-600 font-semibold">Slab Hit</p>
                           </div>
                           <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
@@ -883,7 +957,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-gray-400 font-mono w-4 text-right shrink-0">{i + 1}</span>
                                 <span className={`font-semibold ${a.hit ? 'text-green-700' : isTeamList ? 'text-red-600' : 'text-gray-600'}`}>{a.displayName}</span>
-                                {isTeamList ? (
+                                {isTeamList && type === 'weekly_target_pct' ? (
+                                  <span className={a.hit ? 'text-green-600' : 'text-red-400'}>{formatINR(a.revenue)} · {a.pct ?? 0}% of {a.weeklyTarget > 0 ? formatINR(a.weeklyTarget) : '?'} target</span>
+                                ) : isTeamList ? (
                                   <span className={a.hit ? 'text-green-600' : 'text-red-400'}>{a.count} deal{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
                                 ) : isSalesOrRev ? (
                                   <span className="text-gray-400">{a.count} sale{a.count !== 1 ? 's' : ''} · {formatINR(a.revenue)}</span>
