@@ -170,23 +170,24 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 
 /* ── Dark ───────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --t-bg:           #0F172A;
-  --t-surface:      #1E293B;
-  --t-surface-2:    #162032;
-  --t-surface-3:    #1A2744;
-  --t-border:       #334155;
-  --t-border-2:     #475569;
-  --t-text:         #F1F5F9;
-  --t-text-2:       #CBD5E1;
-  --t-text-3:       #94A3B8;
-  --t-text-4:       #64748B;
-  --t-brand:        #60A5FA;
-  --t-brand-light:  rgba(96,165,250,0.14);
-  --t-glass-bg:     rgba(30,41,59,0.92);
-  --t-glass-border: #334155;
-  --t-scrollbar:    #475569;
-  --t-input-bg:     #162032;
-  --t-select-bg:    #162032;
+  /* F.R.I.D.A.Y. Night Theme */
+  --t-bg:           #0B0918;   /* --bg  */
+  --t-surface:      #16122B;   /* --s1  */
+  --t-surface-2:    #1E1840;   /* --s2  */
+  --t-surface-3:    #241E4C;   /* between s2 and border */
+  --t-border:       #2D2650;   /* --bd  */
+  --t-border-2:     #3D3660;   /* bd + step */
+  --t-text:         #F0EAFF;   /* --t   */
+  --t-text-2:       #C4BCEB;   /* between t and m */
+  --t-text-3:       #8B88AF;   /* --m   */
+  --t-text-4:       #6B6890;   /* m - step */
+  --t-brand:        #8B6AFC;   /* --pl  */
+  --t-brand-light:  rgba(104,53,251,0.18);
+  --t-glass-bg:     rgba(22,18,43,0.92);
+  --t-glass-border: #2D2650;
+  --t-scrollbar:    #3D3660;
+  --t-input-bg:     #1E1840;
+  --t-select-bg:    #1E1840;
   color-scheme: dark;
 }
 
