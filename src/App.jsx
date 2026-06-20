@@ -78,7 +78,13 @@ class PageErrorBoundary extends Component {
             <p className="text-xs text-red-500 font-mono break-all">{this.state.error?.message}</p>
             <button
               className="mt-3 text-xs text-red-600 underline"
-              onClick={() => this.setState({ error: null })}
+              onClick={() => {
+                if (this.state.error?.message?.includes('dynamically imported module')) {
+                  window.location.reload()
+                } else {
+                  this.setState({ error: null })
+                }
+              }}
             >
               Try again
             </button>
