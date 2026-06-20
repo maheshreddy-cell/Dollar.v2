@@ -29,6 +29,7 @@ const KICKER_TYPES = [
   { value: 'collective',         label: '🤝 Collective Team Kicker',     desc: 'Entire team hits X combined sales together → every contributor earns payout', unit: 'sales'   },
   { value: 'sales_or_revenue',   label: '⚡ Sales OR Revenue',           desc: 'Hit either X sales count OR Y revenue — whichever is reached first earns the payout', unit: 'both' },
   { value: 'weekly_target_pct',  label: '📊 Weekly % Target (Managers)', desc: 'Managers earn based on % of their weekly payment target achieved (Sun–Sat). Each manager can have a different target.', unit: 'pct' },
+  { value: 'team_month_end',     label: '📋 Month-End Team Kicker',      desc: 'Each agent gets their own individual sales target with 2 slabs. Payouts are the same for everyone; only the thresholds differ per agent.', unit: 'sales' },
 ]
 
 // Returns the Sunday of the week containing `date`
@@ -49,6 +50,7 @@ function normalizeType(t) {
   if (t === 'collective') return 'collective'
   if (t === 'sales_or_revenue') return 'sales_or_revenue'
   if (t === 'weekly_target_pct') return 'weekly_target_pct'
+  if (t === 'team_month_end') return 'team_month_end'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales' // covers 'sales', 'team_sales', 'individual_sales', 'individual_or', 'individual_and', null
 }
@@ -219,6 +221,25 @@ function computeKickerProgress(kicker, allMembers, allDeals) {
     return { kind: 'weekly_pct', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), slabs }
   }
 
+  // Month-end team kicker — per-agent custom thresholds, shared payout amounts
+  const agentTargets = kicker.agentTargets || {}
+  if (type === 'team_month_end') {
+    const s1Payout = Number(slabs[0]?.payout || 0)
+    const s2Payout = Number(slabs[1]?.payout || 0)
+    const agents = agentList.map(a => {
+      const key = (a.email || '').toLowerCase()
+      const targets = agentTargets[key] || {}
+      const s1 = Number(targets.s1 || 0)
+      const s2 = Number(targets.s2 || 0)
+      let slabHit = null, payout = 0, slabLabel = null
+      if (s2 > 0 && a.sales >= s2) { slabHit = 's2'; payout = s2Payout; slabLabel = `S2: ${s2} sales` }
+      else if (s1 > 0 && a.sales >= s1) { slabHit = 's1'; payout = s1Payout; slabLabel = `S1: ${s1} sales` }
+      return { ...a, s1, s2, s1Payout, s2Payout, slabHit, payout, slabLabel, hasTarget: s1 > 0 || s2 > 0 }
+    })
+    const eligible = agents.filter(a => a.slabHit)
+    return { kind: 'month_end', agents, eligible: eligible.length, totalPayout: eligible.reduce((s, a) => s + a.payout, 0), s1Payout, s2Payout }
+  }
+
   if (isTeam || isCollective) {
     const totals  = agentList.reduce((acc, a) => { acc.sales += a.sales; acc.revenue += a.revenue; return acc }, { sales: 0, revenue: 0 })
     const slabHit = getSlabHit(totals.sales, totals.revenue)
@@ -297,6 +318,53 @@ function ProgressPanel({ kicker, progress }) {
                   </tr>
                 )
               })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  if (progress.kind === 'month_end') {
+    const { agents, eligible, totalPayout, s1Payout, s2Payout } = progress
+    return (
+      <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{eligible} earned</span>
+          <span className="text-gray-400">{agents.length - eligible} not yet</span>
+          {totalPayout > 0 && <span className="ml-auto font-bold text-gray-700">Total payout: {formatINR(totalPayout)}</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left pb-1 font-semibold">Agent</th>
+                <th className="text-right pb-1 font-semibold">S1 Target</th>
+                <th className="text-right pb-1 font-semibold">S2 Target</th>
+                <th className="text-right pb-1 font-semibold">Sales</th>
+                <th className="text-right pb-1 font-semibold">Slab</th>
+                <th className="text-right pb-1 font-semibold">Payout</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[...agents].filter(a => a.hasTarget).sort((a, b) => b.sales - a.sales).map(a => (
+                <tr key={a.email} className={a.slabHit ? 'bg-green-50/40' : ''}>
+                  <td className="py-1.5 text-gray-700 font-medium">{a.name}</td>
+                  <td className="py-1 text-right text-gray-500">{a.s1 > 0 ? `${a.s1} sales` : '—'}</td>
+                  <td className="py-1 text-right text-gray-500">{a.s2 > 0 ? `${a.s2} sales` : '—'}</td>
+                  <td className="py-1 text-right font-semibold text-gray-700">{a.sales}</td>
+                  <td className="py-1 text-right">
+                    {a.slabHit === 's2'
+                      ? <span className="text-green-600 font-bold">S2 ✓</span>
+                      : a.slabHit === 's1'
+                        ? <span className="text-blue-600 font-bold">S1 ✓</span>
+                        : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="py-1 text-right font-semibold text-green-700">
+                    {a.payout > 0 ? formatINR(a.payout) : '—'}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -556,6 +624,8 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
               let desc
               if (nt === 'weekly_target_pct') {
                 desc = `${s.threshold || 0}% of weekly target → ${formatINR(Number(s.payout))}`
+              } else if (nt === 'team_month_end') {
+                desc = `S${i + 1} payout → ${formatINR(Number(s.payout))} (per-agent thresholds)`
               } else if (nt === 'sales_or_revenue') {
                 const tS  = Number(s.salesThreshold || 0)
                 const tR  = Number(s.revenueThreshold || 0)
@@ -591,7 +661,7 @@ function ManageCard({ kicker, onEdit, onDelete, onStatusChange, progress }) {
             >
               {showProgress ? <ChevronUp size={12} /> : <BarChart2 size={12} />}
               {showProgress ? 'Hide Progress' : 'View Progress'}
-              {(progress.kind === 'individual' || progress.kind === 'weekly_pct') && progress.eligible > 0 && (
+              {(progress.kind === 'individual' || progress.kind === 'weekly_pct' || progress.kind === 'month_end') && progress.eligible > 0 && (
                 <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
                   {progress.eligible} eligible
                 </span>
@@ -628,7 +698,9 @@ export default function AnnounceKicker() {
     pinned: false, slabs: emptySlabs(),
     status: 'Announced', paidDate: '', notes: '', individualOverridesText: '',
     collectiveMode: 'per_sale',
-    weeklyTargets: {},  // { email: weeklyRevenueTarget } for weekly_target_pct type
+    weeklyTargets: {},      // { email: weeklyRevenueTarget } for weekly_target_pct type
+    agentTargets:  {},      // { email: { s1: N, s2: M } } for team_month_end type
+    monthEndPayouts: { s1: '', s2: '' }, // shared payout amounts for team_month_end
   }
 
   const [form,        setForm]        = useState(BLANK_FORM)
@@ -817,8 +889,13 @@ export default function AnnounceKicker() {
       paidDate:     kicker.paidDate || '',
       notes:        kicker.notes || '',
       individualOverridesText: Object.entries(kicker.individualAmounts || {}).map(([e, a]) => `${e},${a}`).join('\n'),
-      collectiveMode: kicker.collectiveMode || 'per_sale',
-      weeklyTargets:  kicker.weeklyTargets  || {},
+      collectiveMode:    kicker.collectiveMode || 'per_sale',
+      weeklyTargets:     kicker.weeklyTargets  || {},
+      agentTargets:      kicker.agentTargets   || {},
+      monthEndPayouts:   {
+        s1: kicker.slabs?.[0]?.payout ?? '',
+        s2: kicker.slabs?.[1]?.payout ?? '',
+      },
     })
     setEditingId(kicker.id)
     setError('')
@@ -843,19 +920,36 @@ export default function AnnounceKicker() {
     e.preventDefault()
     if (!form.title.trim())                    { setError('Title is required.'); return }
     if (!form.dateFrom || !form.dateTo)        { setError('Date range is required.'); return }
-    if (form.type !== 'weekly_target_pct' && (!form.minSaleValue || Number(form.minSaleValue) <= 0)) { setError('Minimum Sale Value is required.'); return }
+    const isMonthEnd = form.type === 'team_month_end'
+    if (!isMonthEnd && form.type !== 'weekly_target_pct' && (!form.minSaleValue || Number(form.minSaleValue) <= 0)) { setError('Minimum Sale Value is required.'); return }
     if (form.targetRoles.length === 0)         { setError('Select at least one target role.'); return }
-    const filledSlabs = form.slabs.filter(s => s.payout !== '')
-    if (!filledSlabs.length)            { setError('Add at least one slab.'); return }
+    if (isMonthEnd) {
+      if (!form.monthEndPayouts.s1 || Number(form.monthEndPayouts.s1) <= 0) { setError('S1 payout amount is required.'); return }
+      if (!form.monthEndPayouts.s2 || Number(form.monthEndPayouts.s2) <= 0) { setError('S2 payout amount is required.'); return }
+    } else {
+      const filledSlabs = form.slabs.filter(s => s.payout !== '')
+      if (!filledSlabs.length) { setError('Add at least one slab.'); return }
+    }
 
     setSubmitting(true); setError('')
-    const cleanSlabs = filledSlabs.map(s => ({
-      threshold:        Number(s.threshold        || 0),
-      salesThreshold:   Number(s.salesThreshold   || 0),
-      revenueThreshold: Number(s.revenueThreshold || 0),
-      payout:           Number(s.payout           || 0),
-      operator:         s.operator === 'AND' ? 'AND' : 'OR',
-    }))
+
+    // For month_end: slabs store only the shared payout amounts (no thresholds — those are per-agent)
+    let cleanSlabs
+    if (isMonthEnd) {
+      cleanSlabs = [
+        { threshold: 0, payout: Number(form.monthEndPayouts.s1) },
+        { threshold: 0, payout: Number(form.monthEndPayouts.s2) },
+      ]
+    } else {
+      const filledSlabs = form.slabs.filter(s => s.payout !== '')
+      cleanSlabs = filledSlabs.map(s => ({
+        threshold:        Number(s.threshold        || 0),
+        salesThreshold:   Number(s.salesThreshold   || 0),
+        revenueThreshold: Number(s.revenueThreshold || 0),
+        payout:           Number(s.payout           || 0),
+        operator:         s.operator === 'AND' ? 'AND' : 'OR',
+      }))
+    }
 
     // Parse "email,amount" lines into an { email: amount } override map
     const individualAmounts = {}
@@ -873,13 +967,13 @@ export default function AnnounceKicker() {
           MinSaleValue:Number(form.minSaleValue || 0),
           DateFrom:    form.dateFrom,
           DateTo:      form.dateTo,
-          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts, collectiveMode: form.collectiveMode, weeklyTargets: form.weeklyTargets }),
+          Slabs:       packSlabsCol({ slabs: cleanSlabs, status: form.status, paidDate: form.paidDate, notes: form.notes, individualAmounts, collectiveMode: form.collectiveMode, weeklyTargets: form.weeklyTargets, agentTargets: form.agentTargets }),
           TargetTeams: JSON.stringify(form.targetTeams || ['ALL']),
           TargetRoles: JSON.stringify(form.targetRoles || []),
           Pinned:      form.pinned ? 'true' : 'false',
         })
       } else {
-        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0), individualAmounts, weeklyTargets: form.weeklyTargets }, activeUser.email, activeUser.role)
+        await announceKicker({ ...form, slabs: cleanSlabs, minSaleValue: Number(form.minSaleValue || 0), individualAmounts, weeklyTargets: form.weeklyTargets, agentTargets: form.agentTargets }, activeUser.email, activeUser.role)
       }
       notifKickerAnnounced({ title: form.title, isEdit: !!editingId })
       notifyKickerAnnounced({
@@ -1325,8 +1419,102 @@ export default function AnnounceKicker() {
             )
           })()}
 
-          {/* Slabs */}
-          <div>
+          {/* Month-End: shared payout amounts + per-agent target table */}
+          {form.type === 'team_month_end' && (() => {
+            // Build the pool of selected agents to assign targets to
+            const agentRoles = form.targetRoles.filter(r => ['Agent', 'PreSales'].includes(r))
+            const agentPool  = subtreeAll.filter(m => agentRoles.includes(m.Role))
+            const isAll      = form.targetTeams.includes('ALL')
+            const selectedAgents = isAll
+              ? agentPool
+              : agentPool.filter(a => form.targetTeams.some(t => t.toLowerCase() === (a.Email || '').toLowerCase()))
+            return (
+              <div className="space-y-4">
+                {/* Global payout amounts */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Payout Amounts (same for all agents)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-blue-200 overflow-hidden">
+                      <div className="bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-700 uppercase">S1 — First Target Hit</div>
+                      <div className="px-3 py-2">
+                        <input type="number" value={form.monthEndPayouts.s1}
+                          onChange={e => setForm(p => ({ ...p, monthEndPayouts: { ...p.monthEndPayouts, s1: e.target.value } }))}
+                          placeholder="e.g. 3000"
+                          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                        {form.monthEndPayouts.s1 > 0 && <p className="text-[10px] text-blue-600 mt-0.5 font-semibold">{formatINR(Number(form.monthEndPayouts.s1))}</p>}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-green-200 overflow-hidden">
+                      <div className="bg-green-50 px-3 py-1.5 text-[10px] font-bold text-green-700 uppercase">S2 — Stretch Target Hit</div>
+                      <div className="px-3 py-2">
+                        <input type="number" value={form.monthEndPayouts.s2}
+                          onChange={e => setForm(p => ({ ...p, monthEndPayouts: { ...p.monthEndPayouts, s2: e.target.value } }))}
+                          placeholder="e.g. 5000"
+                          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                        {form.monthEndPayouts.s2 > 0 && <p className="text-[10px] text-green-600 mt-0.5 font-semibold">{formatINR(Number(form.monthEndPayouts.s2))}</p>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-agent targets */}
+                {selectedAgents.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">
+                      Sales Target per Agent
+                    </label>
+                    <p className="text-[11px] text-gray-400 mb-2">Set S1 and S2 sales count targets for each agent. Leave blank to exclude an agent from this kicker.</p>
+                    <div className="rounded-xl overflow-hidden border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-[10px] font-bold uppercase bg-gray-50 text-gray-500">
+                            <th className="px-3 py-2 text-left">Agent</th>
+                            <th className="px-3 py-2 text-center w-28 bg-blue-50 text-blue-700">S1 Sales</th>
+                            <th className="px-3 py-2 text-center w-28 bg-green-50 text-green-700">S2 Sales</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {selectedAgents.map(a => {
+                            const email = (a.Email || '').toLowerCase()
+                            const targets = form.agentTargets[email] || {}
+                            return (
+                              <tr key={email} className="hover:bg-gray-50/50">
+                                <td className="px-3 py-2 text-gray-700 font-medium">{a.Name || a.Email}</td>
+                                <td className="px-2 py-1.5">
+                                  <input type="number" value={targets.s1 ?? ''}
+                                    onChange={e => setForm(p => ({
+                                      ...p,
+                                      agentTargets: { ...p.agentTargets, [email]: { ...( p.agentTargets[email] || {}), s1: e.target.value === '' ? '' : Number(e.target.value) } }
+                                    }))}
+                                    placeholder="e.g. 6"
+                                    className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <input type="number" value={targets.s2 ?? ''}
+                                    onChange={e => setForm(p => ({
+                                      ...p,
+                                      agentTargets: { ...p.agentTargets, [email]: { ...( p.agentTargets[email] || {}), s2: e.target.value === '' ? '' : Number(e.target.value) } }
+                                    }))}
+                                    placeholder="e.g. 8"
+                                    className="w-full border border-green-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-green-400" />
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {Object.values(form.agentTargets).filter(t => t?.s1 || t?.s2).length} of {selectedAgents.length} agents have targets set
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Slabs — hidden for team_month_end (uses monthEndPayouts + agentTargets instead) */}
+          {form.type === 'team_month_end' ? null : <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Incentive Slabs</label>
             <div className="rounded-xl overflow-hidden border border-gray-200">
               <table className="w-full text-xs">
@@ -1415,7 +1603,7 @@ export default function AnnounceKicker() {
                 </button>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* Pin toggle */}
           <div className="flex items-center gap-3">

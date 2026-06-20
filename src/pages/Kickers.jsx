@@ -273,12 +273,14 @@ const KICKER_TYPES = [
   { value: 'sales_or_revenue',  label: '⚡ Sales OR Revenue',           unit: 'both'    },
   { value: 'collective',        label: '🤝 Collective Team Kicker',     unit: 'sales'   },
   { value: 'weekly_target_pct', label: '📊 Weekly % Target',            unit: 'pct'     },
+  { value: 'team_month_end',    label: '📋 Month-End Team Kicker',      unit: 'sales'   },
 ]
 
 function normalizeType(t) {
   if (t === 'collective') return 'collective'
   if (t === 'sales_or_revenue') return 'sales_or_revenue'
   if (t === 'weekly_target_pct') return 'weekly_target_pct'
+  if (t === 'team_month_end') return 'team_month_end'
   if (t === 'revenue' || t === 'team_revenue' || t === 'individual_revenue') return 'revenue'
   return 'sales'
 }
@@ -305,7 +307,7 @@ function countdown(k) {
 }
 
 // ── Progress calculation ──────────────────────────────────────────────────────
-function computeProgress(kicker, allDeals, myEmail, weeklyTarget) {
+function computeProgress(kicker, allDeals, myEmail, weeklyTarget, emailForTargets) {
   const from = new Date(kicker.dateFrom)
   const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
 
@@ -353,6 +355,30 @@ function computeProgress(kicker, allDeals, myEmail, weeklyTarget) {
   const isRev        = type === 'revenue'
   const isSalesOrRev = type === 'sales_or_revenue'
   const isWeeklyPct  = type === 'weekly_target_pct'
+  const isMonthEnd   = type === 'team_month_end'
+
+  // team_month_end: use per-agent targets instead of shared slabs
+  if (isMonthEnd) {
+    const emailKey  = (emailForTargets || '').toLowerCase()
+    const targets   = (kicker.agentTargets || {})[emailKey] || {}
+    const s1        = Number(targets.s1 || 0)
+    const s2        = Number(targets.s2 || 0)
+    const s1Payout  = Number((kicker.slabs || [])[0]?.payout || 0)
+    const s2Payout  = Number((kicker.slabs || [])[1]?.payout || 0)
+    let activeSlab  = null
+    let nextSlab    = null
+    if (s2 > 0 && sales >= s2)       { activeSlab = { threshold: s2, payout: s2Payout, _tier: 's2' } }
+    else if (s1 > 0 && sales >= s1)  { activeSlab = { threshold: s1, payout: s1Payout, _tier: 's1' } }
+    if (!activeSlab) {
+      nextSlab = s1 > 0 && sales < s1
+        ? { threshold: s1, payout: s1Payout, _tier: 's1' }
+        : (s2 > 0 && sales < s2 ? { threshold: s2, payout: s2Payout, _tier: 's2' } : null)
+    } else if (activeSlab._tier === 's1' && s2 > 0 && sales < s2) {
+      nextSlab = { threshold: s2, payout: s2Payout, _tier: 's2' }
+    }
+    return { sales, revenue, activeSlab, nextSlab, sorted: [], myContribution, contributorsMap, isSalesOrRev: false, isWeeklyPct: false, isMonthEnd: true, achievedPct: 0, weeklyTarget: 0, myS1: s1, myS2: s2, s1Payout, s2Payout }
+  }
+
   const sorted = [...(kicker.slabs || [])].sort((a, b) => {
     const at = Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0)
     const bt = Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
@@ -386,13 +412,17 @@ function computeProgress(kicker, allDeals, myEmail, weeklyTarget) {
     else if (!nextSlab) nextSlab = slab
   }
 
-  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap, isSalesOrRev, isWeeklyPct, achievedPct, weeklyTarget: weeklyTarget || 0 }
+  return { sales, revenue, activeSlab, nextSlab, sorted, myContribution, contributorsMap, isSalesOrRev, isWeeklyPct, isMonthEnd: false, achievedPct, weeklyTarget: weeklyTarget || 0, myS1: 0, myS2: 0, s1Payout: 0, s2Payout: 0 }
 }
 
 // ── Slab label formatter ──────────────────────────────────────────────────────
 function slabLabel(slab, type) {
   const t = normalizeType(type)
   if (t === 'weekly_target_pct') return `${slab.threshold || 0}% of weekly target → ${formatINR(Number(slab.payout))}`
+  if (t === 'team_month_end') {
+    const tier = slab._tier === 's2' ? 'S2' : 'S1'
+    return `${tier}: ${slab.threshold || 0} sales → ${formatINR(Number(slab.payout))}`
+  }
   if (t === 'sales_or_revenue') {
     const tS = Number(slab.salesThreshold || 0)
     const tR = Number(slab.revenueThreshold || 0)
@@ -406,6 +436,10 @@ function slabLabel(slab, type) {
 
 function slabBarPct(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'team_month_end') {
+    const threshold = Number(slab.threshold || 1)
+    return Math.min((progress.sales / Math.max(threshold, 1)) * 100, 100)
+  }
   if (t === 'weekly_target_pct') {
     const threshold = Number(slab.threshold || 1)
     return Math.min((progress.achievedPct / Math.max(threshold, 1)) * 100, 100)
@@ -425,6 +459,11 @@ function slabBarPct(slab, type, progress) {
 
 function nudgeText(slab, type, progress) {
   const t = normalizeType(type)
+  if (t === 'team_month_end') {
+    const gap  = Number(slab.threshold || 0) - progress.sales
+    const tier = slab._tier === 's2' ? 'S2' : 'S1'
+    return gap > 0 ? `${gap} more sale${gap > 1 ? 's' : ''} to unlock ${tier} (${formatINR(Number(slab.payout))})` : null
+  }
   if (t === 'weekly_target_pct') {
     const tPct = Number(slab.threshold || 0)
     const gap  = tPct - progress.achievedPct
@@ -492,9 +531,12 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     ? Number((kicker.weeklyTargets || {})[(agentEmail || '').toLowerCase()] || 0)
     : 0
 
+  const isMonthEnd = type === 'team_month_end'
+
   // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight.
   // Collective kickers always use all deals so the full contributors map is visible to every agent.
-  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined, myWeeklyTarget)
+  // For team_month_end: pass agentEmail so computeProgress can look up personal targets.
+  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined, myWeeklyTarget, isMonthEnd ? agentEmail : undefined)
 
   // Individual payout override — admin can set a custom amount for a specific
   // person, taking precedence over the slab-derived payout once applied.
@@ -642,6 +684,45 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           const payout = override != null ? Number(override) : (hitSlab ? Number(hitSlab.payout) : 0)
           return { ...m, payout, hit: !!hitSlab || override != null, weeklyTarget: wt, pct }
         }).sort((a, b) => b.payout - a.payout || b.revenue - a.revenue || b.count - a.count)
+      })()
+    : null
+
+  // Month-end earners list — oversight view for team_month_end kicker
+  const monthEndEarners = (isOversight && isMonthEnd)
+    ? (() => {
+        const from     = new Date(kicker.dateFrom)
+        const to       = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+        const minVal   = Number(kicker.minSaleValue || 0)
+        const agTargets = kicker.agentTargets || {}
+        const s1Payout = Number((kicker.slabs || [])[0]?.payout || 0)
+        const s2Payout = Number((kicker.slabs || [])[1]?.payout || 0)
+        // Count qualifying sales per agent
+        const byAgent = {}
+        for (const d of deals) {
+          if (d.PaymentDate) {
+            const dt = new Date(d.PaymentDate)
+            if (isNaN(dt) || dt < from || dt > to) continue
+          } else if (d.Month) {
+            const km = kicker.dateFrom?.substring(0, 7)
+            if (!km || d.Month !== km) continue
+          } else continue
+          if (minVal > 0 && (d.TotalValue || 0) < minVal) continue
+          const email = (d.Email || '').toLowerCase()
+          if (!email) continue
+          if (!byAgent[email]) byAgent[email] = 0
+          byAgent[email]++
+        }
+        // Build earner rows from agentTargets (agents with targets set)
+        return Object.entries(agTargets).map(([email, targets]) => {
+          const s1   = Number(targets?.s1 || 0)
+          const s2   = Number(targets?.s2 || 0)
+          const count = byAgent[email] || 0
+          const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+          let hitTier = null, payout = 0
+          if (s2 > 0 && count >= s2) { hitTier = 'S2'; payout = s2Payout }
+          else if (s1 > 0 && count >= s1) { hitTier = 'S1'; payout = s1Payout }
+          return { email, displayName, count, s1, s2, s1Payout, s2Payout, hitTier, payout, hit: !!hitTier }
+        }).sort((a, b) => (b.hit ? 1 : 0) - (a.hit ? 1 : 0) || b.count - a.count)
       })()
     : null
 
@@ -797,6 +878,100 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            ) : isMonthEnd ? (
+              /* Month-End Team Kicker */
+              <div className="space-y-2">
+                {isOversight && monthEndEarners ? (
+                  <>
+                    <div className="flex gap-2">
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                        <p className="text-xl font-black text-indigo-700">{monthEndEarners.length}</p>
+                        <p className="text-[10px] text-indigo-500 font-semibold">Agents Targeted</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-blue-50 border border-blue-100">
+                        <p className="text-xl font-black text-blue-700">{monthEndEarners.filter(a => a.hitTier === 'S1').length}</p>
+                        <p className="text-[10px] text-blue-500 font-semibold">Hit S1</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                        <p className="text-xl font-black text-green-700">{monthEndEarners.filter(a => a.hitTier === 'S2').length}</p>
+                        <p className="text-[10px] text-green-600 font-semibold">Hit S2</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-purple-50 border border-purple-100">
+                        <p className="text-sm font-black text-purple-700">{formatINR(monthEndEarners.reduce((s, a) => s + a.payout, 0))}</p>
+                        <p className="text-[10px] text-purple-500 font-semibold">Total Payout</p>
+                      </div>
+                    </div>
+                    {/* Per-agent earner list */}
+                    <div>
+                      <button onClick={() => setShowContributors(v => !v)}
+                        className="flex items-center justify-between w-full text-xs text-brand-600 hover:text-brand-800 font-semibold mt-1">
+                        <span>👥 {monthEndEarners.length} agent{monthEndEarners.length !== 1 ? 's' : ''} · {monthEndEarners.filter(a => a.hit).length} earned</span>
+                        {showContributors ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      </button>
+                      {showContributors && (
+                        <div className="mt-2 rounded-xl overflow-hidden border border-gray-100">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[10px] font-bold uppercase bg-gray-50 text-gray-500">
+                                <th className="px-3 py-2 text-left">Agent</th>
+                                <th className="px-3 py-2 text-center text-blue-700">S1</th>
+                                <th className="px-3 py-2 text-center text-green-700">S2</th>
+                                <th className="px-3 py-2 text-center">Sales</th>
+                                <th className="px-3 py-2 text-right">Payout</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {monthEndEarners.map(a => (
+                                <tr key={a.email} className={a.hit ? 'bg-green-50' : ''}>
+                                  <td className={`px-3 py-2 font-medium ${a.hit ? 'text-green-700' : 'text-gray-700'}`}>{a.displayName}</td>
+                                  <td className="px-3 py-2 text-center text-blue-600">{a.s1 || '—'}</td>
+                                  <td className="px-3 py-2 text-center text-green-600">{a.s2 || '—'}</td>
+                                  <td className="px-3 py-2 text-center font-bold text-gray-700">{a.count}</td>
+                                  <td className={`px-3 py-2 text-right font-bold ${a.hit ? 'text-green-700' : 'text-gray-300'}`}>
+                                    {a.hit ? `${a.hitTier} · ${formatINR(a.payout)}` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  /* Agent's personal view */
+                  <>
+                    <div className="flex gap-2">
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-indigo-50 border border-indigo-100">
+                        <p className="text-xl font-black text-indigo-700">{progress.sales}</p>
+                        <p className="text-[10px] text-indigo-500 font-semibold">Your Sales</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-blue-50 border border-blue-100">
+                        <p className="text-xl font-black text-blue-700">{progress.myS1 || '—'}</p>
+                        <p className="text-[10px] text-blue-500 font-semibold">S1 Target</p>
+                      </div>
+                      <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-teal-50 border border-teal-100">
+                        <p className="text-xl font-black text-teal-700">{progress.myS2 || '—'}</p>
+                        <p className="text-[10px] text-teal-500 font-semibold">S2 Target</p>
+                      </div>
+                      {progress.activeSlab ? (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-green-50 border border-green-200">
+                          <p className="text-sm font-black text-green-700">{progress.activeSlab._tier?.toUpperCase()} · {formatINR(Number(progress.activeSlab.payout))}</p>
+                          <p className="text-[10px] text-green-600 font-semibold">🎉 {past ? 'Earned' : 'Earned!'}</p>
+                        </div>
+                      ) : (
+                        <div className="flex-1 rounded-xl px-3 py-2.5 text-center bg-gray-50 border border-gray-100">
+                          <p className="text-sm font-black text-gray-400">—</p>
+                          <p className="text-[10px] text-gray-400 font-semibold">{past ? 'Not Hit' : 'Not Yet'}</p>
+                        </div>
+                      )}
+                    </div>
+                    {progress.myS1 === 0 && progress.myS2 === 0 && (
+                      <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-2 font-semibold">No target assigned to you for this kicker yet.</p>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -982,6 +1157,31 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
               </div>
             )}
           </>
+        )}
+
+        {/* Reward Tiers — team_month_end uses shared S1/S2 payouts */}
+        {isMonthEnd && (progress.s1Payout > 0 || progress.s2Payout > 0) && (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Reward Tiers</p>
+            <div className="space-y-1">
+              {[{ tier: 'S1', target: progress.myS1, payout: progress.s1Payout }, { tier: 'S2', target: progress.myS2, payout: progress.s2Payout }]
+                .filter(r => r.payout > 0)
+                .map(r => {
+                  const hit = progress.activeSlab?._tier === r.tier.toLowerCase() ||
+                    (progress.activeSlab?._tier === 's2' && r.tier === 'S1')
+                  return (
+                    <div key={r.tier} className={`flex items-center justify-between text-xs rounded-lg px-3 py-1.5 ${
+                      hit ? 'bg-green-100 text-green-700 font-semibold' : 'text-gray-500'
+                    }`}>
+                      <span>{r.tier}{r.target ? `: ${r.target} sales` : ''}</span>
+                      <span className={`font-bold ${hit ? 'text-green-700' : 'text-gray-700'}`}>
+                        {hit ? '✓ ' : ''}{formatINR(r.payout)}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
         )}
 
         {/* Slab summary */}
