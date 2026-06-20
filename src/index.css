@@ -193,23 +193,23 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 
 /* ── Ocean ──────────────────────────────────────────────────────────────────── */
 [data-theme="ocean"] {
-  --t-bg:           #EEF4FF;
-  --t-surface:      #FFFFFF;
-  --t-surface-2:    #F0F6FF;
-  --t-surface-3:    #E4EEFF;
-  --t-border:       #C7DCFF;
-  --t-border-2:     #A3C4FD;
+  --t-bg:           #EFF6FF;
+  --t-surface:      #DBEAFE;
+  --t-surface-2:    #BFDBFE;
+  --t-surface-3:    #93C5FD;
+  --t-border:       #60A5FA;
+  --t-border-2:     #3B82F6;
   --t-text:         #0F172A;
-  --t-text-2:       #1E3A5F;
-  --t-text-3:       #4A6FA5;
-  --t-text-4:       #7B9CC9;
-  --t-brand:        #2563EB;
-  --t-brand-light:  rgba(37,99,235,0.10);
-  --t-glass-bg:     rgba(255,255,255,0.90);
-  --t-glass-border: #C7DCFF;
-  --t-scrollbar:    #C7DCFF;
-  --t-input-bg:     #FFFFFF;
-  --t-select-bg:    #FFFFFF;
+  --t-text-2:       #1E293B;
+  --t-text-3:       #334155;
+  --t-text-4:       #475569;
+  --t-brand:        #1D4ED8;
+  --t-brand-light:  rgba(29,78,216,0.15);
+  --t-glass-bg:     rgba(219,234,254,0.95);
+  --t-glass-border: #60A5FA;
+  --t-scrollbar:    #93C5FD;
+  --t-input-bg:     #EFF6FF;
+  --t-select-bg:    #EFF6FF;
   color-scheme: light;
 }
 
