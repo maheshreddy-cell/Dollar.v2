@@ -58,13 +58,14 @@ function normalizeType(t) {
 // Roles each announcer level can target
 const ANNOUNCE_FOR = {
   Admin:     ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead'],
+  'Sales Ops': ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead'],
   SalesHead: ['Agent', 'PreSales', 'Manager', 'VH'],
   VH:        ['Agent', 'PreSales', 'Manager'],
   Manager:   ['Agent', 'PreSales'],
 }
 
 // Role hierarchy for "can manage" check (higher index = higher authority)
-const ROLE_HIERARCHY = ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Admin']
+const ROLE_HIERARCHY = ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Sales Ops', 'Admin']
 
 const TODAY = new Date().toISOString().split('T')[0]
 
@@ -90,7 +91,7 @@ function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date
 function canManage(kicker, user) {
   if (!user) return false
   // VH and Admin (HOS) can edit all kickers regardless of who announced them
-  if (user.role === 'Admin' || user.role === 'VH' || user.role === 'SalesHead') return true
+  if (user.role === 'Admin' || user.role === 'VH' || user.role === 'SalesHead' || user.role === 'Sales Ops') return true
   if (kicker.announcedBy === user?.email) return true
   const announcerIdx = ROLE_HIERARCHY.indexOf(kicker.announcedByRole)
   const userIdx      = ROLE_HIERARCHY.indexOf(user?.role)
@@ -797,7 +798,7 @@ export default function AnnounceKicker() {
     setLoadingList(true)
     try {
       // Admin/SalesHead/VH can target anyone — fetch all users instead of just their subtree
-      const isOrgWide = ['Admin', 'SalesHead', 'VH'].includes(activeUser?.role)
+      const isOrgWide = ['Admin', 'SalesHead', 'VH', 'Sales Ops'].includes(activeUser?.role)
       const [ks, membersRaw, deals] = await Promise.all([
         getKickers(),
         isOrgWide
@@ -821,7 +822,7 @@ export default function AnnounceKicker() {
           ? ['Manager']
           : activeUser?.role === 'SalesHead'
             ? ['VH', 'Manager']
-            : ['VH', 'Manager', 'SalesHead'] // Admin
+            : ['VH', 'Manager', 'SalesHead'] // Admin / Sales Ops
         setManagers(allMembers.filter(m => managerRoles.includes(m.Role)))
       }
     } catch {}
@@ -1618,16 +1619,26 @@ export default function AnnounceKicker() {
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-2">Status</label>
             <div className="flex gap-2">
-              {STATUSES.map(s => (
-                <button key={s} type="button" onClick={() => setField('status', s)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                    form.status === s ? STATUS_COLORS[s] + ' border-transparent' : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                  }`}>
-                  {s}
-                </button>
-              ))}
+              {STATUSES.map(s => {
+                const isSalesOpsLocked = activeUser?.role === 'Sales Ops' && s !== 'Announced'
+                return (
+                  <button key={s} type="button"
+                    onClick={() => !isSalesOpsLocked && setField('status', s)}
+                    disabled={isSalesOpsLocked}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      isSalesOpsLocked
+                        ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+                        : form.status === s ? STATUS_COLORS[s] + ' border-transparent' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}>
+                    {s}
+                  </button>
+                )
+              })}
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">New kickers start as "Announced" — approve once qualification is confirmed, mark Paid once payroll processes it.</p>
+            {activeUser?.role === 'Sales Ops'
+              ? <p className="text-[10px] text-amber-600 mt-1 font-semibold">🔒 Sales Ops kickers require approval — only Hassaan can move to Approved/Paid.</p>
+              : <p className="text-[10px] text-gray-400 mt-1">New kickers start as "Announced" — approve once qualification is confirmed, mark Paid once payroll processes it.</p>
+            }
           </div>
 
           {/* Individual overrides */}

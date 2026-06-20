@@ -27,7 +27,7 @@ const ROLE_DOTS = {
 
 // What roles each rank can invite
 const INVITE_ROLES = {
-  Admin:     ['SalesHead', 'VH', 'Manager', 'Agent', 'PreSales'],
+  Admin:     ['SalesHead', 'Sales Ops', 'VH', 'Manager', 'Agent', 'PreSales'],
   SalesHead: ['VH', 'Manager', 'Agent', 'PreSales'],
   VH:        ['Manager', 'Agent', 'PreSales'],
   Manager:   ['Agent', 'PreSales'],
@@ -35,7 +35,7 @@ const INVITE_ROLES = {
 
 // What roles each rank can assign to a member
 const ROLE_CHANGE_TO = {
-  Admin:     ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead'],
+  Admin:     ['Agent', 'PreSales', 'Manager', 'VH', 'SalesHead', 'Sales Ops'],
   SalesHead: ['Agent', 'PreSales', 'Manager', 'VH'],
   VH:        ['Agent', 'PreSales', 'Manager'],
   Manager:   ['Agent', 'PreSales'],

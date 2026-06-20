@@ -286,7 +286,7 @@ function normalizeType(t) {
 }
 
 // Roles that see all kickers (oversight view)
-const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH']
+const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH', 'Sales Ops']
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 function kickerIsActive(k) {
@@ -1244,7 +1244,7 @@ export default function Kickers() {
   const isPreSales     = effectiveUser?.role === 'PreSales'
   const isOversight    = OVERSIGHT_ROLES.includes(effectiveUser?.role) && effectiveUser?.email === user?.email
   // Full oversight = Admin or SalesHead (see ALL kickers with no filtering)
-  const isFullOversight = (effectiveUser?.role === 'Admin' || effectiveUser?.role === 'SalesHead') && effectiveUser?.email === user?.email
+  const isFullOversight = (effectiveUser?.role === 'Admin' || effectiveUser?.role === 'SalesHead' || effectiveUser?.role === 'Sales Ops') && effectiveUser?.email === user?.email
 
   function isVisible(k) {
     const roles    = k.targetRoles || []
