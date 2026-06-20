@@ -995,7 +995,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
                   ? progress.sorted.indexOf(progress.activeSlab) >= i
                   : false
                 let label
-                if (isSalesOrRev) {
+                if (type === 'weekly_target_pct') {
+                  label = `${slab.threshold || 0}% of weekly target`
+                } else if (isSalesOrRev) {
                   const tS = Number(slab.salesThreshold || 0)
                   const tR = Number(slab.revenueThreshold || 0)
                   const op = slab.operator === 'AND' ? 'AND' : 'OR'
