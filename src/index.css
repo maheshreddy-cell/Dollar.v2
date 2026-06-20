@@ -193,24 +193,24 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 
 /* ── Ocean ──────────────────────────────────────────────────────────────────── */
 [data-theme="ocean"] {
-  --t-bg:           #051525;
-  --t-surface:      #0A2040;
-  --t-surface-2:    #0C2848;
-  --t-surface-3:    #0E3055;
-  --t-border:       #1A3A5C;
-  --t-border-2:     #1E4470;
-  --t-text:         #D6EEFF;
-  --t-text-2:       #90CAF9;
-  --t-text-3:       #64B5F6;
-  --t-text-4:       #42A5F5;
-  --t-brand:        #00E5FF;
-  --t-brand-light:  rgba(0,229,255,0.12);
-  --t-glass-bg:     rgba(10,32,64,0.95);
-  --t-glass-border: #1A3A5C;
-  --t-scrollbar:    #1E4470;
-  --t-input-bg:     #0C2848;
-  --t-select-bg:    #0C2848;
-  color-scheme: dark;
+  --t-bg:           #EEF4FF;
+  --t-surface:      #FFFFFF;
+  --t-surface-2:    #F0F6FF;
+  --t-surface-3:    #E4EEFF;
+  --t-border:       #C7DCFF;
+  --t-border-2:     #A3C4FD;
+  --t-text:         #0F172A;
+  --t-text-2:       #1E3A5F;
+  --t-text-3:       #4A6FA5;
+  --t-text-4:       #7B9CC9;
+  --t-brand:        #2563EB;
+  --t-brand-light:  rgba(37,99,235,0.10);
+  --t-glass-bg:     rgba(255,255,255,0.90);
+  --t-glass-border: #C7DCFF;
+  --t-scrollbar:    #C7DCFF;
+  --t-input-bg:     #FFFFFF;
+  --t-select-bg:    #FFFFFF;
+  color-scheme: light;
 }
 
 /* ── Apply tokens to body & page shell ─────────────────────────────────────── */
@@ -343,8 +343,7 @@ body {
   color: var(--t-text-4) !important;
 }
 /* Month calendar picker icon */
-[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
-[data-theme="ocean"] input[type="month"]::-webkit-calendar-picker-indicator {
+[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.5);
 }
 
@@ -373,90 +372,85 @@ body {
   background: var(--t-border);
 }
 
-/* ── Gray 200 / 300 ─────────────────────────────────────────────────────────── */
-[data-theme="dark"] .bg-gray-200,
-[data-theme="ocean"] .bg-gray-200 { background-color: var(--t-border-2) !important; }
-[data-theme="dark"] .bg-gray-300,
-[data-theme="ocean"] .bg-gray-300 { background-color: var(--t-border-2) !important; }
-[data-theme="dark"] .text-gray-300,
-[data-theme="ocean"] .text-gray-300 { color: var(--t-text-3) !important; }
-[data-theme="dark"] .border-gray-400,
-[data-theme="ocean"] .border-gray-400 { border-color: var(--t-border-2) !important; }
-[data-theme="dark"] .hover\:bg-gray-200:hover,
-[data-theme="ocean"] .hover\:bg-gray-200:hover { background-color: var(--t-surface-3) !important; }
+/* ── Gray 200 / 300 (dark only) ─────────────────────────────────────────────── */
+[data-theme="dark"] .bg-gray-200  { background-color: var(--t-border-2) !important; }
+[data-theme="dark"] .bg-gray-300  { background-color: var(--t-border-2) !important; }
+[data-theme="dark"] .text-gray-300 { color: var(--t-text-3) !important; }
+[data-theme="dark"] .border-gray-400 { border-color: var(--t-border-2) !important; }
+[data-theme="dark"] .hover\:bg-gray-200:hover { background-color: var(--t-surface-3) !important; }
 
-/* ── Colored surfaces — muted overlays so dark bg shows through ─────────────── */
-[data-theme="dark"] .bg-blue-50,    [data-theme="ocean"] .bg-blue-50    { background-color: rgba(59,130,246,0.13) !important; }
-[data-theme="dark"] .bg-blue-100,   [data-theme="ocean"] .bg-blue-100   { background-color: rgba(59,130,246,0.20) !important; }
-[data-theme="dark"] .bg-green-50,   [data-theme="ocean"] .bg-green-50   { background-color: rgba(34,197,94,0.12) !important; }
-[data-theme="dark"] .bg-green-100,  [data-theme="ocean"] .bg-green-100  { background-color: rgba(34,197,94,0.18) !important; }
-[data-theme="dark"] .bg-red-50,     [data-theme="ocean"] .bg-red-50     { background-color: rgba(239,68,68,0.12) !important; }
-[data-theme="dark"] .bg-red-100,    [data-theme="ocean"] .bg-red-100    { background-color: rgba(239,68,68,0.18) !important; }
-[data-theme="dark"] .bg-amber-50,   [data-theme="ocean"] .bg-amber-50   { background-color: rgba(245,158,11,0.12) !important; }
-[data-theme="dark"] .bg-amber-100,  [data-theme="ocean"] .bg-amber-100  { background-color: rgba(245,158,11,0.18) !important; }
-[data-theme="dark"] .bg-yellow-50,  [data-theme="ocean"] .bg-yellow-50  { background-color: rgba(234,179,8,0.10) !important; }
-[data-theme="dark"] .bg-yellow-100, [data-theme="ocean"] .bg-yellow-100 { background-color: rgba(234,179,8,0.16) !important; }
-[data-theme="dark"] .bg-yellow-400, [data-theme="ocean"] .bg-yellow-400 { background-color: rgba(234,179,8,0.55) !important; }
-[data-theme="dark"] .bg-purple-50,  [data-theme="ocean"] .bg-purple-50  { background-color: rgba(168,85,247,0.12) !important; }
-[data-theme="dark"] .bg-purple-100, [data-theme="ocean"] .bg-purple-100 { background-color: rgba(168,85,247,0.18) !important; }
-[data-theme="dark"] .bg-indigo-50,  [data-theme="ocean"] .bg-indigo-50  { background-color: rgba(99,102,241,0.12) !important; }
-[data-theme="dark"] .bg-indigo-100, [data-theme="ocean"] .bg-indigo-100 { background-color: rgba(99,102,241,0.18) !important; }
-[data-theme="dark"] .bg-teal-50,    [data-theme="ocean"] .bg-teal-50    { background-color: rgba(20,184,166,0.12) !important; }
-[data-theme="dark"] .bg-teal-100,   [data-theme="ocean"] .bg-teal-100   { background-color: rgba(20,184,166,0.18) !important; }
-[data-theme="dark"] .bg-orange-50,  [data-theme="ocean"] .bg-orange-50  { background-color: rgba(249,115,22,0.12) !important; }
-[data-theme="dark"] .bg-orange-100, [data-theme="ocean"] .bg-orange-100 { background-color: rgba(249,115,22,0.18) !important; }
-[data-theme="dark"] .bg-pink-50,    [data-theme="ocean"] .bg-pink-50    { background-color: rgba(236,72,153,0.12) !important; }
-[data-theme="dark"] .bg-pink-100,   [data-theme="ocean"] .bg-pink-100   { background-color: rgba(236,72,153,0.18) !important; }
+/* ── Colored surfaces — muted overlays for dark bg ─────────────────────────── */
+[data-theme="dark"] .bg-blue-50    { background-color: rgba(59,130,246,0.13) !important; }
+[data-theme="dark"] .bg-blue-100   { background-color: rgba(59,130,246,0.20) !important; }
+[data-theme="dark"] .bg-green-50   { background-color: rgba(34,197,94,0.12) !important; }
+[data-theme="dark"] .bg-green-100  { background-color: rgba(34,197,94,0.18) !important; }
+[data-theme="dark"] .bg-red-50     { background-color: rgba(239,68,68,0.12) !important; }
+[data-theme="dark"] .bg-red-100    { background-color: rgba(239,68,68,0.18) !important; }
+[data-theme="dark"] .bg-amber-50   { background-color: rgba(245,158,11,0.12) !important; }
+[data-theme="dark"] .bg-amber-100  { background-color: rgba(245,158,11,0.18) !important; }
+[data-theme="dark"] .bg-yellow-50  { background-color: rgba(234,179,8,0.10) !important; }
+[data-theme="dark"] .bg-yellow-100 { background-color: rgba(234,179,8,0.16) !important; }
+[data-theme="dark"] .bg-yellow-400 { background-color: rgba(234,179,8,0.55) !important; }
+[data-theme="dark"] .bg-purple-50  { background-color: rgba(168,85,247,0.12) !important; }
+[data-theme="dark"] .bg-purple-100 { background-color: rgba(168,85,247,0.18) !important; }
+[data-theme="dark"] .bg-indigo-50  { background-color: rgba(99,102,241,0.12) !important; }
+[data-theme="dark"] .bg-indigo-100 { background-color: rgba(99,102,241,0.18) !important; }
+[data-theme="dark"] .bg-teal-50    { background-color: rgba(20,184,166,0.12) !important; }
+[data-theme="dark"] .bg-teal-100   { background-color: rgba(20,184,166,0.18) !important; }
+[data-theme="dark"] .bg-orange-50  { background-color: rgba(249,115,22,0.12) !important; }
+[data-theme="dark"] .bg-orange-100 { background-color: rgba(249,115,22,0.18) !important; }
+[data-theme="dark"] .bg-pink-50    { background-color: rgba(236,72,153,0.12) !important; }
+[data-theme="dark"] .bg-pink-100   { background-color: rgba(236,72,153,0.18) !important; }
 
-/* ── Colored borders — visible but not glaring ──────────────────────────────── */
-[data-theme="dark"] .border-blue-100,   [data-theme="ocean"] .border-blue-100   { border-color: rgba(59,130,246,0.28) !important; }
-[data-theme="dark"] .border-blue-200,   [data-theme="ocean"] .border-blue-200   { border-color: rgba(59,130,246,0.40) !important; }
-[data-theme="dark"] .border-green-100,  [data-theme="ocean"] .border-green-100  { border-color: rgba(34,197,94,0.28) !important; }
-[data-theme="dark"] .border-green-200,  [data-theme="ocean"] .border-green-200  { border-color: rgba(34,197,94,0.40) !important; }
-[data-theme="dark"] .border-red-100,    [data-theme="ocean"] .border-red-100    { border-color: rgba(239,68,68,0.28) !important; }
-[data-theme="dark"] .border-red-200,    [data-theme="ocean"] .border-red-200    { border-color: rgba(239,68,68,0.40) !important; }
-[data-theme="dark"] .border-amber-100,  [data-theme="ocean"] .border-amber-100  { border-color: rgba(245,158,11,0.28) !important; }
-[data-theme="dark"] .border-amber-200,  [data-theme="ocean"] .border-amber-200  { border-color: rgba(245,158,11,0.40) !important; }
-[data-theme="dark"] .border-yellow-300, [data-theme="ocean"] .border-yellow-300 { border-color: rgba(234,179,8,0.40) !important; }
-[data-theme="dark"] .border-yellow-100, [data-theme="ocean"] .border-yellow-100 { border-color: rgba(234,179,8,0.28) !important; }
-[data-theme="dark"] .border-purple-50,  [data-theme="ocean"] .border-purple-50  { border-color: rgba(168,85,247,0.20) !important; }
-[data-theme="dark"] .border-purple-100, [data-theme="ocean"] .border-purple-100 { border-color: rgba(168,85,247,0.28) !important; }
-[data-theme="dark"] .border-indigo-100, [data-theme="ocean"] .border-indigo-100 { border-color: rgba(99,102,241,0.28) !important; }
-[data-theme="dark"] .border-teal-100,   [data-theme="ocean"] .border-teal-100   { border-color: rgba(20,184,166,0.28) !important; }
-[data-theme="dark"] .border-teal-200,   [data-theme="ocean"] .border-teal-200   { border-color: rgba(20,184,166,0.40) !important; }
-[data-theme="dark"] .border-orange-100, [data-theme="ocean"] .border-orange-100 { border-color: rgba(249,115,22,0.28) !important; }
-[data-theme="dark"] .border-pink-100,   [data-theme="ocean"] .border-pink-100   { border-color: rgba(236,72,153,0.28) !important; }
+/* ── Colored borders (dark only) ───────────────────────────────────────────── */
+[data-theme="dark"] .border-blue-100   { border-color: rgba(59,130,246,0.28) !important; }
+[data-theme="dark"] .border-blue-200   { border-color: rgba(59,130,246,0.40) !important; }
+[data-theme="dark"] .border-green-100  { border-color: rgba(34,197,94,0.28) !important; }
+[data-theme="dark"] .border-green-200  { border-color: rgba(34,197,94,0.40) !important; }
+[data-theme="dark"] .border-red-100    { border-color: rgba(239,68,68,0.28) !important; }
+[data-theme="dark"] .border-red-200    { border-color: rgba(239,68,68,0.40) !important; }
+[data-theme="dark"] .border-amber-100  { border-color: rgba(245,158,11,0.28) !important; }
+[data-theme="dark"] .border-amber-200  { border-color: rgba(245,158,11,0.40) !important; }
+[data-theme="dark"] .border-yellow-300 { border-color: rgba(234,179,8,0.40) !important; }
+[data-theme="dark"] .border-yellow-100 { border-color: rgba(234,179,8,0.28) !important; }
+[data-theme="dark"] .border-purple-50  { border-color: rgba(168,85,247,0.20) !important; }
+[data-theme="dark"] .border-purple-100 { border-color: rgba(168,85,247,0.28) !important; }
+[data-theme="dark"] .border-indigo-100 { border-color: rgba(99,102,241,0.28) !important; }
+[data-theme="dark"] .border-teal-100   { border-color: rgba(20,184,166,0.28) !important; }
+[data-theme="dark"] .border-teal-200   { border-color: rgba(20,184,166,0.40) !important; }
+[data-theme="dark"] .border-orange-100 { border-color: rgba(249,115,22,0.28) !important; }
+[data-theme="dark"] .border-pink-100   { border-color: rgba(236,72,153,0.28) !important; }
 
-/* ── Colored text — lighter variants for readability on dark bg ─────────────── */
-[data-theme="dark"] .text-blue-700,   [data-theme="ocean"] .text-blue-700   { color: #93C5FD !important; }
-[data-theme="dark"] .text-blue-600,   [data-theme="ocean"] .text-blue-600   { color: #60A5FA !important; }
-[data-theme="dark"] .text-blue-500,   [data-theme="ocean"] .text-blue-500   { color: #93C5FD !important; }
-[data-theme="dark"] .text-green-700,  [data-theme="ocean"] .text-green-700  { color: #6EE7B7 !important; }
-[data-theme="dark"] .text-green-600,  [data-theme="ocean"] .text-green-600  { color: #34D399 !important; }
-[data-theme="dark"] .text-green-500,  [data-theme="ocean"] .text-green-500  { color: #6EE7B7 !important; }
-[data-theme="dark"] .text-red-700,    [data-theme="ocean"] .text-red-700    { color: #FCA5A5 !important; }
-[data-theme="dark"] .text-red-600,    [data-theme="ocean"] .text-red-600    { color: #F87171 !important; }
-[data-theme="dark"] .text-red-500,    [data-theme="ocean"] .text-red-500    { color: #FCA5A5 !important; }
-[data-theme="dark"] .text-red-400,    [data-theme="ocean"] .text-red-400    { color: #FCA5A5 !important; }
-[data-theme="dark"] .text-amber-700,  [data-theme="ocean"] .text-amber-700  { color: #FCD34D !important; }
-[data-theme="dark"] .text-amber-600,  [data-theme="ocean"] .text-amber-600  { color: #FBBF24 !important; }
-[data-theme="dark"] .text-yellow-700, [data-theme="ocean"] .text-yellow-700 { color: #FDE68A !important; }
-[data-theme="dark"] .text-yellow-600, [data-theme="ocean"] .text-yellow-600 { color: #FCD34D !important; }
-[data-theme="dark"] .text-purple-700, [data-theme="ocean"] .text-purple-700 { color: #C4B5FD !important; }
-[data-theme="dark"] .text-purple-600, [data-theme="ocean"] .text-purple-600 { color: #A78BFA !important; }
-[data-theme="dark"] .text-purple-500, [data-theme="ocean"] .text-purple-500 { color: #C4B5FD !important; }
-[data-theme="dark"] .text-indigo-700, [data-theme="ocean"] .text-indigo-700 { color: #A5B4FC !important; }
-[data-theme="dark"] .text-indigo-600, [data-theme="ocean"] .text-indigo-600 { color: #818CF8 !important; }
-[data-theme="dark"] .text-indigo-500, [data-theme="ocean"] .text-indigo-500 { color: #A5B4FC !important; }
-[data-theme="dark"] .text-teal-700,   [data-theme="ocean"] .text-teal-700   { color: #5EEAD4 !important; }
-[data-theme="dark"] .text-teal-600,   [data-theme="ocean"] .text-teal-600   { color: #2DD4BF !important; }
-[data-theme="dark"] .text-teal-500,   [data-theme="ocean"] .text-teal-500   { color: #5EEAD4 !important; }
-[data-theme="dark"] .text-orange-700, [data-theme="ocean"] .text-orange-700 { color: #FDBA74 !important; }
-[data-theme="dark"] .text-orange-600, [data-theme="ocean"] .text-orange-600 { color: #FB923C !important; }
-[data-theme="dark"] .text-pink-700,   [data-theme="ocean"] .text-pink-700   { color: #F9A8D4 !important; }
+/* ── Colored text — lighter variants for dark bg ────────────────────────────── */
+[data-theme="dark"] .text-blue-700   { color: #93C5FD !important; }
+[data-theme="dark"] .text-blue-600   { color: #60A5FA !important; }
+[data-theme="dark"] .text-blue-500   { color: #93C5FD !important; }
+[data-theme="dark"] .text-green-700  { color: #6EE7B7 !important; }
+[data-theme="dark"] .text-green-600  { color: #34D399 !important; }
+[data-theme="dark"] .text-green-500  { color: #6EE7B7 !important; }
+[data-theme="dark"] .text-red-700    { color: #FCA5A5 !important; }
+[data-theme="dark"] .text-red-600    { color: #F87171 !important; }
+[data-theme="dark"] .text-red-500    { color: #FCA5A5 !important; }
+[data-theme="dark"] .text-red-400    { color: #FCA5A5 !important; }
+[data-theme="dark"] .text-amber-700  { color: #FCD34D !important; }
+[data-theme="dark"] .text-amber-600  { color: #FBBF24 !important; }
+[data-theme="dark"] .text-yellow-700 { color: #FDE68A !important; }
+[data-theme="dark"] .text-yellow-600 { color: #FCD34D !important; }
+[data-theme="dark"] .text-purple-700 { color: #C4B5FD !important; }
+[data-theme="dark"] .text-purple-600 { color: #A78BFA !important; }
+[data-theme="dark"] .text-purple-500 { color: #C4B5FD !important; }
+[data-theme="dark"] .text-indigo-700 { color: #A5B4FC !important; }
+[data-theme="dark"] .text-indigo-600 { color: #818CF8 !important; }
+[data-theme="dark"] .text-indigo-500 { color: #A5B4FC !important; }
+[data-theme="dark"] .text-teal-700   { color: #5EEAD4 !important; }
+[data-theme="dark"] .text-teal-600   { color: #2DD4BF !important; }
+[data-theme="dark"] .text-teal-500   { color: #5EEAD4 !important; }
+[data-theme="dark"] .text-orange-700 { color: #FDBA74 !important; }
+[data-theme="dark"] .text-orange-600 { color: #FB923C !important; }
+[data-theme="dark"] .text-pink-700   { color: #F9A8D4 !important; }
 
 /* ── Ring / outline colors ───────────────────────────────────────────────────── */
-[data-theme="dark"] .ring-yellow-100, [data-theme="ocean"] .ring-yellow-100 { --tw-ring-color: rgba(234,179,8,0.25) !important; }
+[data-theme="dark"] .ring-yellow-100 { --tw-ring-color: rgba(234,179,8,0.25) !important; }
 
 /* ── Transition for smooth theme switching ──────────────────────────────────── */
 *, *::before, *::after {

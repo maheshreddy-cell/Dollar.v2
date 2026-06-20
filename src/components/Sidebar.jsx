@@ -69,7 +69,7 @@ export default function Sidebar() {
   const { user, effectiveUser, isRole } = useAuth()
   const { can } = usePermissions()
   const { theme } = useTheme()
-  const isDark = theme === 'dark' || theme === 'ocean'
+  const isDark = theme === 'dark'
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
 
   const [unread, setUnread] = useState(0)
