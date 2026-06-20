@@ -173,7 +173,7 @@ export default function App() {
             <Route
               path="/assign-targets"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
                   <AssignTargets />
                 </RequireRole>
               }
@@ -205,7 +205,7 @@ export default function App() {
             <Route
               path="/commission-config"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH']}>
                   <CommissionConfig />
                 </RequireRole>
               }
@@ -239,7 +239,7 @@ export default function App() {
             <Route
               path="/permissions"
               element={
-                <RequireRole roles={['Admin','SalesHead','VH']}>
+                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH']}>
                   <Permissions />
                 </RequireRole>
               }
@@ -247,7 +247,7 @@ export default function App() {
             <Route
               path="/usage"
               element={
-                <RequireRole roles={['Admin']}>
+                <RequireRole roles={['Admin','Sales Ops']}>
                   <Usage />
                 </RequireRole>
               }
