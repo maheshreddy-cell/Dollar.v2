@@ -164,7 +164,7 @@ export default function App() {
             <Route
               path="/deals"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
                   <Deals />
                 </RequireRole>
               }
@@ -181,7 +181,7 @@ export default function App() {
             <Route
               path="/team"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
                   <Team />
                 </RequireRole>
               }
@@ -189,7 +189,7 @@ export default function App() {
             <Route
               path="/metrics"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
                   <Metrics />
                 </RequireRole>
               }
@@ -197,7 +197,7 @@ export default function App() {
             <Route
               path="/org"
               element={
-                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
                   <OrgPage />
                 </RequireRole>
               }
@@ -223,7 +223,7 @@ export default function App() {
             <Route
               path="/kickers"
               element={
-                <RequireRole roles={['Admin','SalesHead','VH','Manager','Agent','PreSales']}>
+                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH','Manager','Agent','PreSales']}>
                   <Kickers />
                 </RequireRole>
               }
@@ -231,7 +231,7 @@ export default function App() {
             <Route
               path="/announce-kicker"
               element={
-                <RequireRole roles={['Admin','SalesHead','VH','Manager']}>
+                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH','Manager']}>
                   <AnnounceKicker />
                 </RequireRole>
               }
@@ -256,7 +256,7 @@ export default function App() {
             <Route
               path="/sales-db-mtd"
               element={
-                <RequireRole roles={['Admin','SalesHead','VH']}>
+                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH']}>
                   <SalesTeamDBMTD />
                 </RequireRole>
               }
