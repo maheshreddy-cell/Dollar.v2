@@ -1237,7 +1237,7 @@ export default function Kickers() {
   const [users,        setUsers]        = useState([])
   const [psSummary,    setPsSummary]    = useState(null)
   const [loading,      setLoading]      = useState(true)
-  const [roleFilter,   setRoleFilter]   = useState('All')   // 'All' | 'Agents' | 'Managers' | 'VHs'
+  const [roleFilter,   setRoleFilter]   = useState(null)    // null | 'Agents' | 'Managers' | 'VHs'
   const [statusFilter, setStatusFilter] = useState('All')   // oversight only
 
   const isManager      = effectiveUser?.role === 'Manager'
@@ -1433,12 +1433,12 @@ export default function Kickers() {
       {/* Role category filter — scope options to what the viewer can actually see */}
       <div className="flex flex-wrap gap-1.5">
         {(isOversight
-          ? ['All', 'Agents', 'Managers', 'VHs']
+          ? ['Agents', 'Managers', 'VHs']
           : isManager
-            ? ['All', 'Agents', 'Managers']
-            : ['All', 'Agents']
+            ? ['Agents', 'Managers']
+            : ['Agents']
         ).map(f => (
-          <button key={f} onClick={() => setRoleFilter(f)}
+          <button key={f} onClick={() => setRoleFilter(prev => prev === f ? null : f)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
               roleFilter === f ? 'bg-brand-600 text-white border-brand-600' : 'border-gray-200 text-gray-500 hover:border-gray-300'
             }`}>
