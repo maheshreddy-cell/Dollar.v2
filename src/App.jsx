@@ -164,7 +164,7 @@ export default function App() {
             <Route
               path="/deals"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
                   <Deals />
                 </RequireRole>
               }
@@ -173,7 +173,7 @@ export default function App() {
             <Route
               path="/assign-targets"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
                   <AssignTargets />
                 </RequireRole>
               }
@@ -181,7 +181,7 @@ export default function App() {
             <Route
               path="/team"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
                   <Team />
                 </RequireRole>
               }
@@ -189,7 +189,7 @@ export default function App() {
             <Route
               path="/metrics"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager', 'Agent', 'PreSales']}>
                   <Metrics />
                 </RequireRole>
               }
@@ -197,7 +197,7 @@ export default function App() {
             <Route
               path="/org"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH', 'Manager']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH', 'Manager']}>
                   <OrgPage />
                 </RequireRole>
               }
@@ -205,7 +205,7 @@ export default function App() {
             <Route
               path="/commission-config"
               element={
-                <RequireRole roles={['Admin', 'Sales Ops', 'SalesHead', 'VH']}>
+                <RequireRole roles={['Admin', 'SalesHead', 'VH']}>
                   <CommissionConfig />
                 </RequireRole>
               }
@@ -223,7 +223,7 @@ export default function App() {
             <Route
               path="/kickers"
               element={
-                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH','Manager','Agent','PreSales']}>
+                <RequireRole roles={['Admin','SalesHead','VH','Manager','Agent','PreSales']}>
                   <Kickers />
                 </RequireRole>
               }
@@ -231,7 +231,7 @@ export default function App() {
             <Route
               path="/announce-kicker"
               element={
-                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH','Manager']}>
+                <RequireRole roles={['Admin','SalesHead','VH','Manager']}>
                   <AnnounceKicker />
                 </RequireRole>
               }
@@ -239,7 +239,7 @@ export default function App() {
             <Route
               path="/permissions"
               element={
-                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH']}>
+                <RequireRole roles={['Admin','SalesHead','VH']}>
                   <Permissions />
                 </RequireRole>
               }
@@ -247,7 +247,7 @@ export default function App() {
             <Route
               path="/usage"
               element={
-                <RequireRole roles={['Admin','Sales Ops']}>
+                <RequireRole roles={['Admin']}>
                   <Usage />
                 </RequireRole>
               }
@@ -256,7 +256,7 @@ export default function App() {
             <Route
               path="/sales-db-mtd"
               element={
-                <RequireRole roles={['Admin','Sales Ops','SalesHead','VH']}>
+                <RequireRole roles={['Admin','SalesHead','VH']}>
                   <SalesTeamDBMTD />
                 </RequireRole>
               }
