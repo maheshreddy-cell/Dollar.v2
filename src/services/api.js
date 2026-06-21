@@ -932,16 +932,14 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
     const k = parseKickerRow(raw)
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
+    // Only count kickers that have been formally approved or paid
+    if (k.status !== 'Approved' && k.status !== 'Paid') continue
 
     const from = new Date(k.dateFrom).getTime()
     const to   = new Date(k.dateTo).getTime() + 86399999
     if (Date.now() < from) continue
 
-    // Normalize type — mirrors Kickers.jsx normalizeType
     const rawType = k.type || 'sales'
-    const type = rawType === 'collective' ? 'collective'
-               : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
-               : 'sales'  // catches team_sales, individual_sales, sales, and anything else
 
     // Date filter — PaymentDate (YYYY-MM-DD) as primary, Month as fallback
     const kickerMonth = (k.dateFrom || '').substring(0, 7)
@@ -952,6 +950,28 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
       }
       return kickerMonth ? d.Month === kickerMonth : false
     }
+
+    // team_month_end: per-agent S1/S2 thresholds stored in agentTargets, not slabs
+    if (rawType === 'team_month_end') {
+      if (!agentEmail) continue
+      const targets = k.agentTargets?.[agentEmail] || k.agentTargets?.[agentEmail.toLowerCase()]
+      if (!targets) continue
+      const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+      const inRange = agentDeals.filter(inDateRange)
+      const sales = minVal > 0 ? inRange.filter(d => (d.TotalValue || 0) >= minVal).length : inRange.length
+      const s1Target = Number(targets.s1 || 0)
+      const s2Target = Number(targets.s2 || 0)
+      const s1Payout = Number(k.slabs[0]?.payout || 0)
+      const s2Payout = Number(k.slabs[1]?.payout || 0)
+      if (s2Target > 0 && sales >= s2Target)       total += s2Payout
+      else if (s1Target > 0 && sales >= s1Target)  total += s1Payout
+      continue
+    }
+
+    // Normalize type for all other kicker types
+    const type = rawType === 'collective' ? 'collective'
+               : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
+               : 'sales'
 
     let sales = 0, revenue = 0, teamSales = 0, agentContrib = 0
 
@@ -1372,10 +1392,11 @@ function unpackSlabsCol(raw) {
     individualAmounts: parsed.individualAmounts || {},
     collectiveMode:    parsed.collectiveMode    || 'per_sale',
     weeklyTargets:     parsed.weeklyTargets     || {},
+    agentTargets:      parsed.agentTargets      || {},  // { email: { s1: N, s2: M } } for team_month_end
   }
 }
 
-export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts, collectiveMode, weeklyTargets }) {
+export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts, collectiveMode, weeklyTargets, agentTargets }) {
   return JSON.stringify({
     slabs:             slabs || [],
     status:            status || 'Announced',
@@ -1384,6 +1405,7 @@ export function packSlabsCol({ slabs, status, paidDate, notes, individualAmounts
     individualAmounts: individualAmounts || {},
     collectiveMode:    collectiveMode || 'per_sale',
     weeklyTargets:     weeklyTargets || {},
+    agentTargets:      agentTargets  || {},
   })
 }
 
@@ -1405,6 +1427,7 @@ function parseKickerRow(r) {
     individualAmounts: extra.individualAmounts,  // { email: customAmount }
     collectiveMode:    extra.collectiveMode,     // 'per_sale' | 'per_agent'
     weeklyTargets:     extra.weeklyTargets,      // { email: weeklyRevenueTarget }
+    agentTargets:      extra.agentTargets,       // { email: { s1: N, s2: M } } for team_month_end
     targetTeams:       safeArr('TargetTeams'),
     targetRoles:       safeArr('TargetRoles'),
     pinned:            r.Pinned === 'true' || r.Pinned === true,
@@ -1438,6 +1461,7 @@ export async function announceKicker(data, announcerEmail, announcerRole) {
       individualAmounts: data.individualAmounts || {},
       collectiveMode: data.collectiveMode || 'per_sale',
       weeklyTargets: data.weeklyTargets || {},
+      agentTargets:  data.agentTargets  || {},
     }),
     JSON.stringify(data.targetTeams || ['ALL']),
     JSON.stringify(data.targetRoles || []),
