@@ -95,7 +95,9 @@ export default function Dashboard() {
       } else if (type === 'kickers') {
         const [allKickers, allDeals] = await Promise.all([getKickers(), getDeals(null, null)])
         const email = (effectiveUser?.email || '').toLowerCase()
-        const agentDeals = allDeals.filter(d => (d.Email || '').toLowerCase() === email)
+        // Mirror getSummary: filter agentDeals by the selected month so kicker thresholds
+        // are compared against the same deal set as the dashboard total.
+        const agentDeals = allDeals.filter(d => (d.Email || '').toLowerCase() === email && d.Month === month)
         const breakdown = computeKickerBreakdown(effectiveUser?.role, agentDeals, allKickers, allDeals, email)
         setCardModal(m => ({ ...m, payload: { breakdown }, loading: false }))
       } else {
