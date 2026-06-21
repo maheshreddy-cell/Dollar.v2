@@ -212,31 +212,21 @@ const STATUS_BADGE = {
 
 function KickersView({ breakdown }) {
   if (!breakdown?.length) {
-    return <p className="text-sm text-gray-400 text-center py-10">No kickers earned yet this period.</p>
+    return <p className="text-sm text-gray-400 text-center py-10">No kickers earned yet.</p>
   }
   const total = breakdown.reduce((s, r) => s + r.amount, 0)
   return (
-    <div className="px-5 py-4 space-y-3">
-      {breakdown.map((row, i) => (
-        <div key={i} className="flex items-start justify-between gap-3 py-3 border-b border-gray-100 last:border-0">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">{row.title}</p>
-            {row.dateFrom && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                {row.dateFrom} → {row.dateTo}
-              </p>
-            )}
-            {row.status && row.type !== 'hat_trick' && (
-              <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                {row.status}
-              </span>
-            )}
+    <div className="px-5 py-4">
+      <div className="space-y-2">
+        {breakdown.map((row, i) => (
+          <div key={i} className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+            <p className="text-sm text-gray-700 font-medium">{row.title}</p>
+            <p className="text-sm font-bold text-green-600">{formatINR(row.amount)}</p>
           </div>
-          <p className="text-sm font-bold text-green-600 shrink-0">{formatINR(row.amount)}</p>
-        </div>
-      ))}
-      <div className="flex items-center justify-between pt-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Earned</p>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</p>
         <p className="text-base font-bold text-green-700">{formatINR(total)}</p>
       </div>
     </div>
