@@ -30,6 +30,8 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
   const todayPct   = Math.min((todayCount / 3) * 100, 100)
   const todayGap   = Math.max(3 - todayCount, 0)
 
+  const [hatCollapsed, setHatCollapsed] = useState(true)
+
   // On Past tab — hide the card entirely if no achievements this month
   if (tab === 'past' && monthEntries.length === 0) return null
 
@@ -106,6 +108,7 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
           </div>
         )}
 
+        {!hatCollapsed && (<>
         {/* Monthly hat trick log — filtered to selected month */}
         {monthEntries.length > 0 && (
           <div className="space-y-1">
@@ -133,7 +136,15 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
             <p>→ Applies to all roles: Agent, PreSales, Manager</p>
           </div>
         </div>
+        </>)}
       </div>
+      <button
+        onClick={() => setHatCollapsed(v => !v)}
+        className="flex items-center justify-center gap-1.5 w-full border-t border-orange-100 py-2 text-xs text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+      >
+        {hatCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        <span className="font-medium">{hatCollapsed ? 'Show details' : 'Hide details'}</span>
+      </button>
     </div>
   )
 }
@@ -513,6 +524,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     !(kicker.targetRoles || []).includes('Agent') &&
     !(kicker.targetRoles || []).includes('PreSales')
   const [showContributors, setShowContributors] = useState(isInitiallyExpanded)
+  const [cardCollapsed, setCardCollapsed] = useState(true)
 
   const active    = kickerIsActive(kicker)
   const past      = kickerIsPast(kicker)
@@ -726,6 +738,32 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
       })()
     : null
 
+  const collapsedEarned = (() => {
+    if (isCollective) {
+      if (progress.activeSlab && progress.myContribution > 0) {
+        const amt = collectivePerAgent
+          ? Number(progress.activeSlab.payout)
+          : progress.myContribution * Number(progress.activeSlab.payout)
+        return formatINR(amt)
+      }
+      return null
+    }
+    if (isOversight) {
+      const earners = managerEarners ?? (agentEarners.length > 0 ? agentEarners : null)
+      if (earners) {
+        const total = earners.reduce((s, a) => s + a.payout, 0)
+        return total > 0 ? formatINR(total) : null
+      }
+      if (monthEndEarners) {
+        const total = monthEndEarners.reduce((s, a) => s + a.payout, 0)
+        return total > 0 ? formatINR(total) : null
+      }
+      return null
+    }
+    if (progress.activeSlab) return formatINR(Number(progress.activeSlab.payout))
+    return null
+  })()
+
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
       kicker.pinned ? 'border-yellow-300 ring-2 ring-yellow-100' : 'border-gray-200'
@@ -751,15 +789,22 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           </div>
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base font-bold text-gray-900 leading-snug">{kicker.title}</h3>
-            {isOversight && (
-              <button
-                onClick={() => navigate('/announce-kicker', { state: { editKicker: kicker } })}
-                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                title="Edit kicker"
-              >
-                <Pencil size={14} />
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {cardCollapsed && collapsedEarned && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${past ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
+                  {collapsedEarned}
+                </span>
+              )}
+              {isOversight && (
+                <button
+                  onClick={() => navigate('/announce-kicker', { state: { editKicker: kicker } })}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                  title="Edit kicker"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Meta */}
@@ -784,6 +829,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
           </div>
         </div>
 
+        {!cardCollapsed && (<>
         {/* Message toggle */}
         {kicker.message && (
           <div>
@@ -1220,8 +1266,16 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
             </div>
           </div>
         )}
+        </>)}
 
       </div>
+      <button
+        onClick={() => setCardCollapsed(v => !v)}
+        className="flex items-center justify-center gap-1.5 w-full border-t border-gray-100 py-2 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+      >
+        {cardCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        <span className="font-medium">{cardCollapsed ? 'Show details' : 'Hide details'}</span>
+      </button>
     </div>
   )
 }
@@ -1478,7 +1532,7 @@ export default function Kickers() {
           <p className="text-sm font-semibold text-gray-400">No kickers for this month.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {displayed.map(k => (
             <KickerCard
               key={k.id}
