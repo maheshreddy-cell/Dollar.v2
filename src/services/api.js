@@ -1021,6 +1021,86 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
   return total
 }
 
+// Returns per-kicker breakdown for dashboard drill-down modal
+export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDeals, agentEmail) {
+  allDeals   = allDeals   || []
+  agentEmail = (agentEmail || '').trim().toLowerCase()
+  const rows = []
+
+  const hatTrick = computeHatTrickEarnings(agentDeals)
+  if (hatTrick.amount > 0) {
+    rows.push({ title: '🎩 Hat Trick Bonus', type: 'hat_trick', dateFrom: '', dateTo: '', status: 'Announced', amount: hatTrick.amount })
+  }
+
+  for (const raw of (allKickers || [])) {
+    const k = parseKickerRow(raw)
+    if (!k.id) continue
+    if (!k.targetRoles.includes(agentRole)) continue
+
+    const from = new Date(k.dateFrom).getTime()
+    const to   = new Date(k.dateTo).getTime() + 86399999
+    if (Date.now() < from) continue
+
+    const rawType = k.type || 'sales'
+    const kickerMonth = (k.dateFrom || '').substring(0, 7)
+    const inRange_ = (d) => {
+      if (d.PaymentDate) { const dt = new Date(d.PaymentDate).getTime(); if (!isNaN(dt)) return dt >= from && dt <= to }
+      return kickerMonth ? d.Month === kickerMonth : false
+    }
+
+    let amount = 0
+
+    if (rawType === 'team_month_end') {
+      if (!agentEmail) continue
+      const targets = k.agentTargets?.[agentEmail] || k.agentTargets?.[agentEmail.toLowerCase()]
+      if (!targets) continue
+      const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+      const sales = agentDeals.filter(inRange_).filter(d => minVal <= 0 || (d.TotalValue || 0) >= minVal).length
+      const s1Target = Number(targets.s1 || 0); const s2Target = Number(targets.s2 || 0)
+      const s1Payout = Number(k.slabs[0]?.payout || 0); const s2Payout = Number(k.slabs[1]?.payout || 0)
+      if (s2Target > 0 && sales >= s2Target)      amount = s2Payout
+      else if (s1Target > 0 && sales >= s1Target) amount = s1Payout
+    } else {
+      const type = rawType === 'collective' ? 'collective'
+                 : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
+                 : 'sales'
+      let sales = 0, revenue = 0, teamSales = 0, agentContrib = 0
+      if (type === 'collective') {
+        if (!allDeals.length || !agentEmail) continue
+        const targetTeams = k.targetTeams || ['ALL']
+        const emailSet = targetTeams.includes('ALL') ? null : new Set(targetTeams.map(e => e.toLowerCase()))
+        const teamDeals = allDeals.filter(d => inRange_(d) && (!emailSet || emailSet.has((d.Email || '').toLowerCase())))
+        const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+        teamSales    = teamDeals.filter(d => minVal <= 0 || (d.TotalValue || 0) >= minVal).length
+        agentContrib = teamDeals.filter(d => (d.Email || '').toLowerCase() === agentEmail && (minVal <= 0 || (d.TotalValue || 0) >= minVal)).length
+      } else {
+        const inRange = agentDeals.filter(inRange_)
+        const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
+        revenue = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+        sales   = minVal > 0 ? inRange.filter(d => (d.TotalValue || 0) >= minVal).length : inRange.length
+      }
+      const sorted = [...k.slabs].sort((a, b) =>
+        Number(a.threshold || a.salesThreshold || a.revenueThreshold || 0) -
+        Number(b.threshold || b.salesThreshold || b.revenueThreshold || 0)
+      )
+      let earnedSlab = null
+      for (const slab of sorted) {
+        const t = Number(slab.threshold || (type === 'revenue' ? slab.revenueThreshold : slab.salesThreshold) || 0)
+        const hit = type === 'sales' ? sales >= t : type === 'revenue' ? revenue >= t : teamSales >= t
+        if (hit) earnedSlab = slab
+      }
+      if (earnedSlab) {
+        amount = type === 'collective'
+          ? (k.collectiveMode === 'per_agent' ? (agentContrib > 0 ? Number(earnedSlab.payout || 0) : 0) : agentContrib * Number(earnedSlab.payout || 0))
+          : Number(earnedSlab.payout || 0)
+      }
+    }
+
+    if (amount > 0) rows.push({ title: k.title, type: k.type, dateFrom: k.dateFrom, dateTo: k.dateTo, status: k.status, amount })
+  }
+  return rows
+}
+
 // ─── Helpers (internal) ───────────────────────────────────────────────────────
 
 function stripSensitive(u) {

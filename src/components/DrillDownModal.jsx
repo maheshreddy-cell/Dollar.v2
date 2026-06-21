@@ -203,6 +203,46 @@ function TeamView({ leaderboard, metric }) {
   )
 }
 
+// ── Kickers breakdown view ────────────────────────────────────────────────────
+const STATUS_BADGE = {
+  Paid:      'bg-green-100 text-green-700',
+  Approved:  'bg-blue-100 text-blue-700',
+  Announced: 'bg-amber-100 text-amber-700',
+}
+
+function KickersView({ breakdown }) {
+  if (!breakdown?.length) {
+    return <p className="text-sm text-gray-400 text-center py-10">No kickers earned yet this period.</p>
+  }
+  const total = breakdown.reduce((s, r) => s + r.amount, 0)
+  return (
+    <div className="px-5 py-4 space-y-3">
+      {breakdown.map((row, i) => (
+        <div key={i} className="flex items-start justify-between gap-3 py-3 border-b border-gray-100 last:border-0">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">{row.title}</p>
+            {row.dateFrom && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {row.dateFrom} → {row.dateTo}
+              </p>
+            )}
+            {row.status && row.type !== 'hat_trick' && (
+              <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                {row.status}
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-bold text-green-600 shrink-0">{formatINR(row.amount)}</p>
+        </div>
+      ))}
+      <div className="flex items-center justify-between pt-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total Earned</p>
+        <p className="text-base font-bold text-green-700">{formatINR(total)}</p>
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function DrillDownModal({ open, onClose, title, type, payload, loading }) {
   if (!open) return null
@@ -224,6 +264,8 @@ export default function DrillDownModal({ open, onClose, title, type, payload, lo
         return <DealsView grouped={payload.grouped} amountField="PaidActual" showPaidDate stageFilter={['PAID', 'PARTIALLY_PAID']} />
       case 'commission':
         return <CommissionView grouped={payload.grouped} summary={payload.summary} />
+      case 'kickers':
+        return <KickersView breakdown={payload.breakdown} />
       case 'team_pipeline':
         return <TeamView leaderboard={payload.leaderboard} metric="pipeline" />
       case 'team_achieved':

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped, getKickers, getDeals, computeKickerBreakdown } from '../services/api'
 import MetricsCard     from '../components/MetricsCard'
 import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
@@ -91,10 +91,14 @@ export default function Dashboard() {
     setCardModal({ open: true, title, type, payload: null, loading: true })
     try {
       if (type.startsWith('team_')) {
-        // Manager team cards — use already-loaded leaderboard
         setCardModal(m => ({ ...m, payload: { leaderboard }, loading: false }))
+      } else if (type === 'kickers') {
+        const [allKickers, allDeals] = await Promise.all([getKickers(), getDeals(null, null)])
+        const email = (effectiveUser?.email || '').toLowerCase()
+        const agentDeals = allDeals.filter(d => (d.Email || '').toLowerCase() === email)
+        const breakdown = computeKickerBreakdown(effectiveUser?.role, agentDeals, allKickers, allDeals, email)
+        setCardModal(m => ({ ...m, payload: { breakdown }, loading: false }))
       } else {
-        // Agent cards — fetch deals breakdown
         const grouped = await getDealsGrouped(effectiveUser?.email, month)
         setCardModal(m => ({ ...m, payload: { grouped, summary }, loading: false }))
       }
@@ -675,7 +679,7 @@ export default function Dashboard() {
                   value={formatINR(summary?.totalKickers ?? 0)}
                   icon={Award} color="green"
                   sub="Confirmed by manager"
-                  onClick={() => openCardDrill('commission', 'Kicker Breakdown')}
+                  onClick={() => openCardDrill('kickers', 'Kickers Earned')}
                 />
               </div>
               {/* Total Incentives — hero row */}
