@@ -932,8 +932,6 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
     const k = parseKickerRow(raw)
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
-    // Only count kickers that have been formally approved or paid
-    if (k.status !== 'Approved' && k.status !== 'Paid') continue
 
     const from = new Date(k.dateFrom).getTime()
     const to   = new Date(k.dateTo).getTime() + 86399999
