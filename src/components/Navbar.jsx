@@ -32,9 +32,18 @@ const THEME_OPTIONS = [
     label: 'Ocean',
     icon: '🌊',
     tip: 'Ocean theme',
-    ring: 'ring-cyan-500',
-    bg: 'bg-[#0A2040]',
-    dot: 'bg-[#051525] border border-cyan-700',
+    ring: 'ring-blue-400',
+    bg: 'bg-[#DBEAFE]',
+    dot: 'bg-[#EFF6FF] border border-blue-300',
+  },
+  {
+    id: 'desert',
+    label: 'Desert',
+    icon: '🏜️',
+    tip: 'Desert theme',
+    ring: 'ring-amber-400',
+    bg: 'bg-[#FEF3E2]',
+    dot: 'bg-[#FFFBF5] border border-amber-300',
   },
 ]
 

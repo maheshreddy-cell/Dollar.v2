@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
-export const THEMES = ['light', 'dark', 'ocean']
+export const THEMES = ['light', 'dark', 'ocean', 'desert']
 
 const ThemeContext = createContext({ theme: 'light', setTheme: () => {} })
 

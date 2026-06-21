@@ -213,6 +213,28 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   color-scheme: light;
 }
 
+/* ── Desert ─────────────────────────────────────────────────────────────────── */
+[data-theme="desert"] {
+  --t-bg:           #FDF6EC;
+  --t-surface:      #FFFBF5;
+  --t-surface-2:    #FEF3E2;
+  --t-surface-3:    #FDEBC8;
+  --t-border:       #F0CC8A;
+  --t-border-2:     #DBA858;
+  --t-text:         #2C1810;
+  --t-text-2:       #4A2E1A;
+  --t-text-3:       #7A5030;
+  --t-text-4:       #A8784A;
+  --t-brand:        #B85A08;
+  --t-brand-light:  rgba(184,90,8,0.12);
+  --t-glass-bg:     rgba(253,246,236,0.92);
+  --t-glass-border: #F0CC8A;
+  --t-scrollbar:    #DBA858;
+  --t-input-bg:     #FFFBF5;
+  --t-select-bg:    #FFFBF5;
+  color-scheme: light;
+}
+
 /* ── Apply tokens to body & page shell ─────────────────────────────────────── */
 body {
   background-color: var(--t-bg);
@@ -222,56 +244,68 @@ body {
 
 /* Scrollbars */
 [data-theme="dark"] ::-webkit-scrollbar-thumb,
-[data-theme="ocean"] ::-webkit-scrollbar-thumb { background: var(--t-scrollbar); }
+[data-theme="ocean"] ::-webkit-scrollbar-thumb,
+[data-theme="desert"] ::-webkit-scrollbar-thumb { background: var(--t-scrollbar); }
 
 /* iOS glass nav → theme-aware frosted glass */
 [data-theme="dark"] .ios-glass,
-[data-theme="ocean"] .ios-glass {
+[data-theme="ocean"] .ios-glass,
+[data-theme="desert"] .ios-glass {
   background: var(--t-glass-bg) !important;
   border-color: var(--t-glass-border) !important;
 }
 
 /* ── Surface / card backgrounds ─────────────────────────────────────────────── */
 [data-theme="dark"] .bg-white,
-[data-theme="ocean"] .bg-white {
+[data-theme="ocean"] .bg-white,
+[data-theme="desert"] .bg-white {
   background-color: var(--t-surface) !important;
 }
 [data-theme="dark"] .bg-white\/80,
-[data-theme="ocean"] .bg-white\/80 {
+[data-theme="ocean"] .bg-white\/80,
+[data-theme="desert"] .bg-white\/80 {
   background-color: color-mix(in srgb, var(--t-surface) 85%, transparent) !important;
 }
 [data-theme="dark"] .bg-gray-50,
-[data-theme="ocean"] .bg-gray-50 {
+[data-theme="ocean"] .bg-gray-50,
+[data-theme="desert"] .bg-gray-50 {
   background-color: var(--t-surface-2) !important;
 }
 [data-theme="dark"] .bg-gray-100,
-[data-theme="ocean"] .bg-gray-100 {
+[data-theme="ocean"] .bg-gray-100,
+[data-theme="desert"] .bg-gray-100 {
   background-color: var(--t-surface-3) !important;
 }
 [data-theme="dark"] .bg-ios-bg,
 [data-theme="dark"] .bg-ios-gray6,
 [data-theme="ocean"] .bg-ios-bg,
-[data-theme="ocean"] .bg-ios-gray6 {
+[data-theme="ocean"] .bg-ios-gray6,
+[data-theme="desert"] .bg-ios-bg,
+[data-theme="desert"] .bg-ios-gray6 {
   background-color: var(--t-surface-2) !important;
 }
 
 /* Hover states */
 [data-theme="dark"] .hover\:bg-gray-50:hover,
-[data-theme="ocean"] .hover\:bg-gray-50:hover {
+[data-theme="ocean"] .hover\:bg-gray-50:hover,
+[data-theme="desert"] .hover\:bg-gray-50:hover {
   background-color: var(--t-surface-2) !important;
 }
 [data-theme="dark"] .hover\:bg-gray-100:hover,
-[data-theme="ocean"] .hover\:bg-gray-100:hover {
+[data-theme="ocean"] .hover\:bg-gray-100:hover,
+[data-theme="desert"] .hover\:bg-gray-100:hover {
   background-color: var(--t-surface-3) !important;
 }
 [data-theme="dark"] .hover\:bg-ios-gray6:hover,
-[data-theme="ocean"] .hover\:bg-ios-gray6:hover {
+[data-theme="ocean"] .hover\:bg-ios-gray6:hover,
+[data-theme="desert"] .hover\:bg-ios-gray6:hover {
   background-color: var(--t-surface-3) !important;
 }
 
 /* Brand-tinted surfaces */
 [data-theme="dark"] .bg-brand-50,
-[data-theme="ocean"] .bg-brand-50 {
+[data-theme="ocean"] .bg-brand-50,
+[data-theme="desert"] .bg-brand-50 {
   background-color: var(--t-brand-light) !important;
 }
 
@@ -281,11 +315,15 @@ body {
 [data-theme="dark"] .border-ios-separator,
 [data-theme="ocean"] .border-gray-200,
 [data-theme="ocean"] .border-gray-100,
-[data-theme="ocean"] .border-ios-separator {
+[data-theme="ocean"] .border-ios-separator,
+[data-theme="desert"] .border-gray-200,
+[data-theme="desert"] .border-gray-100,
+[data-theme="desert"] .border-ios-separator {
   border-color: var(--t-border) !important;
 }
 [data-theme="dark"] .border-gray-300,
-[data-theme="ocean"] .border-gray-300 {
+[data-theme="ocean"] .border-gray-300,
+[data-theme="desert"] .border-gray-300 {
   border-color: var(--t-border-2) !important;
 }
 /* Divide utilities */
@@ -294,7 +332,10 @@ body {
 [data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
 [data-theme="ocean"] .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
 [data-theme="ocean"] .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
-[data-theme="ocean"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+[data-theme="ocean"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+[data-theme="desert"] .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+[data-theme="desert"] .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+[data-theme="desert"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--t-border) !important;
 }
 
@@ -302,28 +343,36 @@ body {
 [data-theme="dark"] .text-gray-900,
 [data-theme="dark"] .text-gray-800,
 [data-theme="ocean"] .text-gray-900,
-[data-theme="ocean"] .text-gray-800 {
+[data-theme="ocean"] .text-gray-800,
+[data-theme="desert"] .text-gray-900,
+[data-theme="desert"] .text-gray-800 {
   color: var(--t-text) !important;
 }
 [data-theme="dark"] .text-gray-700,
 [data-theme="dark"] .text-gray-600,
 [data-theme="ocean"] .text-gray-700,
-[data-theme="ocean"] .text-gray-600 {
+[data-theme="ocean"] .text-gray-600,
+[data-theme="desert"] .text-gray-700,
+[data-theme="desert"] .text-gray-600 {
   color: var(--t-text-2) !important;
 }
 [data-theme="dark"] .text-gray-500,
-[data-theme="ocean"] .text-gray-500 {
+[data-theme="ocean"] .text-gray-500,
+[data-theme="desert"] .text-gray-500 {
   color: var(--t-text-3) !important;
 }
 [data-theme="dark"] .text-gray-400,
 [data-theme="dark"] .text-ios-gray1,
 [data-theme="ocean"] .text-gray-400,
-[data-theme="ocean"] .text-ios-gray1 {
+[data-theme="ocean"] .text-ios-gray1,
+[data-theme="desert"] .text-gray-400,
+[data-theme="desert"] .text-ios-gray1 {
   color: var(--t-text-4) !important;
 }
 /* Active nav text stays brand-coloured */
 [data-theme="dark"] .text-brand-600,
-[data-theme="ocean"] .text-brand-600 {
+[data-theme="ocean"] .text-brand-600,
+[data-theme="desert"] .text-brand-600 {
   color: var(--t-brand) !important;
 }
 
@@ -333,13 +382,17 @@ body {
 [data-theme="dark"] textarea,
 [data-theme="ocean"] input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
 [data-theme="ocean"] select,
-[data-theme="ocean"] textarea {
+[data-theme="ocean"] textarea,
+[data-theme="desert"] input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+[data-theme="desert"] select,
+[data-theme="desert"] textarea {
   background-color: var(--t-input-bg) !important;
   color: var(--t-text) !important;
   border-color: var(--t-border) !important;
 }
 [data-theme="dark"] input::placeholder,
-[data-theme="ocean"] input::placeholder {
+[data-theme="ocean"] input::placeholder,
+[data-theme="desert"] input::placeholder {
   color: var(--t-text-4) !important;
 }
 /* Month calendar picker icon */
@@ -349,26 +402,31 @@ body {
 
 /* ── Tables ──────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] thead,
-[data-theme="ocean"] thead {
+[data-theme="ocean"] thead,
+[data-theme="desert"] thead {
   background-color: var(--t-surface-2) !important;
 }
 [data-theme="dark"] th,
-[data-theme="ocean"] th {
+[data-theme="ocean"] th,
+[data-theme="desert"] th {
   color: var(--t-text-3) !important;
   border-color: var(--t-border) !important;
 }
 [data-theme="dark"] tr,
-[data-theme="ocean"] tr {
+[data-theme="ocean"] tr,
+[data-theme="desert"] tr {
   border-color: var(--t-border) !important;
 }
 [data-theme="dark"] .hover\:bg-blue-50\/40:hover,
-[data-theme="ocean"] .hover\:bg-blue-50\/40:hover {
+[data-theme="ocean"] .hover\:bg-blue-50\/40:hover,
+[data-theme="desert"] .hover\:bg-blue-50\/40:hover {
   background-color: var(--t-surface-2) !important;
 }
 
 /* ── Progress track ──────────────────────────────────────────────────────────── */
 [data-theme="dark"] .ios-progress-track,
-[data-theme="ocean"] .ios-progress-track {
+[data-theme="ocean"] .ios-progress-track,
+[data-theme="desert"] .ios-progress-track {
   background: var(--t-border);
 }
 
