@@ -162,9 +162,10 @@ export default function Dashboard() {
           const totalAchieved   = anal?.totalAchieved  ?? rows.reduce((s, r) => s + r.achieved, 0)
           const totalSaleValue  = anal?.totalSaleValue ?? rows.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
           const totalT2Amount   = anal?.totalT2Amount  ?? rows.reduce((s, r) => s + (r.totalT2Amount  ?? 0), 0)
+          const totalKickers    = rows.reduce((s, r) => s + (r.kickerEarnings ?? 0), 0)
           setSummary({
             totalTarget, totalAchieved, totalCommission,
-            totalT2Amount, totalMoneyMade: totalCommission + totalT2Amount,
+            totalKickers, totalT2Amount, totalMoneyMade: totalCommission + totalT2Amount + totalKickers,
             totalSaleValue,
             achievementPct: totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0,
             teamWipAmount: anal?.teamWipAmount ?? 0,
