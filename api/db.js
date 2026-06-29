@@ -30,7 +30,7 @@ const toSheet = {
   kickers:           r => ({ KickerId: r.kicker_id, Title: r.title, Message: r.message, Type: r.type, MinSaleValue: r.min_sale_value || 0, DateFrom: r.date_from, DateTo: r.date_to, Slabs: r.slabs, TargetTeams: r.target_teams, TargetRoles: r.target_roles, Pinned: String(r.pinned || false), AnnouncedBy: r.announced_by, AnnouncedByRole: r.announced_by_role, AnnouncedAt: r.announced_at }),
   kicker_earnings:   r => ({ Date: r.date, Month: r.month, AgentEmail: r.agent_email, AgentName: r.agent_name, KickerType: r.kicker_type, Details: r.details, Amount: r.amount, LoggedAt: r.logged_at }),
   presales_calls:    r => ({ Timestamp: r.timestamp, 'Email address': r.email_address, Course: r.course, 'Learner Name': r.learner_name, 'Learner PH': r.learner_ph, 'Lead source': r.lead_source, Date: r.date, 'Assigned to ': r.assigned_to, Month: r.month }),
-  user_activity:     r => ({ Timestamp: r.timestamp, Date: r.date, Email: r.email, Name: r.name, Role: r.role }),
+  user_activity:     r => ({ Timestamp: r.timestamp, Date: r.date, Email: r.email, Name: r.name, Role: r.role, DurationSeconds: r.duration_seconds ?? 0 }),
   presales_sales:    r => ({ PreSalesEmail: r.presales_email, Month: r.month, LeadName: r.lead_name, Amount: r.amount }),
   manager_slabs:     r => ({ Type: r.type, SlabName: r.slab_name, MaxTarget: r.max_target, CommissionPct: r.commission_pct, CreatedBy: r.created_by }),
   deals:             r => ({ ID: r.id, Email: r.email, Month: r.month, CustomerName: r.customer_name, Docs: r.docs, Price: r.price, Status: r.status, DealDate: r.deal_date, ClosedDate: r.closed_date }),
@@ -52,7 +52,7 @@ const arrayOrder = {
 }
 
 const objToDb = {
-  user_activity:   o => ({ timestamp: o.Timestamp, date: o.Date, email: o.Email, name: o.Name, role: o.Role }),
+  user_activity:   o => ({ timestamp: o.Timestamp, date: o.Date, email: o.Email, name: o.Name, role: o.Role, duration_seconds: o.DurationSeconds ?? 0 }),
   kicker_earnings: o => ({ date: o.Date, month: o.Month, agent_email: o.AgentEmail, agent_name: o.AgentName, kicker_type: o.KickerType, details: o.Details, amount: o.Amount, logged_at: o.LoggedAt }),
 }
 

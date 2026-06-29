@@ -51,6 +51,20 @@ export const logUsage = (user) => {
 export const getUsageLog = () =>
   appsScript.getSheet('Usage_Log').catch(() => [])
 
+// Inserts a duration heartbeat row so per-user time-spent can be computed
+export const logDuration = (user, durationSeconds) => {
+  if (!durationSeconds || durationSeconds < 10) return
+  const now = new Date()
+  appsScript.appendRow('UserActivity', {
+    Timestamp:       now.toISOString(),
+    Date:            now.toLocaleDateString('en-CA'),
+    Email:           user.email,
+    Name:            user.name,
+    Role:            user.role,
+    DurationSeconds: Math.round(durationSeconds),
+  }).catch(() => {})
+}
+
 export const activateInvite = (token, password) =>
   appsScript.activateInvite(token, password)
 

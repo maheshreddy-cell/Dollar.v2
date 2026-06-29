@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from 'react'
-import { login as apiLogin, activateInvite as apiActivate, logUsage } from '../services/api'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { login as apiLogin, activateInvite as apiActivate, logUsage, logDuration } from '../services/api'
 import { warmCache } from '../services/supabase'
 
 const AuthContext = createContext(null)
@@ -22,29 +22,90 @@ function shouldLogToday(email) {
   return true
 }
 
+// ─── Session timer hook ─────────────────────────────────────────────────────
+// Tracks active time while the tab is visible. Flushes to the server every
+// 5 minutes and on tab-hide / beforeunload so Usage Analytics can show
+// time spent per user.
+function useSessionTimer(user) {
+  const startRef    = useRef(null)   // when visible period began
+  const pendingRef  = useRef(0)      // seconds accumulated but not yet flushed
+
+  const flush = (u) => {
+    if (!u) return
+    if (startRef.current) {
+      pendingRef.current += (Date.now() - startRef.current) / 1000
+      startRef.current = null
+    }
+    if (pendingRef.current >= 10) {
+      logDuration(u, pendingRef.current)
+      pendingRef.current = 0
+    }
+  }
+
+  useEffect(() => {
+    if (!user) return
+
+    // Start timer if tab is already visible
+    if (document.visibilityState === 'visible') startRef.current = Date.now()
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        flush(user)
+      } else {
+        startRef.current = Date.now()
+      }
+    }
+
+    const onUnload = () => flush(user)
+
+    // Flush every 5 minutes to avoid losing data on crash/forced close
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && startRef.current) {
+        const elapsed = (Date.now() - startRef.current) / 1000
+        pendingRef.current += elapsed
+        startRef.current = Date.now()
+        if (pendingRef.current >= 60) {
+          logDuration(user, pendingRef.current)
+          pendingRef.current = 0
+        }
+      }
+    }, 5 * 60 * 1000)
+
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('beforeunload', onUnload)
+
+    return () => {
+      flush(user)
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('beforeunload', onUnload)
+    }
+  }, [user?.email])
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(() => {
     const saved = readSession()
     if (saved) {
       warmCache()
-      // Log session restore once per day so daily activity is captured
-      // even when the user doesn't re-login
       if (shouldLogToday(saved.email)) logUsage(saved)
     }
     return saved
   })
-  const [viewAs, setViewAs]   = useState(null)   // { email, name, role, managerEmail }
+  const [viewAs, setViewAs]   = useState(null)
 
-  // What all pages see for data fetching — real user unless Admin is impersonating
   const effectiveUser = viewAs || user
+
+  useSessionTimer(user)
 
   const login = async (email, password) => {
     const userData = await apiLogin(email, password)
     localStorage.setItem(SESSION_KEY, JSON.stringify(userData))
     setUser(userData)
     setViewAs(null)
-    warmCache()      // pre-warm immediately after login
-    logUsage(userData) // fire-and-forget usage log
+    warmCache()
+    logUsage(userData)
     return userData
   }
 

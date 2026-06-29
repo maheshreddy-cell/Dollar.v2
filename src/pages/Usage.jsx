@@ -47,6 +47,13 @@ function relTime(ts) {
 function todayStr() { return new Date().toLocaleDateString('en-CA') }
 function isOnline(ts) { return !!ts && Date.now() - new Date(ts).getTime() < 15 * 60 * 1000 }
 
+function fmtTime(seconds) {
+  if (!seconds || seconds < 60) return seconds > 0 ? `${Math.round(seconds)}s` : '—'
+  const m = Math.floor(seconds / 60)
+  const h = Math.floor(m / 60)
+  return h > 0 ? `${h}h ${m % 60}m` : `${m}m`
+}
+
 export default function Usage() {
   const [rows,      setRows]      = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -61,21 +68,25 @@ export default function Usage() {
   }
   useEffect(() => { load() }, [])
 
-  const { users, onlineNow, activeToday, totalLogins } = useMemo(() => {
+  const { users, onlineNow, activeToday, totalLogins, totalTodaySeconds } = useMemo(() => {
     const t = todayStr()
     const norm = rows.map(r => ({
-      timestamp: r.Timestamp || r.timestamp || '',
-      date:      r.Date      || r.date      || (r.Timestamp || '').slice(0, 10) || '',
-      email:     (r.Email    || r.email     || '').toLowerCase(),
-      name:      r.Name      || r.name      || '',
-      role:      r.Role      || r.role      || '',
+      timestamp:       r.Timestamp       || r.timestamp || '',
+      date:            r.Date            || r.date      || (r.Timestamp || '').slice(0, 10) || '',
+      email:           (r.Email          || r.email     || '').toLowerCase(),
+      name:            r.Name            || r.name      || '',
+      role:            r.Role            || r.role      || '',
+      durationSeconds: Number(r.DurationSeconds ?? r.duration_seconds ?? 0),
     })).filter(r => r.email)
 
     const byUser = {}
     for (const r of norm) {
-      if (!byUser[r.email]) byUser[r.email] = { email: r.email, name: r.name, role: r.role, total: 0, todayCount: 0, lastSeen: '' }
+      if (!byUser[r.email]) byUser[r.email] = { email: r.email, name: r.name, role: r.role, total: 0, todayCount: 0, todaySeconds: 0, lastSeen: '' }
       byUser[r.email].total++
-      if (r.date === t) byUser[r.email].todayCount++
+      if (r.date === t) {
+        byUser[r.email].todayCount++
+        byUser[r.email].todaySeconds += r.durationSeconds
+      }
       if (r.timestamp > byUser[r.email].lastSeen) {
         byUser[r.email].lastSeen = r.timestamp
         byUser[r.email].name     = r.name
@@ -91,11 +102,14 @@ export default function Usage() {
       return b.total - a.total
     })
 
+    const totalTodaySeconds = users.reduce((s, u) => s + (u.todaySeconds || 0), 0)
+
     return {
       users,
-      onlineNow:   users.filter(u => isOnline(u.lastSeen)).length,
-      activeToday: users.filter(u => u.lastSeen?.slice(0, 10) === t).length,
-      totalLogins: rows.length,
+      onlineNow:        users.filter(u => isOnline(u.lastSeen)).length,
+      activeToday:      users.filter(u => u.lastSeen?.slice(0, 10) === t).length,
+      totalLogins:      rows.length,
+      totalTodaySeconds,
     }
   }, [rows])
 
@@ -106,7 +120,7 @@ export default function Usage() {
   )
 
   const t = todayStr()
-  const maxLogins = Math.max(...users.map(u => u.total), 1)
+  const maxLogins = Math.max(...users.map(u => u.total), 1) // fallback for bar when no time data
 
   return (
     <div className="min-h-full -m-6 bg-[#eeecf9] p-5">
@@ -153,13 +167,13 @@ export default function Usage() {
           <p className="text-5xl font-black text-blue-600 leading-none">{activeToday}</p>
         </div>
 
-        {/* Total Logins */}
+        {/* Total Time */}
         <div className="rounded-2xl bg-white border border-orange-100 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-orange-500 text-sm font-black">∑</span>
-            <p className="text-[11px] font-bold text-orange-700 uppercase tracking-widest">Total Logins</p>
+            <span className="text-orange-500 text-sm font-black">⏱</span>
+            <p className="text-[11px] font-bold text-orange-700 uppercase tracking-widest">Total Time</p>
           </div>
-          <p className="text-5xl font-black text-orange-500 leading-none">{totalLogins}</p>
+          <p className="text-4xl font-black text-orange-500 leading-none">{totalTodaySeconds >= 60 ? fmtTime(totalTodaySeconds) : `${totalLogins} logins`}</p>
         </div>
       </div>
 
@@ -170,9 +184,11 @@ export default function Usage() {
           const todayActive = !online && u.lastSeen?.slice(0, 10) === t
           const role        = ROLE_META[u.role] || { label: u.role || '—', color: '#f3f4f6', text: '#374151' }
           const color       = avatarColor(u.email)
-          const count       = u.todayCount > 0 ? u.todayCount : u.total
-          const countLabel  = u.todayCount > 0 ? 'logins today' : 'total logins'
-          const barPct      = Math.max(4, Math.round((u.total / maxLogins) * 100))
+          const hasTime     = u.todaySeconds > 0
+          const timeLabel   = hasTime ? fmtTime(u.todaySeconds) : (u.todayCount > 0 ? `${u.todayCount} logins` : '—')
+          const subLabel    = hasTime ? 'time today' : (u.todayCount > 0 ? 'today' : 'no activity today')
+          const maxSecs     = Math.max(...users.map(x => x.todaySeconds), 1)
+          const barPct      = hasTime ? Math.max(4, Math.round((u.todaySeconds / maxSecs) * 100)) : Math.max(4, Math.round((u.total / maxLogins) * 100))
           const barColor    = online ? '#22c55e' : todayActive ? '#3b82f6' : '#d1d5db'
 
           return (
@@ -217,12 +233,12 @@ export default function Usage() {
                   {role.label}
                 </span>
 
-                {/* Login count */}
+                {/* Time / activity */}
                 <div className="mt-1">
-                  <p className="text-2xl font-black leading-none" style={{ color: online ? '#16a34a' : todayActive ? '#2563eb' : '#1f2937' }}>
-                    {count}
+                  <p className="text-2xl font-black leading-none" style={{ color: online ? '#16a34a' : todayActive ? '#2563eb' : '#9ca3af' }}>
+                    {timeLabel}
                   </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{countLabel}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{subLabel}</p>
                 </div>
 
                 {/* Last seen */}
