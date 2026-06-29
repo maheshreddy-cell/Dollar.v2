@@ -72,15 +72,17 @@ export default function Sidebar() {
   const isDark = theme === 'dark'
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
 
-  const fileInputRef = useRef(null)
-  const [uploading, setUploading] = useState(false)
+  const fileInputRef   = useRef(null)
+  const cameraInputRef = useRef(null)
+  const [uploading,  setUploading]  = useState(false)
+  const [showMenu,   setShowMenu]   = useState(false)
 
-  const handlePhotoClick = () => fileInputRef.current?.click()
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    try { await updatePhoto(file) } catch {}
+    setShowMenu(false)
+    try { await updatePhoto(file) } catch (err) { console.error('Photo upload failed:', err) }
     setUploading(false)
     e.target.value = ''
   }
@@ -185,27 +187,47 @@ export default function Sidebar() {
       {user && (
         <div className="px-4 py-4 border-t border-ios-separator">
           <div className="flex items-center gap-3">
-            <button
-              onClick={handlePhotoClick}
-              className="relative w-9 h-9 rounded-full shrink-0 overflow-hidden group focus:outline-none"
-              title="Change profile photo"
-            >
-              {user.photoUrl
-                ? <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full bg-brand-500 flex items-center justify-center shadow-ios-sm">
-                    <span className="text-white text-xs font-semibold">
-                      {user.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-                    </span>
-                  </div>
-              }
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                {uploading
-                  ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  : <Camera size={12} className="text-white" />
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowMenu(v => !v)}
+                className="relative w-9 h-9 rounded-full overflow-hidden group focus:outline-none"
+                title="Change profile photo"
+              >
+                {user.photoUrl
+                  ? <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full bg-brand-500 flex items-center justify-center shadow-ios-sm">
+                      <span className="text-white text-xs font-semibold">
+                        {user.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                      </span>
+                    </div>
                 }
-              </div>
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  {uploading
+                    ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Camera size={12} className="text-white" />
+                  }
+                </div>
+              </button>
+
+              {showMenu && (
+                <div className="absolute bottom-11 left-0 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <span>📁</span> Upload from device
+                  </button>
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <span>📷</span> Take a photo
+                  </button>
+                </div>
+              )}
+            </div>
+            <input ref={fileInputRef}   type="file" accept="image/*"                   className="hidden" onChange={handlePhotoChange} />
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="user"    className="hidden" onChange={handlePhotoChange} />
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-gray-900 truncate tracking-ios-tight">{user.name}</p>
               <p className="text-[11px] text-ios-gray1 truncate">{user.email}</p>

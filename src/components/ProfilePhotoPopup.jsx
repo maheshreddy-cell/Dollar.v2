@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Camera, X } from 'lucide-react'
+import { Camera, X, Upload } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 const DISMISSED_KEY = (email) => `dv2_photo_dismissed_${email}`
@@ -8,7 +8,8 @@ export default function ProfilePhotoPopup() {
   const { user, updatePhoto } = useAuth()
   const [visible,   setVisible]   = useState(false)
   const [uploading, setUploading] = useState(false)
-  const fileRef = useRef(null)
+  const fileRef   = useRef(null)
+  const cameraRef = useRef(null)
 
   useEffect(() => {
     if (!user?.email) return
@@ -64,19 +65,27 @@ export default function ProfilePhotoPopup() {
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="flex-1 text-sm font-semibold bg-brand-600 text-white rounded-xl py-2 hover:bg-brand-700 transition-colors disabled:opacity-60"
+          className="flex-1 text-xs font-semibold bg-brand-600 text-white rounded-xl py-2 hover:bg-brand-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
         >
-          {uploading ? 'Uploading…' : 'Upload Photo'}
+          <Upload size={12} /> {uploading ? 'Uploading…' : 'Upload File'}
+        </button>
+        <button
+          onClick={() => cameraRef.current?.click()}
+          disabled={uploading}
+          className="flex-1 text-xs font-semibold bg-gray-800 text-white rounded-xl py-2 hover:bg-gray-900 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
+        >
+          <Camera size={12} /> Take Photo
         </button>
         <button
           onClick={dismiss}
-          className="px-4 text-sm font-medium text-gray-500 hover:text-gray-700 rounded-xl border border-gray-200 py-2 hover:bg-gray-50 transition-colors"
+          className="px-3 text-xs font-medium text-gray-500 hover:text-gray-700 rounded-xl border border-gray-200 py-2 hover:bg-gray-50 transition-colors"
         >
-          Not Now
+          Later
         </button>
       </div>
 
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <input ref={fileRef}   type="file" accept="image/*"              className="hidden" onChange={handleFile} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFile} />
     </div>
   )
 }
