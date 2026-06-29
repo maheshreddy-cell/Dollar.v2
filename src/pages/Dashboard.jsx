@@ -121,25 +121,31 @@ export default function Dashboard() {
   const isPreSales  = effectiveUser?.role === 'PreSales'
   const tick        = useRefresh()
 
-  // ── Push in-app notification when at-risk count rises ────────────────────
+  // ── Push in-app + Slack notification when at-risk count rises ───────────
+  // sessionStorage key prevents re-firing when user navigates away and back
   const prevAtRiskRef = useRef(null)
   useEffect(() => {
     const count = summary?.atRiskCount ?? 0
-    if (count > 0 && (prevAtRiskRef.current === null || count > prevAtRiskRef.current)) {
+    const email = effectiveUser?.email || ''
+    const dedupKey = `atrisk_slack_${email}_${count}`
+    const alreadySent = count > 0 && !!sessionStorage.getItem(dedupKey)
+
+    if (count > 0 && !alreadySent && (prevAtRiskRef.current === null || count > prevAtRiskRef.current)) {
       notifAtRisk({
-        agentName:  effectiveUser?.name  || effectiveUser?.email || '',
-        agentEmail: effectiveUser?.email || '',
+        agentName:  effectiveUser?.name  || email,
+        agentEmail: email,
         count,
         amount:     summary?.atRiskAmount ?? 0,
-        forUser:    effectiveUser?.email  || '',
+        forUser:    email,
       })
       notifyAtRiskPayments({
-        agentName: effectiveUser?.name || effectiveUser?.email || '',
+        agentName: effectiveUser?.name || email,
         agentTeam: effectiveUser?.team || '',
         count,
         amount:    summary?.atRiskAmount ?? 0,
         deals:     summary?.atRiskDeals ?? [],
       })
+      try { sessionStorage.setItem(dedupKey, '1') } catch {}
     }
     prevAtRiskRef.current = count
   }, [summary?.atRiskCount]) // eslint-disable-line

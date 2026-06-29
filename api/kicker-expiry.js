@@ -42,11 +42,23 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, message: 'No kickers expired today' })
     }
 
-    // Fetch all kicker earnings
-    const { data: earnings, error: eErr } = await supabase
-      .from('kicker_earnings')
-      .select('*')
-    if (eErr) throw eErr
+    // Fetch kicker earnings within the date range of today's expiring kickers
+    // Use the earliest date_from across all expiring kickers as the lower bound
+    const earliestFrom = kickers.reduce((min, k) => k.date_from < min ? k.date_from : min, kickers[0].date_from)
+    const PAGE = 1000
+    let eFrom = 0
+    const allEarnings = []
+    for (;;) {
+      const { data: rows, error: eErr } = await supabase
+        .from('kicker_earnings')
+        .select('*')
+        .gte('date', earliestFrom)
+        .range(eFrom, eFrom + PAGE - 1)
+      if (eErr) throw eErr
+      allEarnings.push(...(rows || []))
+      if (!rows || rows.length < PAGE) break
+      eFrom += PAGE
+    }
 
     const sentCount = []
 
@@ -56,9 +68,10 @@ export default async function handler(req, res) {
       const maxPayout = slabs.reduce((m, s) => Math.max(m, Number(s.payout || 0)), 0)
       const roles    = safeParse(kicker.target_roles, [])
 
-      // Match earnings by kicker title
-      const kickerEarnings = (earnings || []).filter(e =>
-        (e.kicker_type || '').toLowerCase() === (kicker.title || '').toLowerCase()
+      // Match earnings by title AND within this kicker's date range
+      const kickerEarnings = allEarnings.filter(e =>
+        (e.kicker_type || '').toLowerCase() === (kicker.title || '').toLowerCase() &&
+        e.date >= kicker.date_from && e.date <= kicker.date_to
       )
 
       // Dedupe by agent — keep highest amount per agent
