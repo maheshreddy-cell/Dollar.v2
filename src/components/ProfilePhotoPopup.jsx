@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Camera, X, Upload } from 'lucide-react'
+import { Camera, Upload } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-
-const DISMISSED_KEY = (email) => `dv2_photo_dismissed_${email}`
 
 export default function ProfilePhotoPopup() {
   const { user, updatePhoto } = useAuth()
@@ -13,21 +11,12 @@ export default function ProfilePhotoPopup() {
 
   useEffect(() => {
     if (!user?.email) return
-    // Don't show if user already has a photo
-    if (user.photoUrl) return
-    // Don't show if already dismissed
-    if (localStorage.getItem(DISMISSED_KEY(user.email))) return
-    // Show after a short delay so it doesn't feel intrusive on first load
-    const t = setTimeout(() => setVisible(true), 2500)
+    if (user.photoUrl) { setVisible(false); return }
+    const t = setTimeout(() => setVisible(true), 1500)
     return () => clearTimeout(t)
   }, [user?.email, user?.photoUrl])
 
   if (!visible) return null
-
-  const dismiss = () => {
-    localStorage.setItem(DISMISSED_KEY(user.email), '1')
-    setVisible(false)
-  }
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
@@ -35,7 +24,7 @@ export default function ProfilePhotoPopup() {
     setUploading(true)
     try {
       await updatePhoto(file)
-      setVisible(false) // photo uploaded — popup never shows again (photoUrl is now set)
+      setVisible(false)
     } catch {
       setUploading(false)
     }
@@ -43,49 +32,39 @@ export default function ProfilePhotoPopup() {
   }
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[340px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 animate-slide-up">
-      <button
-        onClick={dismiss}
-        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
-      >
-        <X size={16} />
-      </button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="bg-white rounded-3xl shadow-2xl w-[340px] p-8 flex flex-col items-center text-center animate-ios-spring">
 
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-          <Camera size={24} className="text-brand-500" />
+        {/* Avatar placeholder */}
+        <div className="w-20 h-20 rounded-full bg-brand-50 border-4 border-brand-100 flex items-center justify-center mb-4">
+          <Camera size={32} className="text-brand-400" />
         </div>
-        <div>
-          <p className="text-sm font-bold text-gray-900">Add a profile photo</p>
-          <p className="text-xs text-gray-500 mt-0.5">Help your teammates recognise you</p>
+
+        <p className="text-lg font-bold text-gray-900">Add a profile photo</p>
+        <p className="text-sm text-gray-500 mt-1 mb-6">
+          Your teammates can't recognise you without one. Upload a photo to continue.
+        </p>
+
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold bg-brand-600 text-white rounded-xl py-3 hover:bg-brand-700 transition-colors disabled:opacity-60"
+          >
+            <Upload size={15} /> {uploading ? 'Uploading…' : 'Upload'}
+          </button>
+          <button
+            onClick={() => cameraRef.current?.click()}
+            disabled={uploading}
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-semibold bg-gray-900 text-white rounded-xl py-3 hover:bg-gray-800 transition-colors disabled:opacity-60"
+          >
+            <Camera size={15} /> Camera
+          </button>
         </div>
-      </div>
 
-      <div className="flex gap-2 mt-4">
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="flex-1 text-xs font-semibold bg-brand-600 text-white rounded-xl py-2 hover:bg-brand-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
-        >
-          <Upload size={12} /> {uploading ? 'Uploading…' : 'Upload File'}
-        </button>
-        <button
-          onClick={() => cameraRef.current?.click()}
-          disabled={uploading}
-          className="flex-1 text-xs font-semibold bg-gray-800 text-white rounded-xl py-2 hover:bg-gray-900 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
-        >
-          <Camera size={12} /> Take Photo
-        </button>
-        <button
-          onClick={dismiss}
-          className="px-3 text-xs font-medium text-gray-500 hover:text-gray-700 rounded-xl border border-gray-200 py-2 hover:bg-gray-50 transition-colors"
-        >
-          Later
-        </button>
+        <input ref={fileRef}   type="file" accept="image/*"               className="hidden" onChange={handleFile} />
+        <input ref={cameraRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFile} />
       </div>
-
-      <input ref={fileRef}   type="file" accept="image/*"              className="hidden" onChange={handleFile} />
-      <input ref={cameraRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFile} />
     </div>
   )
 }
