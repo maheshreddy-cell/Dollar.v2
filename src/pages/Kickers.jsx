@@ -1538,7 +1538,7 @@ export default function Kickers() {
         agentEmail={effectiveUser?.email}
         agentName={effectiveUser?.name}
         month={month}
-        tab="active"
+        tab={kickerTab === 'expired' ? 'past' : 'active'}
       />
       {isPreSales && <PSCallsCard psSummary={psSummary} />}
 

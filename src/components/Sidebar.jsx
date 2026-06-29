@@ -67,7 +67,7 @@ const NAV_BASE = [
 ]
 
 export default function Sidebar() {
-  const { user, effectiveUser, isRole, updatePhoto } = useAuth()
+  const { user, effectiveUser, isRole } = useAuth()
   const { can } = usePermissions()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
