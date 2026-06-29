@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getUsageLog } from '../services/api'
+import { getUsageLog, getAllUsers } from '../services/api'
 import { RefreshCw } from 'lucide-react'
 
 const AVATAR_COLORS = [
@@ -56,13 +56,20 @@ function fmtTime(seconds) {
 
 export default function Usage() {
   const [rows,      setRows]      = useState([])
+  const [photoMap,  setPhotoMap]  = useState({})
   const [loading,   setLoading]   = useState(true)
   const [refreshed, setRefreshed] = useState(null)
 
   const load = async () => {
     setLoading(true)
-    const data = await getUsageLog()
+    const [data, usersData] = await Promise.all([getUsageLog(), getAllUsers().catch(() => [])])
     setRows(Array.isArray(data) ? data : [])
+    const map = {}
+    for (const u of (Array.isArray(usersData) ? usersData : [])) {
+      const email = (u.Email || u.email || '').toLowerCase()
+      if (email && u.PhotoUrl) map[email] = u.PhotoUrl
+    }
+    setPhotoMap(map)
     setRefreshed(new Date())
     setLoading(false)
   }
@@ -200,12 +207,15 @@ export default function Usage() {
               <div className="p-4 flex flex-col gap-2 flex-1">
                 {/* Top row: avatar + status */}
                 <div className="flex items-start justify-between">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                    style={{ backgroundColor: color }}
-                  >
-                    {initials(u.name, u.email)}
-                  </div>
+                  {photoMap[u.email]
+                  ? <img src={photoMap[u.email]} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                  : <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      style={{ backgroundColor: color }}
+                    >
+                      {initials(u.name, u.email)}
+                    </div>
+                }
 
                   {online ? (
                     <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">

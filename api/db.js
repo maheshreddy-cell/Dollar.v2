@@ -23,7 +23,7 @@ const TABLE = {
 }
 
 const toSheet = {
-  users:             r => ({ Email: r.email, Name: r.name, Role: r.role, ManagerEmail: r.manager_email, PasswordHash: r.password_hash, InviteToken: r.invite_token, InviteExpiry: r.invite_expiry, Status: r.status, Team: r.team, CreatedAt: r.created_at }),
+  users:             r => ({ Email: r.email, Name: r.name, Role: r.role, ManagerEmail: r.manager_email, PasswordHash: r.password_hash, InviteToken: r.invite_token, InviteExpiry: r.invite_expiry, Status: r.status, Team: r.team, CreatedAt: r.created_at, PhotoUrl: r.photo_url || null }),
   targets:           r => ({ Key: r.key, Email: r.email, Month: r.month, TargetAmount: r.target_amount, CommissionPct: r.commission_pct, CommissionStartDate: r.commission_start_date, CommissionEndDate: r.commission_end_date, AssignedBy: r.assigned_by, AssignedAt: r.assigned_at }),
   sales:             r => ({ Email: r.agent_email || '', LeadName: r.lead_name || '', CustomerEmail: r.customer_email || '', TotalValue: Number(r.total_sale_value) || 0, PaidActual: Number(r.paid_actual) || 0, AmountCleared: Number(r.amount_cleared) || 0, PaymentDate: r.payment_date || '', Month: r.month || '', Team: r.team || '', Vertical: r.vertical || '', Status: r.status || '', Course: r.course || '', Rating: r.rating, PaymentType: r.payment_type || '', Profession: r.profession || '', Timestamp: r.timestamp || '', LoanDocsCollected: r.loan_docs_collected || '', T2Amount: Number(r.t2_amount) || 0 }),
   commission_config: r => ({ Key: r.key, ManagerEmail: r.manager_email, Month: r.month, ProjectedSlabs: r.projected_slabs, RealisedSlabs: r.realised_slabs, AssignedBy: r.assigned_by, AssignedAt: r.assigned_at, ProgramFilter: r.program_filter || 'all' }),
