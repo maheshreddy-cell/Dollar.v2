@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, CheckCircle, Trash2, PencilLine, Plus, Search } from 'lucide-react'
 import { notifTargetAssigned } from '../services/notifications'
-import { notifyTargetAssigned } from '../services/slack'
+import { notifyTargetAssigned, notifyManagerTargetAssigned } from '../services/slack'
 import { useMonth } from '../contexts/MonthContext'
 import { useAuth } from '../contexts/AuthContext'
 import { getTeam, getSubtree, assignTarget, deleteTarget, getTargets, assignManagerTarget, deleteManagerTarget, getManagerTargetHistory, getManagerSlabs, MANAGER_TARGET_PROGRAMS, parseSlabsField } from '../services/api'
@@ -806,6 +806,15 @@ export default function AssignTargets() {
                       program:             pid,
                       personalContribution: Number(progContrib[pid] || 0),
                     }, user.email)
+                    notifyManagerTargetAssigned({
+                      managerName:    selected?.Name  || selected?.Email || '',
+                      managerEmail:   selected?.Email || '',
+                      month:          formMonth,
+                      program:        pid,
+                      projectedSlabs: proj,
+                      personalContrib: Number(progContrib[pid] || 0),
+                      assignerName:   user?.name || user?.email || '',
+                    })
                     setProgState(pid, { success: true, submitting: false })
                     clearCache()
                     await new Promise(r => setTimeout(r, 1200))

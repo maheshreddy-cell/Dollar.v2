@@ -15,6 +15,7 @@ import { useBackground } from '../hooks/useBackground'
 import { MANAGER_ROLES } from '../utils/roles'
 import { formatINR, getAchievementPct } from '../utils/commission'
 import { notifAtRisk } from '../services/notifications'
+import { notifyAtRiskPayments } from '../services/slack'
 
 // Preset slab badge color
 const PRESET_COLOR = {
@@ -131,6 +132,12 @@ export default function Dashboard() {
         count,
         amount:     summary?.atRiskAmount ?? 0,
         forUser:    effectiveUser?.email  || '',
+      })
+      notifyAtRiskPayments({
+        agentName: effectiveUser?.name || effectiveUser?.email || '',
+        count,
+        amount:    summary?.atRiskAmount ?? 0,
+        deals:     summary?.atRiskDeals ?? [],
       })
     }
     prevAtRiskRef.current = count
