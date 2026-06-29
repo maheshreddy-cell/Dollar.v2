@@ -82,6 +82,16 @@ function useSessionTimer(user) {
     }
   }, [user?.email])
 }
+// ── Keep Vercel function warm — ping every 4 min to avoid cold-start delays ──
+function useKeepAlive(active) {
+  useEffect(() => {
+    if (!active) return
+    const ping = () => fetch('/api/db?action=ping').catch(() => {})
+    ping()
+    const id = setInterval(ping, 4 * 60_000)
+    return () => clearInterval(id)
+  }, [active])
+}
 // ────────────────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }) {
@@ -98,6 +108,7 @@ export function AuthProvider({ children }) {
   const effectiveUser = viewAs || user
 
   useSessionTimer(user)
+  useKeepAlive(!!user)
 
   const login = async (email, password) => {
     const userData = await apiLogin(email, password)

@@ -191,6 +191,9 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const { action, sheet, token } = req.query
 
+    // Keep-alive ping — no DB hit, just confirms the function is warm
+    if (action === 'ping') return ok({ pong: true })
+
     if (action === 'getSheet') {
       // Sales are read live from Google Sheet so the dashboard always reflects
       // new form submissions without any sync delay.
@@ -199,6 +202,26 @@ export default async function handler(req, res) {
       }
       const table = TABLE[sheet]
       if (!table) return ok([])
+
+      // user_activity can grow very large — only fetch the last 90 days
+      if (table === 'user_activity') {
+        const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        const PAGE = 1000
+        let from = 0, all = []
+        for (;;) {
+          const { data: rows, error } = await supabase
+            .from('user_activity')
+            .select('*')
+            .gte('date', cutoff)
+            .range(from, from + PAGE - 1)
+          if (error) return fail(error.message)
+          all = all.concat(rows || [])
+          if (!rows || rows.length < PAGE) break
+          from += PAGE
+        }
+        return ok(all.map(toSheet.user_activity))
+      }
+
       const { data, error } = await selectAll(table)
       if (error) return fail(error.message)
       const mapper = toSheet[table] || (r => r)
