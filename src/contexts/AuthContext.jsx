@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { login as apiLogin, activateInvite as apiActivate, logUsage, logDuration, uploadProfilePhoto } from '../services/api'
+import { login as apiLogin, activateInvite as apiActivate, logUsage, logDuration, uploadProfilePhoto, updateBio as apiBio, removeProfilePhoto as apiRemovePhoto } from '../services/api'
 import { warmCache } from '../services/supabase'
 
 const AuthContext = createContext(null)
@@ -116,6 +116,20 @@ export function AuthProvider({ children }) {
     return userData
   }
 
+  const saveBio = async (bio) => {
+    await apiBio(user.email, bio)
+    const updated = { ...user, bio }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(updated))
+    setUser(updated)
+  }
+
+  const removePhoto = async () => {
+    await apiRemovePhoto(user.email)
+    const updated = { ...user, photoUrl: null }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(updated))
+    setUser(updated)
+  }
+
   const updatePhoto = async (file) => {
     const url = await uploadProfilePhoto(user.email, file)
     const updated = { ...user, photoUrl: url }
@@ -147,6 +161,8 @@ export function AuthProvider({ children }) {
       activateInvite,
       logout,
       updatePhoto,
+      removePhoto,
+      saveBio,
       isRole,
     }}>
       {children}

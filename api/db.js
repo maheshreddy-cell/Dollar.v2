@@ -222,11 +222,11 @@ export default async function handler(req, res) {
   if (action === 'login') {
     const { email, password } = body
     const hash = sha256(password)
-    const { data, error } = await supabase.from('users').select('email,name,role,manager_email,team,status,password_hash,photo_url').eq('email', (email || '').trim().toLowerCase()).single()
+    const { data, error } = await supabase.from('users').select('email,name,role,manager_email,team,status,password_hash,photo_url,bio').eq('email', (email || '').trim().toLowerCase()).single()
     if (error || !data) return fail('User not found')
     if (data.status === 'invited') return fail('Account not activated yet')
     if (data.password_hash !== hash) return fail('Invalid password')
-    return ok({ email: data.email, name: data.name, role: data.role, managerEmail: data.manager_email, team: data.team, photoUrl: data.photo_url || null })
+    return ok({ email: data.email, name: data.name, role: data.role, managerEmail: data.manager_email, team: data.team, photoUrl: data.photo_url || null, bio: data.bio || '' })
   }
 
   if (action === 'activateInvite') {
@@ -274,6 +274,22 @@ export default async function handler(req, res) {
     const { error } = await supabase.from(table).update(dbUpdates).eq(dbCol(table, matchCol), matchVal)
     if (error) return fail(error.message)
     return ok({ updated: true })
+  }
+
+  if (action === 'updateBio') {
+    const { email, bio } = body
+    if (!email) return fail('Missing email')
+    const { error } = await supabase.from('users').update({ bio: bio || '' }).eq('email', email.toLowerCase())
+    if (error) return fail(error.message)
+    return ok({ updated: true })
+  }
+
+  if (action === 'removePhoto') {
+    const { email } = body
+    if (!email) return fail('Missing email')
+    const { error } = await supabase.from('users').update({ photo_url: null }).eq('email', email.toLowerCase())
+    if (error) return fail(error.message)
+    return ok({ removed: true })
   }
 
   if (action === 'uploadPhoto') {

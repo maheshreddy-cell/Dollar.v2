@@ -55,6 +55,26 @@ export const getUsageLog = () => {
   return appsScript.getSheet('Usage_Log').catch(() => [])
 }
 
+export async function updateBio(email, bio) {
+  const res = await fetch('/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'updateBio', email, bio }),
+  })
+  const data = await res.json()
+  if (!data.success) throw new Error(data.error || 'Failed to update bio')
+}
+
+export async function removeProfilePhoto(email) {
+  const res = await fetch('/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'removePhoto', email }),
+  })
+  const data = await res.json()
+  if (!data.success) throw new Error(data.error || 'Failed to remove photo')
+}
+
 // Inserts a duration heartbeat row so per-user time-spent can be computed
 export const logDuration = (user, durationSeconds) => {
   if (!durationSeconds || durationSeconds < 10) return
