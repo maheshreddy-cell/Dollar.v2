@@ -584,6 +584,7 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
     wipSlabHint,
     atRiskCount,
     atRiskAmount,
+    atRiskDeals,
   }
 }
 

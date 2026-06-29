@@ -85,18 +85,27 @@ export function notifyManagerTargetAssigned({ managerName, managerEmail, month, 
 }
 
 // ─── 4. At-Risk Payments ────────────────────────────────────────────────────
-export function notifyAtRiskPayments({ agentName, count, amount, deals }) {
-  const dealLines = (deals || []).slice(0, 5).map(d =>
-    `• *${d.LeadName || 'Unknown'}* — ${fmt(d.TotalValue)} (${d.LoanDocsCollected || 'pending'})`
-  ).join('\n')
+export function notifyAtRiskPayments({ agentName, agentTeam, count, amount, deals }) {
+  const dealLines = (deals || []).slice(0, 8).map(d => {
+    const stage     = d.LoanDocsCollected || 'Pending'
+    const tsv       = fmt(d.TotalValue   || 0)
+    const paid      = fmt(d.PaidActual   || 0)
+    return `• *${d.LeadName || 'Unknown'}* | TSV: ${tsv} | Paid: ${paid} | Stage: _${stage}_`
+  }).join('\n')
+
+  const teamLine = agentTeam ? ` • Team: ${agentTeam}` : ''
 
   send({
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: '🚨 At-Risk Payments Alert', emoji: true } },
-      { type: 'section', text: { type: 'mrkdwn', text: `*${count} deal${count !== 1 ? 's' : ''}* stuck 3+ working days\nTotal at risk: *${fmt(amount)}*` } },
+      { type: 'section', fields: [
+        { type: 'mrkdwn', text: `*Agent:*\n${agentName}${teamLine}` },
+        { type: 'mrkdwn', text: `*Deals Stuck:*\n${count} deal${count !== 1 ? 's' : ''} (3+ working days)` },
+        { type: 'mrkdwn', text: `*Total at Risk:*\n${fmt(amount)}` },
+      ]},
       ...(dealLines ? [{ type: 'section', text: { type: 'mrkdwn', text: dealLines } }] : []),
       { type: 'context', elements: [
-        { type: 'mrkdwn', text: `Agent: ${agentName} • Auto-detected from dashboard` },
+        { type: 'mrkdwn', text: `Auto-detected from dashboard • Dollar.v2` },
       ]},
     ],
   })

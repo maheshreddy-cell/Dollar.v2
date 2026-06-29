@@ -135,6 +135,7 @@ export default function Dashboard() {
       })
       notifyAtRiskPayments({
         agentName: effectiveUser?.name || effectiveUser?.email || '',
+        agentTeam: effectiveUser?.team || '',
         count,
         amount:    summary?.atRiskAmount ?? 0,
         deals:     summary?.atRiskDeals ?? [],
