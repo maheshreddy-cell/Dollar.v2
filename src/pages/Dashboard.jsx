@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped, getKickers, getDeals, computeKickerBreakdown, getManagerOwnKickerEarnings } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped, getKickers, getDeals, computeKickerBreakdown, getManagerOwnKickerEarnings, getSubtreeEmails } from '../services/api'
 import MetricsCard     from '../components/MetricsCard'
 import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
@@ -93,11 +93,17 @@ export default function Dashboard() {
       if (type.startsWith('team_')) {
         setCardModal(m => ({ ...m, payload: { leaderboard }, loading: false }))
       } else if (type === 'kickers') {
-        const [allKickers, allDeals] = await Promise.all([getKickers(), getDeals(null, null)])
         const email = (effectiveUser?.email || '').toLowerCase()
-        // Mirror getSummary: filter agentDeals by the selected month so kicker thresholds
-        // are compared against the same deal set as the dashboard total.
-        const agentDeals = allDeals.filter(d => (d.Email || '').toLowerCase() === email && d.Month === month)
+        const [allKickers, allDeals, teamEmails] = await Promise.all([
+          getKickers(),
+          getDeals(null, null),
+          isManager ? getSubtreeEmails(effectiveUser?.email) : Promise.resolve(null),
+        ])
+        // Managers: use full team deals (kickers are evaluated on team revenue/sales)
+        // Agents: use own deals filtered by month
+        const agentDeals = isManager
+          ? allDeals.filter(d => (teamEmails || []).map(e => e.toLowerCase()).includes((d.Email || '').toLowerCase()))
+          : allDeals.filter(d => (d.Email || '').toLowerCase() === email && d.Month === month)
         const breakdown = computeKickerBreakdown(effectiveUser?.role, agentDeals, allKickers, allDeals, email)
         setCardModal(m => ({ ...m, payload: { breakdown }, loading: false }))
       } else {

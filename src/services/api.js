@@ -1077,6 +1077,19 @@ export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDea
       const s1Payout = Number(k.slabs[0]?.payout || 0); const s2Payout = Number(k.slabs[1]?.payout || 0)
       if (s2Target > 0 && sales >= s2Target)      amount = s2Payout
       else if (s1Target > 0 && sales >= s1Target) amount = s1Payout
+    } else if (rawType === 'weekly_target_pct') {
+      if (!agentEmail) continue
+      const weeklyTarget = Number((k.weeklyTargets || {})[agentEmail] || 0)
+      if (!weeklyTarget) continue
+      const inRange    = agentDeals.filter(inRange_)
+      const revenue    = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+      const achievedPct = Math.round((revenue / weeklyTarget) * 100)
+      const sorted2    = [...k.slabs].sort((a, b) => Number(a.threshold || 0) - Number(b.threshold || 0))
+      let earnedSlab2  = null
+      for (const slab of sorted2) {
+        if (achievedPct >= Number(slab.threshold || 0)) earnedSlab2 = slab
+      }
+      if (earnedSlab2) amount = Number(earnedSlab2.payout || 0)
     } else {
       const type = rawType === 'collective' ? 'collective'
                  : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
