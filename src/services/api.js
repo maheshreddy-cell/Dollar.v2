@@ -48,8 +48,12 @@ export const logUsage = (user) => {
   appsScript.appendRow('UserActivity', payload).catch(() => {}) // fire-and-forget, never block login
 }
 
-export const getUsageLog = () =>
-  appsScript.getSheet('Usage_Log').catch(() => [])
+export const getUsageLog = () => {
+  // Always bypass cache so online status and recent activity are accurate
+  clearSheetCache('Usage_Log')
+  clearSheetCache('UserActivity')
+  return appsScript.getSheet('Usage_Log').catch(() => [])
+}
 
 // Inserts a duration heartbeat row so per-user time-spent can be computed
 export const logDuration = (user, durationSeconds) => {
