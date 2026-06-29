@@ -1,46 +1,47 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getUsageLog } from '../services/api'
-import { Users, TrendingUp, Calendar, Clock, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 
-const ROLE_COLORS = {
-  Admin:     'bg-red-100 text-red-700',
-  SalesHead: 'bg-purple-100 text-purple-700',
-  VH:        'bg-blue-100 text-blue-700',
-  Manager:   'bg-green-100 text-green-700',
-  Agent:     'bg-gray-100 text-gray-700',
-  PreSales:  'bg-teal-100 text-teal-700',
+const AVATAR_COLORS = [
+  'bg-purple-400', 'bg-blue-500', 'bg-green-500', 'bg-orange-400',
+  'bg-pink-500',   'bg-indigo-500', 'bg-teal-500', 'bg-red-400',
+  'bg-yellow-500', 'bg-cyan-500',   'bg-violet-500', 'bg-rose-400',
+]
+
+const ROLE_META = {
+  Admin:     { label: 'Admin',      color: 'bg-red-100 text-red-700' },
+  SalesHead: { label: 'Sales Head', color: 'bg-purple-100 text-purple-700' },
+  VH:        { label: 'VH',         color: 'bg-blue-100 text-blue-700' },
+  Manager:   { label: 'Team Lead',  color: 'bg-green-100 text-green-700' },
+  Agent:     { label: 'Agent',      color: 'bg-gray-100 text-gray-600' },
+  PreSales:  { label: 'PreSales',   color: 'bg-teal-100 text-teal-700' },
 }
 
-function fmt(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  if (isNaN(d)) return dateStr
-  return d.toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  })
+function avatarColor(email) {
+  let h = 0
+  for (let i = 0; i < email.length; i++) h = email.charCodeAt(i) + ((h << 5) - h)
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
-function today() { return new Date().toLocaleDateString('en-CA') }
-
-function last14Days() {
-  const days = []
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    days.push(d.toLocaleDateString('en-CA'))
-  }
-  return days
+function relTime(ts) {
+  if (!ts) return 'Never'
+  const diff = Date.now() - new Date(ts).getTime()
+  const m = Math.floor(diff / 60000)
+  const h = Math.floor(m / 60)
+  const d = Math.floor(h / 24)
+  if (m < 1)  return 'Just now'
+  if (m < 60) return `${m}m ago`
+  if (h < 24) return `${h}h ${m % 60}m ago`
+  if (d === 1) return 'Yesterday'
+  return `${d}d ago`
 }
 
-function shortDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-}
+function todayStr() { return new Date().toLocaleDateString('en-CA') }
+function isOnline(ts) { return !!ts && Date.now() - new Date(ts).getTime() < 15 * 60 * 1000 }
 
 export default function Usage() {
-  const [rows, setRows]       = useState([])
-  const [loading, setLoading] = useState(true)
+  const [rows,      setRows]      = useState([])
+  const [loading,   setLoading]   = useState(true)
   const [refreshed, setRefreshed] = useState(null)
 
   const load = async () => {
@@ -50,15 +51,11 @@ export default function Usage() {
     setRefreshed(new Date())
     setLoading(false)
   }
-
   useEffect(() => { load() }, [])
 
-  // ── Derived stats ────────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const t = today()
-
-    // Normalise rows — Sheets returns objects; field names may vary
-    const normalised = rows.map(r => ({
+  const { users, onlineNow, activeToday, totalLogins } = useMemo(() => {
+    const t = todayStr()
+    const norm = rows.map(r => ({
       timestamp: r.Timestamp || r.timestamp || '',
       date:      r.Date      || r.date      || (r.Timestamp || '').slice(0, 10) || '',
       email:     (r.Email    || r.email     || '').toLowerCase(),
@@ -66,47 +63,33 @@ export default function Usage() {
       role:      r.Role      || r.role      || '',
     })).filter(r => r.email)
 
-    // Today's unique users
-    const todayEmails   = [...new Set(normalised.filter(r => r.date === t).map(r => r.email))]
-    // This week (last 7 days)
-    const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 6)
-    const weekStartStr = weekStart.toLocaleDateString('en-CA')
-    const weekEmails    = [...new Set(normalised.filter(r => r.date >= weekStartStr).map(r => r.email))]
-    // All time unique users
-    const allEmails     = [...new Set(normalised.map(r => r.email))]
-
-    // Per-day counts for bar chart (last 14 days)
-    const days = last14Days()
-    const perDay = days.map(d => {
-      const unique = new Set(normalised.filter(r => r.date === d).map(r => r.email)).size
-      const total  = normalised.filter(r => r.date === d).length
-      return { date: d, unique, total }
-    })
-
-    // Per-user breakdown
     const byUser = {}
-    for (const r of normalised) {
-      if (!byUser[r.email]) {
-        byUser[r.email] = { email: r.email, name: r.name, role: r.role, count: 0, lastSeen: '' }
-      }
-      byUser[r.email].count++
+    for (const r of norm) {
+      if (!byUser[r.email]) byUser[r.email] = { email: r.email, name: r.name, role: r.role, total: 0, todayCount: 0, lastSeen: '' }
+      byUser[r.email].total++
+      if (r.date === t) byUser[r.email].todayCount++
       if (r.timestamp > byUser[r.email].lastSeen) {
-        byUser[r.email].lastSeen  = r.timestamp
-        byUser[r.email].name      = r.name  // keep latest
-        byUser[r.email].role      = r.role
+        byUser[r.email].lastSeen = r.timestamp
+        byUser[r.email].name     = r.name
+        byUser[r.email].role     = r.role
       }
     }
-    const users = Object.values(byUser).sort((a, b) => b.count - a.count)
 
-    // Recent logins (last 20)
-    const recent = [...normalised]
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-      .slice(0, 20)
+    const users = Object.values(byUser).sort((a, b) => {
+      const ao = isOnline(a.lastSeen), bo = isOnline(b.lastSeen)
+      if (ao !== bo) return bo - ao
+      const at = a.lastSeen?.slice(0, 10) === t, bt = b.lastSeen?.slice(0, 10) === t
+      if (at !== bt) return bt - at
+      return b.total - a.total
+    })
 
-    return { todayEmails, weekEmails, allEmails, perDay, users, recent }
+    return {
+      users,
+      onlineNow:   users.filter(u => isOnline(u.lastSeen)).length,
+      activeToday: users.filter(u => u.lastSeen?.slice(0, 10) === t).length,
+      totalLogins: rows.length,
+    }
   }, [rows])
-
-  const maxBar = Math.max(...stats.perDay.map(d => d.unique), 1)
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -114,152 +97,114 @@ export default function Usage() {
     </div>
   )
 
+  const t = todayStr()
+
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-5">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-base font-bold text-gray-900">Usage Analytics</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Who's logged in and when — updated on every login
-            {refreshed && <> · refreshed {refreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</>}
-          </p>
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-bold text-gray-900">Platform Usage</h2>
+          <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full">{t}</span>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-xl px-3 py-2 hover:bg-gray-50 transition-colors"
-        >
-          <RefreshCw size={14} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {refreshed && <span className="text-xs text-gray-400">Updated {refreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
+          <button onClick={load} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-xl px-3 py-1.5 hover:bg-gray-50 transition-colors">
+            <RefreshCw size={13} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Active Today',    value: stats.todayEmails.length,  sub: 'unique users',     icon: <Clock size={16} className="text-green-600" />,  bg: 'bg-green-50 border-green-100' },
-          { label: 'Active This Week',value: stats.weekEmails.length,   sub: 'last 7 days',      icon: <Calendar size={16} className="text-blue-600" />, bg: 'bg-blue-50 border-blue-100' },
-          { label: 'Total Users',     value: stats.allEmails.length,    sub: 'ever logged in',   icon: <Users size={16} className="text-purple-600" />,  bg: 'bg-purple-50 border-purple-100' },
-          { label: 'Total Logins',    value: rows.length,               sub: 'all time',         icon: <TrendingUp size={16} className="text-brand-600" />, bg: 'bg-brand-50 border-brand-100' },
-        ].map(c => (
-          <div key={c.label} className={`rounded-xl border p-4 ${c.bg}`}>
-            <div className="flex items-center gap-2 mb-2">{c.icon}<p className="text-xs font-semibold text-gray-600">{c.label}</p></div>
-            <p className="text-3xl font-black text-gray-900">{c.value}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{c.sub}</p>
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-2xl bg-green-50 border border-green-100 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
+            <p className="text-[11px] font-bold text-green-700 uppercase tracking-widest">Online Now</p>
           </div>
-        ))}
+          <p className="text-4xl font-black text-green-700">{onlineNow}</p>
+        </div>
+        <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+            <p className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Active Today</p>
+          </div>
+          <p className="text-4xl font-black text-blue-700">{activeToday}</p>
+        </div>
+        <div className="rounded-2xl bg-orange-50 border border-orange-100 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+            <p className="text-[11px] font-bold text-orange-700 uppercase tracking-widest">Total Logins</p>
+          </div>
+          <p className="text-4xl font-black text-orange-700">{totalLogins}</p>
+        </div>
       </div>
 
-      {/* DAU bar chart — last 14 days */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <p className="text-sm font-bold text-gray-800 mb-4">Daily Active Users — Last 14 Days</p>
-        <div className="flex items-end gap-1.5 h-36">
-          {stats.perDay.map(({ date, unique }) => {
-            const pct = maxBar > 0 ? (unique / maxBar) * 100 : 0
-            const isToday = date === today()
-            return (
-              <div key={date} className="flex-1 flex flex-col items-center gap-1 group">
-                <div className="relative w-full flex flex-col justify-end" style={{ height: '100px' }}>
-                  {unique > 0 && (
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-800 text-white text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                      {unique} user{unique !== 1 ? 's' : ''}
-                    </div>
-                  )}
-                  <div
-                    className={`w-full rounded-t-md transition-all ${isToday ? 'bg-brand-500' : unique > 0 ? 'bg-brand-200' : 'bg-gray-100'}`}
-                    style={{ height: `${Math.max(pct, unique > 0 ? 8 : 4)}%` }}
-                  />
-                </div>
-                <p className={`text-[9px] font-medium ${isToday ? 'text-brand-700 font-bold' : 'text-gray-400'}`}>
-                  {shortDate(date)}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-        <p className="text-[10px] text-gray-400 mt-2 text-center">Hover over a bar to see the count · today is highlighted</p>
-      </div>
+      {/* User card grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {users.map(u => {
+          const online     = isOnline(u.lastSeen)
+          const todayActive = !online && u.lastSeen?.slice(0, 10) === t
+          const role       = ROLE_META[u.role] || { label: u.role || '—', color: 'bg-gray-100 text-gray-600' }
+          const initials   = (u.name || u.email).slice(0, 2).toUpperCase()
+          const count      = u.todayCount > 0 ? u.todayCount : u.total
+          const countLabel = u.todayCount > 0 ? 'logins today' : 'total logins'
 
-      {/* Per-user breakdown */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <p className="text-sm font-bold text-gray-800">Per-User Breakdown</p>
-          <p className="text-xs text-gray-400">{stats.users.length} users total</p>
-        </div>
-        {stats.users.length === 0 ? (
-          <p className="text-sm text-gray-400 py-10 text-center">No login data yet. Logs are recorded on each login.</p>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">User</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Role</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Total Logins</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Last Seen</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {stats.users.map((u, i) => (
-                <tr key={u.email} className="hover:bg-gray-50">
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-700 shrink-0">
-                        {(u.name || u.email)[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{u.name || u.email}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {u.role || '—'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <span className={`text-sm font-bold ${i === 0 ? 'text-brand-700' : 'text-gray-700'}`}>{u.count}</span>
-                  </td>
-                  <td className="px-5 py-3 text-right text-xs text-gray-500">{fmt(u.lastSeen)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+          return (
+            <div key={u.email} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2 relative overflow-hidden">
 
-      {/* Recent logins feed */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <p className="text-sm font-bold text-gray-800">Recent Logins</p>
-          <p className="text-xs text-gray-400 mt-0.5">Last 20 sessions</p>
-        </div>
-        {stats.recent.length === 0 ? (
-          <p className="text-sm text-gray-400 py-10 text-center">No logins recorded yet.</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {stats.recent.map((r, i) => (
-              <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">
-                    {(r.name || r.email)[0]?.toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{r.name || r.email}</p>
-                    <p className="text-xs text-gray-400">{r.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ROLE_COLORS[r.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {r.role}
+              {/* Status badge */}
+              <div className="absolute top-3 right-3">
+                {online ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Online
                   </span>
-                  <p className="text-xs text-gray-400 text-right">{fmt(r.timestamp)}</p>
-                </div>
+                ) : todayActive ? (
+                  <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Today</span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inactive</span>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Avatar */}
+              <div className={`w-10 h-10 rounded-full ${avatarColor(u.email)} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
+                {initials}
+              </div>
+
+              {/* Name + email */}
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 truncate pr-14">{u.name || u.email}</p>
+                <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+              </div>
+
+              {/* Role */}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${role.color}`}>
+                {role.label}
+              </span>
+
+              {/* Login count */}
+              <div className="mt-0.5">
+                <p className="text-2xl font-black text-gray-900 leading-none">{count}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{countLabel}</p>
+              </div>
+
+              {/* Last seen */}
+              <p className="text-[10px] text-gray-400">
+                last seen: <span className="font-semibold text-gray-600">{relTime(u.lastSeen)}</span>
+              </p>
+
+              {/* Bottom progress bar */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-100">
+                <div
+                  className={`h-full transition-all ${online ? 'bg-green-400' : todayActive ? 'bg-blue-400' : 'bg-gray-200'}`}
+                  style={{ width: online || todayActive ? '100%' : `${Math.min(100, (u.total / Math.max(...users.map(x => x.total), 1)) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )
+        })}
       </div>
 
     </div>
