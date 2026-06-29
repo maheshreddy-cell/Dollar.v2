@@ -153,7 +153,18 @@ export function notifyDailySummary({ summaryText }) {
   })
 }
 
-// ─── 8. Generic update (for future use) ─────────────────────────────────────
+// ─── 8. Kicker Earned ────────────────────────────────────────────────────────
+export function notifyKickerEarned({ agentName, kickerTitle, amount, details, isTeam }) {
+  send({
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: '🏆 Kicker Earned!', emoji: true } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*${agentName}* is eligible for the *${kickerTitle}* kicker\n💰 Payout: *${fmt(amount)}*` } },
+      ...(details ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: details }] }] : []),
+    ],
+  })
+}
+
+// ─── 9. Generic update (for future use) ─────────────────────────────────────
 export function notifyUpdate({ title, message, footer }) {
   send({
     blocks: [

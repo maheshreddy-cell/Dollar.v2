@@ -4,6 +4,7 @@ import { Zap, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useMonth } from '../contexts/MonthContext'
 import { getKickers, getDeals, getAllUsers, computeHatTrickEarnings, logHatTrickAchievement, logKickerEarning, getPreSalesSummary, PS_CALLS_SLABS, PS_SALES_SLABS } from '../services/api'
+import { notifyKickerEarned } from '../services/slack'
 import { formatINR } from '../utils/commission'
 import { useRefresh } from '../hooks/useRefresh'
 
@@ -570,18 +571,27 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     const month   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
     const dedupKey = `kicker_logged_${agentEmail}_${kicker.id}_${progress.activeSlab.payout}`
     try { if (sessionStorage.getItem(dedupKey)) return } catch {}
+    const earnedAmount = (type === 'collective'
+      ? (collectivePerAgent
+          ? Number(progress.activeSlab.payout)
+          : progress.myContribution * Number(progress.activeSlab.payout))
+      : Number(progress.activeSlab.payout)) || 0
+    const earnedDetails = `Slab hit: ${slabLabel(progress.activeSlab, origType)} | ${isTeam ? 'Team' : 'Individual'} kicker`
     logKickerEarning({
       agentEmail,
       agentName: agentName || agentEmail,
       date:       today,
       month,
       kickerType: kicker.title || type,
-      details:    `Slab hit: ${slabLabel(progress.activeSlab, origType)} | ${isTeam ? 'Team' : 'Individual'} kicker`,
-      amount:     (type === 'collective'
-        ? (collectivePerAgent
-            ? Number(progress.activeSlab.payout)
-            : progress.myContribution * Number(progress.activeSlab.payout))
-        : Number(progress.activeSlab.payout)) || 0,
+      details:    earnedDetails,
+      amount:     earnedAmount,
+    })
+    notifyKickerEarned({
+      agentName:   agentName || agentEmail,
+      kickerTitle: kicker.title || type,
+      amount:      earnedAmount,
+      details:     earnedDetails,
+      isTeam,
     })
     try { sessionStorage.setItem(dedupKey, '1') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
