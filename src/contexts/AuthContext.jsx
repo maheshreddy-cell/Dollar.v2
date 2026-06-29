@@ -15,10 +15,22 @@ function readSession() {
   }
 }
 
+function shouldLogToday(email) {
+  const key = `dv2_usage_logged_${email}_${new Date().toLocaleDateString('en-CA')}`
+  if (localStorage.getItem(key)) return false
+  localStorage.setItem(key, '1')
+  return true
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(() => {
     const saved = readSession()
-    if (saved) warmCache()   // pre-warm on page refresh if already logged in
+    if (saved) {
+      warmCache()
+      // Log session restore once per day so daily activity is captured
+      // even when the user doesn't re-login
+      if (shouldLogToday(saved.email)) logUsage(saved)
+    }
     return saved
   })
   const [viewAs, setViewAs]   = useState(null)   // { email, name, role, managerEmail }
