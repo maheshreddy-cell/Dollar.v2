@@ -1293,6 +1293,7 @@ export default function Kickers() {
   const [loading,      setLoading]      = useState(true)
   const [roleFilter,   setRoleFilter]   = useState(null)    // null | 'Agents' | 'Managers' | 'VHs'
   const [statusFilter, setStatusFilter] = useState('All')   // oversight only
+  const [kickerTab,    setKickerTab]    = useState('active') // 'active' | 'expired'
 
   const isManager      = effectiveUser?.role === 'Manager'
   const isPreSales     = effectiveUser?.role === 'PreSales'
@@ -1403,6 +1404,7 @@ export default function Kickers() {
   const displayed = monthVisible
     .filter(matchesRoleFilter)
     .filter(k => isOversight && statusFilter !== 'All' ? k.status === statusFilter : true)
+    .filter(k => kickerTab === 'active' ? !kickerIsPast(k) : kickerIsPast(k))
     .sort((a, b) => new Date(b.dateFrom) - new Date(a.dateFrom))
 
   function dealsFor(k) {
@@ -1482,6 +1484,21 @@ export default function Kickers() {
             className="text-xs bg-transparent border-0 focus:outline-none text-gray-800 font-semibold cursor-pointer"
           />
         </div>
+      </div>
+
+      {/* Active / Expired tab toggle */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        {[['active', '⚡ Active'], ['expired', '🕒 Expired']].map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setKickerTab(val)}
+            className={`text-xs font-semibold px-4 py-1.5 rounded-lg transition-colors ${
+              kickerTab === val ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Role category filter — scope options to what the viewer can actually see */}
