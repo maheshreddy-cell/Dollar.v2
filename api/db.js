@@ -222,7 +222,7 @@ export default async function handler(req, res) {
   if (action === 'login') {
     const { email, password } = body
     const hash = sha256(password)
-    const { data, error } = await supabase.from('users').select('email,name,role,manager_email,team,status,password_hash').eq('email', (email || '').trim().toLowerCase()).single()
+    const { data, error } = await supabase.from('users').select('email,name,role,manager_email,team,status,password_hash,photo_url').eq('email', (email || '').trim().toLowerCase()).single()
     if (error || !data) return fail('User not found')
     if (data.status === 'invited') return fail('Account not activated yet')
     if (data.password_hash !== hash) return fail('Invalid password')
