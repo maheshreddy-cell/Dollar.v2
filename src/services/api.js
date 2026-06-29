@@ -83,8 +83,8 @@ export async function uploadProfilePhoto(email, file) {
     body: JSON.stringify({ action: 'uploadPhoto', email, photoBase64: base64, mimeType }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Upload failed')
-  return data.url
+  if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed')
+  return data.data?.url
 }
 
 function resizeImage(file, maxPx) {
