@@ -3,7 +3,8 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/daily-summary", "schedule": "30 5 * * *" },
-    { "path": "/api/kicker-review", "schedule": "0 8 8 * *" }
+    { "path": "/api/daily-summary",  "schedule": "30 5 * * *" },
+    { "path": "/api/kicker-review",  "schedule": "0 8 8 * *" },
+    { "path": "/api/kicker-expiry",  "schedule": "0 13 * * *" }
   ]
 }
