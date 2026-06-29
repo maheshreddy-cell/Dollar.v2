@@ -72,6 +72,40 @@ export const logDuration = (user, durationSeconds) => {
 export const activateInvite = (token, password) =>
   appsScript.activateInvite(token, password)
 
+// Resizes image client-side to max 400px, then uploads to Supabase Storage
+export async function uploadProfilePhoto(email, file) {
+  const resized = await resizeImage(file, 400)
+  const base64  = resized.split(',')[1]
+  const mimeType = resized.split(';')[0].split(':')[1]
+  const res = await fetch('/api/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'uploadPhoto', email, photoBase64: base64, mimeType }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Upload failed')
+  return data.url
+}
+
+function resizeImage(file, maxPx) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
+
 export const getInviteInfo = (token) =>
   appsScript.getInviteInfo(token)
 

@@ -55,8 +55,13 @@ export default {
         'fade-in':     'fadeIn 0.18s ease-out both',
         'ios-spring':  'iosSpring 0.38s cubic-bezier(0.34, 1.5, 0.64, 1) both',
         'ios-press':   'iosPress 0.12s ease-out both',
+        'slide-up':    'slideUp 0.3s cubic-bezier(0.34, 1.3, 0.64, 1) both',
       },
       keyframes: {
+        slideUp: {
+          from: { opacity: '0', transform: 'translateX(-50%) translateY(20px)' },
+          to:   { opacity: '1', transform: 'translateX(-50%) translateY(0)' },
+        },
         fadeInUp: {
           from: { opacity: '0', transform: 'translateY(8px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },

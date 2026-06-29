@@ -1,8 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   LayoutDashboard, Briefcase, Users,
-  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles, Bell, TrendingUp,
+  BarChart2, GitBranch, Settings, DollarSign, Star, Shield, Zap, Megaphone, Activity, Sparkles, Bell, TrendingUp, Camera,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
@@ -66,11 +66,24 @@ const NAV_BASE = [
 ]
 
 export default function Sidebar() {
-  const { user, effectiveUser, isRole } = useAuth()
+  const { user, effectiveUser, isRole, updatePhoto } = useAuth()
   const { can } = usePermissions()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const isViewAs = effectiveUser && effectiveUser.email !== user?.email
+
+  const fileInputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handlePhotoClick = () => fileInputRef.current?.click()
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try { await updatePhoto(file) } catch {}
+    setUploading(false)
+    e.target.value = ''
+  }
 
   const [unread, setUnread] = useState(0)
   useEffect(() => {
@@ -172,11 +185,27 @@ export default function Sidebar() {
       {user && (
         <div className="px-4 py-4 border-t border-ios-separator">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center shrink-0 shadow-ios-sm">
-              <span className="text-white text-xs font-semibold">
-                {user.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-              </span>
-            </div>
+            <button
+              onClick={handlePhotoClick}
+              className="relative w-9 h-9 rounded-full shrink-0 overflow-hidden group focus:outline-none"
+              title="Change profile photo"
+            >
+              {user.photoUrl
+                ? <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-brand-500 flex items-center justify-center shadow-ios-sm">
+                    <span className="text-white text-xs font-semibold">
+                      {user.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                    </span>
+                  </div>
+              }
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                {uploading
+                  ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <Camera size={12} className="text-white" />
+                }
+              </div>
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-gray-900 truncate tracking-ios-tight">{user.name}</p>
               <p className="text-[11px] text-ios-gray1 truncate">{user.email}</p>

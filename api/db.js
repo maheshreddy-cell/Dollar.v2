@@ -226,7 +226,7 @@ export default async function handler(req, res) {
     if (error || !data) return fail('User not found')
     if (data.status === 'invited') return fail('Account not activated yet')
     if (data.password_hash !== hash) return fail('Invalid password')
-    return ok({ email: data.email, name: data.name, role: data.role, managerEmail: data.manager_email, team: data.team })
+    return ok({ email: data.email, name: data.name, role: data.role, managerEmail: data.manager_email, team: data.team, photoUrl: data.photo_url || null })
   }
 
   if (action === 'activateInvite') {
@@ -274,6 +274,22 @@ export default async function handler(req, res) {
     const { error } = await supabase.from(table).update(dbUpdates).eq(dbCol(table, matchCol), matchVal)
     if (error) return fail(error.message)
     return ok({ updated: true })
+  }
+
+  if (action === 'uploadPhoto') {
+    const { email, photoBase64, mimeType } = body
+    if (!email || !photoBase64) return fail('Missing email or photo')
+    const ext = (mimeType || 'image/jpeg').split('/')[1]?.replace('jpeg','jpg') || 'jpg'
+    const fileName = email.toLowerCase().replace(/[^a-z0-9]/g, '_') + '.' + ext
+    const buffer = Buffer.from(photoBase64, 'base64')
+    const { error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(fileName, buffer, { contentType: mimeType || 'image/jpeg', upsert: true })
+    if (uploadError) return fail(uploadError.message)
+    const { data: { publicUrl } } = supabase.storage.from('profile-photos').getPublicUrl(fileName)
+    const { error: updateError } = await supabase.from('users').update({ photo_url: publicUrl }).eq('email', email.toLowerCase())
+    if (updateError) return fail(updateError.message)
+    return ok({ url: publicUrl })
   }
 
   if (action === 'deleteRow') {

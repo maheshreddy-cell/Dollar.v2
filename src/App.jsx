@@ -6,6 +6,7 @@ import { MonthProvider } from './contexts/MonthContext'
 import { PermissionsProvider } from './contexts/PermissionsContext'
 import Sidebar from './components/Sidebar'
 import Navbar from './components/Navbar'
+import ProfilePhotoPopup from './components/ProfilePhotoPopup'
 
 // Eagerly load auth pages (needed before app shell renders)
 import Login from './pages/Login'
@@ -109,6 +110,7 @@ function AppLayout() {
             </Suspense>
           </PageErrorBoundary>
         </main>
+        <ProfilePhotoPopup />
       </div>
     </div>
   )
