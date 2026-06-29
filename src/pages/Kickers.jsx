@@ -33,10 +33,8 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
 
   const [hatCollapsed, setHatCollapsed] = useState(true)
 
-  // On Past tab — hide the card entirely if no achievements this month
-  if (tab === 'past' && monthEntries.length === 0) return null
-
   // Auto-log new hat trick achievements to Kickers sheet (dedup: track in sessionStorage)
+  // Must be before any conditional return — hooks cannot be called after early returns
   useEffect(() => {
     const hatTrickDays = Object.entries(byDate).filter(([, n]) => n >= 3)
     if (!hatTrickDays.length || !agentEmail) return
@@ -59,6 +57,9 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(byDate), agentEmail])
+
+  // On Past tab — hide the card entirely if no achievements this month (after all hooks)
+  if (tab === 'past' && monthEntries.length === 0) return null
 
   return (
     <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden ring-2 ring-orange-100">
