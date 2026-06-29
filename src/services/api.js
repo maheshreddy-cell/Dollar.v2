@@ -966,6 +966,23 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
       continue
     }
 
+    // weekly_target_pct: revenue vs per-person weekly target (percentage threshold)
+    if (rawType === 'weekly_target_pct') {
+      if (!agentEmail) continue
+      const weeklyTarget = Number((k.weeklyTargets || {})[agentEmail] || 0)
+      if (!weeklyTarget) continue
+      const inRange    = agentDeals.filter(inDateRange)
+      const revenue    = inRange.reduce((s, d) => s + (d.TotalValue || 0), 0)
+      const achievedPct = Math.round((revenue / weeklyTarget) * 100)
+      const sorted2    = [...k.slabs].sort((a, b) => Number(a.threshold || 0) - Number(b.threshold || 0))
+      let earnedSlab2  = null
+      for (const slab of sorted2) {
+        if (achievedPct >= Number(slab.threshold || 0)) earnedSlab2 = slab
+      }
+      if (earnedSlab2) total += Number(earnedSlab2.payout || 0)
+      continue
+    }
+
     // Normalize type for all other kicker types
     const type = rawType === 'collective' ? 'collective'
                : (rawType === 'revenue' || rawType === 'team_revenue' || rawType === 'individual_revenue') ? 'revenue'
@@ -1520,6 +1537,19 @@ export async function getKickers() {
     const rows = await appsScript.getSheet('Kickers')
     return (rows || []).map(parseKickerRow).filter(k => k.id)
   } catch { return [] }
+}
+
+// Compute a manager's own kicker earnings (manager-role kickers evaluated on team revenue)
+export async function getManagerOwnKickerEarnings(managerEmail) {
+  const [users, deals, allKickers] = await Promise.all([
+    appsScript.getSheet('Users'),
+    appsScript.getSalesSheet(),
+    appsScript.getSheet('Kickers').catch(() => []),
+  ])
+  const lowerEmail = (managerEmail || '').trim().toLowerCase()
+  const teamEmails = collectEmails(users, managerEmail).map(e => e.trim().toLowerCase())
+  const teamDeals  = deals.filter(d => teamEmails.includes((d.Email || '').trim().toLowerCase()))
+  return computeKickerEarningsForAgent('Manager', teamDeals, allKickers, deals, lowerEmail)
 }
 
 export async function announceKicker(data, announcerEmail, announcerRole) {

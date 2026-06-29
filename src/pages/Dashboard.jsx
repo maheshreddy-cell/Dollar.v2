@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useAuth }   from '../contexts/AuthContext'
 import { useMonth }  from '../contexts/MonthContext'
-import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped, getKickers, getDeals, computeKickerBreakdown } from '../services/api'
+import { getSummary, getLeaderboard, getTeamSalesAnalytics, getManagersLeaderboard, getPreSalesSummary, getManagerTargets, getDealsGrouped, getKickers, getDeals, computeKickerBreakdown, getManagerOwnKickerEarnings } from '../services/api'
 import MetricsCard     from '../components/MetricsCard'
 import DrillDownModal  from '../components/DrillDownModal'
 import FadeIn        from '../components/FadeIn'
@@ -154,15 +154,16 @@ export default function Dashboard() {
         getLeaderboard(effectiveUser?.email, month),
         getTeamSalesAnalytics(effectiveUser?.email, month, effectiveUser?.role === 'Admin'),
         getManagerTargets(effectiveUser?.email, month),
+        getManagerOwnKickerEarnings(effectiveUser?.email),
       ])
-        .then(([rows, anal, mgrTargets]) => {
+        .then(([rows, anal, mgrTargets, mgrOwnKickers]) => {
           const mgrPersonalContrib = (mgrTargets ?? []).reduce((s, t) => s + Number(t.personalContribution ?? 0), 0)
           const totalTarget     = rows.reduce((s, r) => s + r.target, 0) + mgrPersonalContrib
           const totalCommission = rows.reduce((s, r) => s + (r.commission  ?? 0), 0)
           const totalAchieved   = anal?.totalAchieved  ?? rows.reduce((s, r) => s + r.achieved, 0)
           const totalSaleValue  = anal?.totalSaleValue ?? rows.reduce((s, r) => s + (r.totalSaleValue ?? 0), 0)
           const totalT2Amount   = anal?.totalT2Amount  ?? rows.reduce((s, r) => s + (r.totalT2Amount  ?? 0), 0)
-          const totalKickers    = rows.reduce((s, r) => s + (r.kickerEarnings ?? 0), 0)
+          const totalKickers    = rows.reduce((s, r) => s + (r.kickerEarnings ?? 0), 0) + (mgrOwnKickers ?? 0)
           setSummary({
             totalTarget, totalAchieved, totalCommission,
             totalKickers, totalT2Amount, totalMoneyMade: totalCommission + totalT2Amount + totalKickers,
