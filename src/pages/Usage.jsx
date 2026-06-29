@@ -3,18 +3,18 @@ import { getUsageLog } from '../services/api'
 import { RefreshCw } from 'lucide-react'
 
 const AVATAR_COLORS = [
-  'bg-purple-400', 'bg-blue-500', 'bg-green-500', 'bg-orange-400',
-  'bg-pink-500',   'bg-indigo-500', 'bg-teal-500', 'bg-red-400',
-  'bg-yellow-500', 'bg-cyan-500',   'bg-violet-500', 'bg-rose-400',
+  '#7C6FCD','#5B8FF9','#4CAF8A','#E07B4F',
+  '#D45FAB','#6B7FD4','#4ABBB5','#E05C5C',
+  '#B8860B','#20A0A0','#7B5EA7','#C0634F',
 ]
 
 const ROLE_META = {
-  Admin:     { label: 'Admin',      color: 'bg-red-100 text-red-700' },
-  SalesHead: { label: 'Sales Head', color: 'bg-purple-100 text-purple-700' },
-  VH:        { label: 'VH',         color: 'bg-blue-100 text-blue-700' },
-  Manager:   { label: 'Team Lead',  color: 'bg-green-100 text-green-700' },
-  Agent:     { label: 'Agent',      color: 'bg-gray-100 text-gray-600' },
-  PreSales:  { label: 'PreSales',   color: 'bg-teal-100 text-teal-700' },
+  Admin:     { label: 'Admin',         color: '#fee2e2', text: '#b91c1c' },
+  SalesHead: { label: 'Sales Head',    color: '#ede9fe', text: '#7c3aed' },
+  VH:        { label: 'Vertical Head', color: '#dbeafe', text: '#1d4ed8' },
+  Manager:   { label: 'Team Lead',     color: '#dcfce7', text: '#15803d' },
+  Agent:     { label: 'Agent',         color: '#f3f4f6', text: '#374151' },
+  PreSales:  { label: 'Ops / Growth',  color: '#ccfbf1', text: '#0f766e' },
 }
 
 function avatarColor(email) {
@@ -23,16 +23,24 @@ function avatarColor(email) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
 }
 
+function initials(name, email) {
+  const src = name || email || '?'
+  const parts = src.trim().split(/\s+/)
+  return parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : src.slice(0, 2).toUpperCase()
+}
+
 function relTime(ts) {
   if (!ts) return 'Never'
   const diff = Date.now() - new Date(ts).getTime()
   const m = Math.floor(diff / 60000)
   const h = Math.floor(m / 60)
   const d = Math.floor(h / 24)
-  if (m < 1)  return 'Just now'
-  if (m < 60) return `${m}m ago`
-  if (h < 24) return `${h}h ${m % 60}m ago`
-  if (d === 1) return 'Yesterday'
+  if (m < 1)   return 'Just now'
+  if (m < 60)  return `${m}m ago`
+  if (h < 24)  return `${h}h ${m % 60}m ago`
+  if (d === 1)  return 'Yesterday'
   return `${d}d ago`
 }
 
@@ -98,108 +106,136 @@ export default function Usage() {
   )
 
   const t = todayStr()
+  const maxLogins = Math.max(...users.map(u => u.total), 1)
 
   return (
-    <div className="space-y-5">
+    <div className="min-h-full -m-6 bg-[#eeecf9] p-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold text-gray-900">Platform Usage</h2>
-          <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded-full">{t}</span>
-        </div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          {refreshed && <span className="text-xs text-gray-400">Updated {refreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
-          <button onClick={load} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-xl px-3 py-1.5 hover:bg-gray-50 transition-colors">
-            <RefreshCw size={13} /> Refresh
+          <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+          <h2 className="text-sm font-bold text-gray-800 tracking-wide">Platform Usage</h2>
+          <span className="text-[11px] font-semibold bg-white text-gray-500 px-2.5 py-0.5 rounded-full border border-gray-200">{t}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {refreshed && (
+            <span className="text-[11px] text-gray-400">
+              Updated {refreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={load}
+            className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <RefreshCw size={12} /> Refresh
           </button>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-2xl bg-green-50 border border-green-100 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block" />
+      {/* Stat cards */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {/* Online Now */}
+        <div className="rounded-2xl bg-white border border-green-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
             <p className="text-[11px] font-bold text-green-700 uppercase tracking-widest">Online Now</p>
           </div>
-          <p className="text-4xl font-black text-green-700">{onlineNow}</p>
+          <p className="text-5xl font-black text-green-600 leading-none">{onlineNow}</p>
         </div>
-        <div className="rounded-2xl bg-blue-50 border border-blue-100 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+
+        {/* Active Today */}
+        <div className="rounded-2xl bg-white border border-blue-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-3 h-3 rounded-sm bg-blue-500" />
             <p className="text-[11px] font-bold text-blue-700 uppercase tracking-widest">Active Today</p>
           </div>
-          <p className="text-4xl font-black text-blue-700">{activeToday}</p>
+          <p className="text-5xl font-black text-blue-600 leading-none">{activeToday}</p>
         </div>
-        <div className="rounded-2xl bg-orange-50 border border-orange-100 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+
+        {/* Total Logins */}
+        <div className="rounded-2xl bg-white border border-orange-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-orange-500 text-sm font-black">∑</span>
             <p className="text-[11px] font-bold text-orange-700 uppercase tracking-widest">Total Logins</p>
           </div>
-          <p className="text-4xl font-black text-orange-700">{totalLogins}</p>
+          <p className="text-5xl font-black text-orange-500 leading-none">{totalLogins}</p>
         </div>
       </div>
 
       {/* User card grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {users.map(u => {
-          const online     = isOnline(u.lastSeen)
+          const online      = isOnline(u.lastSeen)
           const todayActive = !online && u.lastSeen?.slice(0, 10) === t
-          const role       = ROLE_META[u.role] || { label: u.role || '—', color: 'bg-gray-100 text-gray-600' }
-          const initials   = (u.name || u.email).slice(0, 2).toUpperCase()
-          const count      = u.todayCount > 0 ? u.todayCount : u.total
-          const countLabel = u.todayCount > 0 ? 'logins today' : 'total logins'
+          const role        = ROLE_META[u.role] || { label: u.role || '—', color: '#f3f4f6', text: '#374151' }
+          const color       = avatarColor(u.email)
+          const count       = u.todayCount > 0 ? u.todayCount : u.total
+          const countLabel  = u.todayCount > 0 ? 'logins today' : 'total logins'
+          const barPct      = Math.max(4, Math.round((u.total / maxLogins) * 100))
+          const barColor    = online ? '#22c55e' : todayActive ? '#3b82f6' : '#d1d5db'
 
           return (
-            <div key={u.email} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-2 relative overflow-hidden">
+            <div
+              key={u.email}
+              className="bg-white rounded-2xl overflow-hidden flex flex-col"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+            >
+              <div className="p-4 flex flex-col gap-2 flex-1">
+                {/* Top row: avatar + status */}
+                <div className="flex items-start justify-between">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{ backgroundColor: color }}
+                  >
+                    {initials(u.name, u.email)}
+                  </div>
 
-              {/* Status badge */}
-              <div className="absolute top-3 right-3">
-                {online ? (
-                  <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    Online
-                  </span>
-                ) : todayActive ? (
-                  <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Today</span>
-                ) : (
-                  <span className="text-[10px] font-bold bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inactive</span>
-                )}
+                  {online ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Online
+                    </span>
+                  ) : todayActive ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">Today</span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-400">Inactive</span>
+                  )}
+                </div>
+
+                {/* Name + email */}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate leading-tight">{u.name || u.email}</p>
+                  <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                </div>
+
+                {/* Role badge */}
+                <span
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit"
+                  style={{ backgroundColor: role.color, color: role.text }}
+                >
+                  {role.label}
+                </span>
+
+                {/* Login count */}
+                <div className="mt-1">
+                  <p className="text-2xl font-black leading-none" style={{ color: online ? '#16a34a' : todayActive ? '#2563eb' : '#1f2937' }}>
+                    {count}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{countLabel}</p>
+                </div>
+
+                {/* Last seen */}
+                <p className="text-[10px] text-gray-400 mt-auto">
+                  last seen: <span className="font-semibold text-gray-600">{relTime(u.lastSeen)}</span>
+                </p>
               </div>
-
-              {/* Avatar */}
-              <div className={`w-10 h-10 rounded-full ${avatarColor(u.email)} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
-                {initials}
-              </div>
-
-              {/* Name + email */}
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate pr-14">{u.name || u.email}</p>
-                <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
-              </div>
-
-              {/* Role */}
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit ${role.color}`}>
-                {role.label}
-              </span>
-
-              {/* Login count */}
-              <div className="mt-0.5">
-                <p className="text-2xl font-black text-gray-900 leading-none">{count}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{countLabel}</p>
-              </div>
-
-              {/* Last seen */}
-              <p className="text-[10px] text-gray-400">
-                last seen: <span className="font-semibold text-gray-600">{relTime(u.lastSeen)}</span>
-              </p>
 
               {/* Bottom progress bar */}
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-100">
+              <div className="h-1 bg-gray-100 w-full">
                 <div
-                  className={`h-full transition-all ${online ? 'bg-green-400' : todayActive ? 'bg-blue-400' : 'bg-gray-200'}`}
-                  style={{ width: online || todayActive ? '100%' : `${Math.min(100, (u.total / Math.max(...users.map(x => x.total), 1)) * 100)}%` }}
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${online || todayActive ? 100 : barPct}%`, backgroundColor: barColor }}
                 />
               </div>
             </div>
