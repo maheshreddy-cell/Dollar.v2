@@ -515,9 +515,12 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
     ? findSimilarEmails(deals, lowerUser, month)
     : []
 
-  // Commission-eligible paid deals only
+  // Commission-eligible paid deals: must have a PaymentDate + PaidActual + within commission period.
+  // Deals with PaidActual > 0 but no PaymentDate (partial WIP payments) are excluded here —
+  // they have not completed payment and should not earn commission yet.
   const cleared = agentDeals.filter(d =>
     d.PaidActual > 0 &&
+    d.PaymentDate &&
     isInCommissionPeriod(d.PaymentDate, tf(target, 'CommissionStartDate'), null)
   )
 
@@ -548,8 +551,10 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
   const atRiskCount  = atRiskDeals.length
   const atRiskAmount = atRiskDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
 
-  // WIP pipeline opportunity
+  // WIP pipeline opportunity — exclude deals already counted in commission (cleared)
+  // to avoid double-counting ALMOST_THERE deals that already have PaidActual + PaymentDate
   const wipDeals = agentDeals.filter(d => {
+    if (d.PaidActual > 0 && d.PaymentDate) return false
     const cat = getStageCategory(d.LoanDocsCollected)
     return cat === 'WIP' || cat === 'ALMOST_THERE'
   })
@@ -641,6 +646,13 @@ export const getLeaderboard = async (rootEmail, month) => {
       ? allPsCalls.filter(r => r.agentEmail === agentEmail && (!month || r.month === month)).length
       : null
 
+    // pendingCollection: value of non-LOST unpaid deals (what could still convert to revenue)
+    // Using totalSaleValue - achieved includes LOST deals and overstates the pipeline.
+    const pendingDeals = agentDeals.filter(d =>
+      d.PaidActual <= 0 && getStageCategory(d.LoanDocsCollected) !== 'LOST'
+    )
+    const pendingCollection = pendingDeals.reduce((s, d) => s + (d.TotalValue || 0), 0)
+
     return {
       name:              agent.Name,
       email:             agent.Email,
@@ -652,7 +664,7 @@ export const getLeaderboard = async (rootEmail, month) => {
       totalT2Amount,
       kickerEarnings,
       moneyMade,
-      pendingCollection: Math.max(0, totalSaleValue - achieved),
+      pendingCollection,
       loanDocsDone,
       loanDocsPending,
       pct:               tAmount > 0 ? Math.min((achieved / tAmount) * 100, 999) : 0,
@@ -660,7 +672,7 @@ export const getLeaderboard = async (rootEmail, month) => {
       slabInfo:          getSlabInfo(achieved, target),
       callsCount,        // non-null only for PreSales agents
     }
-  }).sort((a, b) => b.achieved - a.achieved)
+  }).sort((a, b) => b.moneyMade - a.moneyMade || b.achieved - a.achieved)
 }
 
 // Returns direct subordinate managers/VHs with their team aggregates
@@ -1384,7 +1396,7 @@ function getSlabInfo(achieved, target) {
 }
 
 export function calcTieredCommission(achieved, target) {
-  if (!achieved || achieved <= 0) return 0
+  if (!achieved || achieved <= 0 || isNaN(achieved)) return 0
 
   // 1. Check if CommissionPct is a preset ID ("basic","average","pro")
   const presetId = String(tf(target, 'CommissionPct') || '').trim().toLowerCase()

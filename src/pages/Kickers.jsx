@@ -562,7 +562,10 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
   // Personal progress — uses own-deals-only for IC kicker viewers, all deals for oversight.
   // Collective kickers always use all deals so the full contributors map is visible to every agent.
   // For team_month_end: pass agentEmail so computeProgress can look up personal targets.
-  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined, myWeeklyTarget, isMonthEnd ? agentEmail : undefined)
+  // For team_month_end: oversight viewers have no personal agentTargets entry, so pass undefined
+  // rather than the oversight user's own email (which would look up a non-existent target → 0).
+  const emailForTargets = isMonthEnd ? (isOversight ? undefined : agentEmail) : undefined
+  let progress = computeProgress(kicker, (type === 'collective' ? deals : (myOnlyDeals ?? deals)), type === 'collective' ? agentEmail : undefined, myWeeklyTarget, emailForTargets)
 
   // Individual payout override — admin can set a custom amount for a specific
   // person, taking precedence over the slab-derived payout once applied.

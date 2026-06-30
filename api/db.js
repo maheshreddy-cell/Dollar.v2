@@ -201,7 +201,7 @@ export default async function handler(req, res) {
         return ok(await fetchSalesFromSheet())
       }
       const table = TABLE[sheet]
-      if (!table) return ok([])
+      if (!table) return fail(`Unknown sheet: ${sheet}`)
 
       // user_activity can grow very large — only fetch the last 90 days
       if (table === 'user_activity') {
