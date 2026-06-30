@@ -561,7 +561,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     }
   }
 
-  // Auto-log when a kicker slab is earned — fires once per kicker+slab combo per session
+  // Auto-log when a kicker slab is earned — fires once per kicker+slab combo, persists across sessions
   useEffect(() => {
     if (!progress.activeSlab || !agentEmail) return
     // Collective: only log if this agent actually contributed — no contribution = no earning
@@ -571,7 +571,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     const today   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
     const month   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
     const dedupKey = `kicker_logged_${agentEmail}_${kicker.id}_${progress.activeSlab.payout}`
-    try { if (sessionStorage.getItem(dedupKey)) return } catch {}
+    // Use localStorage so this persists across browser sessions — prevents re-notifying on every login
+    try { if (localStorage.getItem(dedupKey)) return } catch {}
     const earnedAmount = (type === 'collective'
       ? (collectivePerAgent
           ? Number(progress.activeSlab.payout)
@@ -594,7 +595,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
       details:     earnedDetails,
       isTeam,
     })
-    try { sessionStorage.setItem(dedupKey, '1') } catch {}
+    try { localStorage.setItem(dedupKey, '1') } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress.activeSlab?.payout, agentEmail, kicker.id])
   const typeInfo     = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]
