@@ -162,9 +162,18 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [])
 
+  // Track which user+month is currently loaded so background ticks refresh silently
+  const prevLoadKeyRef = useRef(null)
   useEffect(() => {
-    setLoading(true)
-    setSummary(null)
+    const loadKey = `${effectiveUser?.email}_${month}`
+    const isNewContext = prevLoadKeyRef.current !== loadKey
+    prevLoadKeyRef.current = loadKey
+    // Only show loading spinner on first load or when user/month changes.
+    // Background refresh ticks keep current data visible (stale-while-revalidate).
+    if (isNewContext) {
+      setLoading(true)
+      setSummary(null)
+    }
     setError('')
 
     // Load managers leaderboard for VH/SalesHead (separate from agent leaderboard)

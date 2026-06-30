@@ -257,7 +257,8 @@ export default async function handler(req, res) {
     const { data: user, error } = await supabase.from('users').select('email,name,role,invite_expiry').eq('invite_token', token).single()
     if (error || !user) return fail('Invalid invite token')
     if (user.invite_expiry && new Date(user.invite_expiry) < new Date()) return fail('Invite token has expired')
-    await supabase.from('users').update({ password_hash: sha256(password), invite_token: null, invite_expiry: null, status: 'active' }).eq('email', user.email)
+    const { error: updateErr } = await supabase.from('users').update({ password_hash: sha256(password), invite_token: null, invite_expiry: null, status: 'active' }).eq('email', user.email)
+    if (updateErr) return fail(updateErr.message)
     return ok({ email: user.email, name: user.name, role: user.role })
   }
 
@@ -273,7 +274,7 @@ export default async function handler(req, res) {
   if (action === 'appendRow') {
     const { sheet, row } = body
     const table = TABLE[sheet]
-    if (!table) return ok({ appended: true })
+    if (!table) return fail(`Unknown sheet: ${sheet}`)
     let record
     if (Array.isArray(row)) {
       const cols = arrayOrder[table]
@@ -292,7 +293,8 @@ export default async function handler(req, res) {
   if (action === 'updateRow') {
     const { sheet, matchCol, matchVal, updates } = body
     const table = TABLE[sheet]
-    if (!table) return ok({ updated: true })
+    if (!table) return fail(`Unknown sheet: ${sheet}`)
+    if (matchVal == null) return fail('matchVal required')
     const dbUpdates = Object.fromEntries(Object.entries(updates).map(([k, v]) => [dbCol(table, k), v]))
     const { error } = await supabase.from(table).update(dbUpdates).eq(dbCol(table, matchCol), matchVal)
     if (error) return fail(error.message)
@@ -334,7 +336,8 @@ export default async function handler(req, res) {
   if (action === 'deleteRow') {
     const { sheet, matchCol, matchVal } = body
     const table = TABLE[sheet]
-    if (!table) return ok({ deleted: true })
+    if (!table) return fail(`Unknown sheet: ${sheet}`)
+    if (matchVal == null) return fail('matchVal required')
     const { error } = await supabase.from(table).delete().eq(dbCol(table, matchCol), matchVal)
     if (error) return fail(error.message)
     return ok({ deleted: true })

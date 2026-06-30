@@ -1026,11 +1026,14 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
 
     const rawType = k.type || 'sales'
 
-    // Date filter — PaymentDate (YYYY-MM-DD) as primary, Month as fallback
+    // Date filter — PaymentDate (YYYY-MM-DD) as primary, Month as fallback.
+    // Plain date strings (10 chars) parse as UTC midnight so we shift to IST midnight.
+    // Full ISO datetimes already encode exact UTC time — no shift needed.
     const kickerMonth = (k.dateFrom || '').substring(0, 7)
     function inDateRange(d) {
       if (d.PaymentDate) {
-        const dt = new Date(d.PaymentDate).getTime() + IST_MS
+        const s  = String(d.PaymentDate)
+        const dt = new Date(s).getTime() + (s.length <= 10 ? IST_MS : 0)
         if (!isNaN(dt)) return dt >= from && dt <= to
       }
       return kickerMonth ? d.Month === kickerMonth : false
@@ -1039,7 +1042,10 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
     // team_month_end: per-agent S1/S2 thresholds stored in agentTargets, not slabs
     if (rawType === 'team_month_end') {
       if (!agentEmail) continue
-      const targets = k.agentTargets?.[agentEmail] || k.agentTargets?.[agentEmail.toLowerCase()]
+      // agentEmail is always lowercase; agentTargets keys may be mixed-case — case-insensitive lookup
+      const agTgt = k.agentTargets || {}
+      const agKey = Object.keys(agTgt).find(e => e.toLowerCase() === agentEmail)
+      const targets = agKey ? agTgt[agKey] : undefined
       if (!targets) continue
       const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
       const inRange = agentDeals.filter(inDateRange)
@@ -1150,7 +1156,11 @@ export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDea
     const rawType = k.type || 'sales'
     const kickerMonth = (k.dateFrom || '').substring(0, 7)
     const inRange_ = (d) => {
-      if (d.PaymentDate) { const dt = new Date(d.PaymentDate).getTime() + IST_MS; if (!isNaN(dt)) return dt >= from && dt <= to }
+      if (d.PaymentDate) {
+        const s  = String(d.PaymentDate)
+        const dt = new Date(s).getTime() + (s.length <= 10 ? IST_MS : 0)
+        if (!isNaN(dt)) return dt >= from && dt <= to
+      }
       return kickerMonth ? d.Month === kickerMonth : false
     }
 
@@ -1158,7 +1168,9 @@ export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDea
 
     if (rawType === 'team_month_end') {
       if (!agentEmail) continue
-      const targets = k.agentTargets?.[agentEmail] || k.agentTargets?.[agentEmail.toLowerCase()]
+      const agTgt2 = k.agentTargets || {}
+      const agKey2 = Object.keys(agTgt2).find(e => e.toLowerCase() === agentEmail)
+      const targets = agKey2 ? agTgt2[agKey2] : undefined
       if (!targets) continue
       const minVal = k.minSaleValue > 0 ? k.minSaleValue : 0
       const sales = agentDeals.filter(inRange_).filter(d => minVal <= 0 || (d.TotalValue || 0) >= minVal).length

@@ -65,6 +65,7 @@ export function clearCache() {
 export function clearSheetCache(sheetName) {
   const key = JSON.stringify({ action: 'getSheet', sheet: sheetName })
   _cache.delete(key)
+  _inflight.delete(key)  // prevent an in-flight pre-mutation fetch from re-populating the cleared slot
   try { localStorage.removeItem(_lsKey(key)) } catch {}
 }
 

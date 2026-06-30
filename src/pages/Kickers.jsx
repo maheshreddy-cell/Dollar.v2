@@ -306,8 +306,13 @@ const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH', 'Sales Ops']
 // which is 5.5h before IST midnight — kickers would expire/start 5.5h early.
 // Adding 5.5h offset keeps the boundary at IST midnight.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
-function istDayStart(dateStr) { return new Date(dateStr).getTime() + IST_OFFSET_MS }
-function istDayEnd(dateStr)   { return istDayStart(dateStr) + 86399999 }
+// Plain YYYY-MM-DD strings (10 chars) parse as UTC midnight — shift to IST midnight.
+// Full ISO datetimes ("2026-06-30T18:45:00Z") already encode exact UTC — no shift.
+function istDayStart(dateStr) {
+  const ms = new Date(dateStr).getTime()
+  return String(dateStr).length <= 10 ? ms + IST_OFFSET_MS : ms
+}
+function istDayEnd(dateStr) { return new Date(dateStr).getTime() + IST_OFFSET_MS + 86399999 }
 
 function kickerIsActive(k) {
   const now = Date.now()
@@ -378,7 +383,9 @@ function computeProgress(kicker, allDeals, myEmail, weeklyTarget, emailForTarget
   // team_month_end: use per-agent targets instead of shared slabs
   if (isMonthEnd) {
     const emailKey  = (emailForTargets || '').toLowerCase()
-    const targets   = (kicker.agentTargets || {})[emailKey] || {}
+    const agTgt     = kicker.agentTargets || {}
+    const agKey     = Object.keys(agTgt).find(k => k.toLowerCase() === emailKey)
+    const targets   = (agKey ? agTgt[agKey] : undefined) || {}
     const s1        = Number(targets.s1 || 0)
     const s2        = Number(targets.s2 || 0)
     const s1Payout  = Number((kicker.slabs || [])[0]?.payout || 0)
