@@ -164,10 +164,11 @@ export function notifyDailySummary({ summaryText }) {
 
 // ─── 8. Kicker Earned ────────────────────────────────────────────────────────
 export function notifyKickerEarned({ agentName, kickerTitle, amount, details, isTeam }) {
+  const label = isTeam ? '👥 Team Kicker' : '👤 Individual Kicker'
   send({
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: '🏆 Kicker Earned!', emoji: true } },
-      { type: 'section', text: { type: 'mrkdwn', text: `*${agentName}* is eligible for the *${kickerTitle}* kicker\n💰 Payout: *${fmt(amount)}*` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*${agentName}* is eligible for the *${kickerTitle}* kicker\n💰 Payout: *${fmt(amount)}* • ${label}` } },
       ...(details ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: details }] }] : []),
     ],
   })

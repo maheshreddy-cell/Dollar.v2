@@ -74,16 +74,14 @@ export default async function handler(req, res) {
         e.date >= kicker.date_from && e.date <= kicker.date_to
       )
 
-      // Dedupe by agent — keep highest amount per agent
+      // Sum all earnings per agent (an agent can earn multiple slabs across the kicker period)
       const byAgent = {}
       for (const e of kickerEarnings) {
         const email = (e.agent_email || '').toLowerCase()
-        if (!byAgent[email] || Number(e.amount) > byAgent[email].amount) {
-          byAgent[email] = {
-            name:   e.agent_name || email,
-            amount: Number(e.amount) || 0,
-          }
+        if (!byAgent[email]) {
+          byAgent[email] = { name: e.agent_name || email, amount: 0 }
         }
+        byAgent[email].amount += Number(e.amount) || 0
       }
 
       const earners = Object.values(byAgent).sort((a, b) => b.amount - a.amount)

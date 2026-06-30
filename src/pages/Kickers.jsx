@@ -40,7 +40,7 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
     if (!hatTrickDays.length || !agentEmail) return
     const loggedKey = `ht_logged_${agentEmail}`
     let alreadyLogged = []
-    try { alreadyLogged = JSON.parse(sessionStorage.getItem(loggedKey) || '[]') } catch {}
+    try { alreadyLogged = JSON.parse(localStorage.getItem(loggedKey) || '[]') } catch {}
     const toLog = hatTrickDays.filter(([date]) => !alreadyLogged.includes(date))
     if (!toLog.length) return
     toLog.forEach(([date, count]) => {
@@ -53,7 +53,7 @@ function HatTrickCard({ deals, agentEmail, agentName, month, tab }) {
       })
     })
     try {
-      sessionStorage.setItem(loggedKey, JSON.stringify([...alreadyLogged, ...toLog.map(([d]) => d)]))
+      localStorage.setItem(loggedKey, JSON.stringify([...alreadyLogged, ...toLog.map(([d]) => d)]))
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(byDate), agentEmail])
@@ -570,8 +570,9 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
     const istNow  = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
     const today   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}-${String(istNow.getUTCDate()).padStart(2,'0')}`
     const month   = `${istNow.getUTCFullYear()}-${String(istNow.getUTCMonth()+1).padStart(2,'0')}`
-    const dedupKey = `kicker_logged_${agentEmail}_${kicker.id}_${progress.activeSlab.payout}`
+    const dedupKey = `kicker_logged_${agentEmail}_${kicker.id}_${month}_${progress.activeSlab.payout}`
     // Use localStorage so this persists across browser sessions — prevents re-notifying on every login
+    // Key includes month so a recycled kicker (same id, new period) correctly re-fires
     try { if (localStorage.getItem(dedupKey)) return } catch {}
     const earnedAmount = (type === 'collective'
       ? (collectivePerAgent
@@ -595,7 +596,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
       details:     earnedDetails,
       isTeam,
     })
-    try { localStorage.setItem(dedupKey, '1') } catch {}
+    try { localStorage.setItem(dedupKey, today) } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [progress.activeSlab?.payout, agentEmail, kicker.id])
   const typeInfo     = KICKER_TYPES.find(t => t.value === type) ?? KICKER_TYPES[0]

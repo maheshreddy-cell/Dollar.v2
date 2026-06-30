@@ -128,7 +128,8 @@ export default function Dashboard() {
     const count = summary?.atRiskCount ?? 0
     const email = effectiveUser?.email || ''
     const dedupKey = `atrisk_slack_${email}_${count}`
-    const alreadySent = count > 0 && !!sessionStorage.getItem(dedupKey)
+    // localStorage persists across tabs/sessions so the same at-risk state doesn't re-alert on reopen
+    const alreadySent = count > 0 && !!localStorage.getItem(dedupKey)
 
     if (count > 0 && !alreadySent && (prevAtRiskRef.current === null || count > prevAtRiskRef.current)) {
       notifAtRisk({
@@ -145,7 +146,7 @@ export default function Dashboard() {
         amount:    summary?.atRiskAmount ?? 0,
         deals:     summary?.atRiskDeals ?? [],
       })
-      try { sessionStorage.setItem(dedupKey, '1') } catch {}
+      try { localStorage.setItem(dedupKey, '1') } catch {}
     }
     prevAtRiskRef.current = count
   }, [summary?.atRiskCount]) // eslint-disable-line
