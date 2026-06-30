@@ -335,7 +335,7 @@ export default async function handler(req, res) {
     const { sheet, matchCol, matchVal } = body
     const table = TABLE[sheet]
     if (!table) return ok({ deleted: true })
-    const { error } = await supabase.from(table).delete().eq(dbCol(table, matchCol), matchVal).limit(1)
+    const { error } = await supabase.from(table).delete().eq(dbCol(table, matchCol), matchVal)
     if (error) return fail(error.message)
     return ok({ deleted: true })
   }

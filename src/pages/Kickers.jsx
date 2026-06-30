@@ -302,16 +302,21 @@ function normalizeType(t) {
 const OVERSIGHT_ROLES = ['Admin', 'SalesHead', 'VH', 'Sales Ops']
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
+// Dates are stored as YYYY-MM-DD (IST). new Date("YYYY-MM-DD") parses as UTC midnight
+// which is 5.5h before IST midnight — kickers would expire/start 5.5h early.
+// Adding 5.5h offset keeps the boundary at IST midnight.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000
+function istDayStart(dateStr) { return new Date(dateStr).getTime() + IST_OFFSET_MS }
+function istDayEnd(dateStr)   { return istDayStart(dateStr) + 86399999 }
+
 function kickerIsActive(k) {
-  const now  = Date.now()
-  const from = new Date(k.dateFrom).getTime()
-  const to   = new Date(k.dateTo).getTime() + 86399999
-  return now >= from && now <= to
+  const now = Date.now()
+  return now >= istDayStart(k.dateFrom) && now <= istDayEnd(k.dateTo)
 }
-function kickerIsPast(k) { return new Date(k.dateTo).getTime() + 86399999 < Date.now() }
+function kickerIsPast(k) { return istDayEnd(k.dateTo) < Date.now() }
 
 function countdown(k) {
-  const ms = new Date(k.dateTo).getTime() + 86399999 - Date.now()
+  const ms = istDayEnd(k.dateTo) - Date.now()
   if (ms <= 0) return 'Ended'
   const h = Math.floor(ms / 3600000)
   const m = Math.floor((ms % 3600000) / 60000)
@@ -1545,14 +1550,16 @@ export default function Kickers() {
         )}
       </div>
 
-      {/* Hat Trick & PreSales always-on cards */}
-      <HatTrickCard
-        deals={deals.filter(d => d.Email === effectiveUser?.email)}
-        agentEmail={effectiveUser?.email}
-        agentName={effectiveUser?.name}
-        month={month}
-        tab={kickerTab === 'expired' ? 'past' : 'active'}
-      />
+      {/* Hat Trick is always-active — only show on the Active tab */}
+      {kickerTab === 'active' && (
+        <HatTrickCard
+          deals={deals.filter(d => d.Email === effectiveUser?.email)}
+          agentEmail={effectiveUser?.email}
+          agentName={effectiveUser?.name}
+          month={month}
+          tab="active"
+        />
+      )}
       {isPreSales && <PSCallsCard psSummary={psSummary} />}
 
       {/* Kicker cards */}

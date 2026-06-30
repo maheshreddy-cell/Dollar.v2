@@ -176,7 +176,7 @@ function workingDaysSince(dateStr) {
   const cur = new Date(start)
   while (cur < now) {
     const d = cur.getDay()
-    if (d !== 0) count++ // Mon–Sat (skip Sunday only)
+    if (d !== 0 && d !== 6) count++ // Mon–Fri only
     cur.setDate(cur.getDate() + 1)
   }
   return count
@@ -487,11 +487,14 @@ export const getSummary = async (userEmail, month, userRole = 'Agent') => {
   if (!target) {
     // No commission target but kickers can still be earned — compute them separately
     const agentDealsAll = deals.filter(d => d.Email === lowerUser && d.Month === month)
-    const totalKickers = computeKickerEarningsForAgent(userRole, agentDealsAll, allKickers, deals, lowerUser)
+    const totalKickers  = computeKickerEarningsForAgent(userRole, agentDealsAll, allKickers, deals, lowerUser)
+    const atRiskDeals   = agentDealsAll.filter(d => ['awaiting for docs', 'post_approval pending'].includes((d.LoanDocsCollected || '').trim().toLowerCase()) && workingDaysSince(d.Timestamp || d.PaymentDate) >= 3)
     return {
       totalTarget: 0, totalAchieved: 0, totalCommission: 0, achievementPct: 0,
       totalSaleValue: 0, totalDeals: 0, loanDocs: {}, slabInfo: null,
       totalKickers, totalT2Amount: 0, totalMoneyMade: totalKickers,
+      atRiskCount: atRiskDeals.length, atRiskAmount: atRiskDeals.reduce((s, d) => s + (d.TotalValue || 0), 0), atRiskDeals,
+      suggestedEmails: [], wipAmount: 0, wipSlabHint: null,
     }
   }
 

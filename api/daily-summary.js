@@ -23,7 +23,12 @@ async function fetchAll(table) {
 }
 
 export default async function handler(req, res) {
-  // Allow Vercel cron (GET) or manual trigger (POST)
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret) {
+    const auth = req.headers.authorization || ''
+    if (auth !== `Bearer ${cronSecret}`) return res.status(401).json({ error: 'Unauthorized' })
+  }
+
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) return res.status(500).json({ error: 'SLACK_WEBHOOK_URL not configured' })
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY)

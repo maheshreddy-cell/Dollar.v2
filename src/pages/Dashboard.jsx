@@ -122,11 +122,16 @@ export default function Dashboard() {
   const tick        = useRefresh()
 
   // ── Push in-app + Slack notification when at-risk count rises ───────────
-  // sessionStorage key prevents re-firing when user navigates away and back
-  const prevAtRiskRef = useRef(null)
+  const prevAtRiskRef    = useRef(null)
+  const prevAtRiskEmail  = useRef(null)
   useEffect(() => {
     const count = summary?.atRiskCount ?? 0
     const email = effectiveUser?.email || ''
+    // Reset ref when viewing a different user (View-As switch) so their count is evaluated fresh
+    if (email !== prevAtRiskEmail.current) {
+      prevAtRiskRef.current   = null
+      prevAtRiskEmail.current = email
+    }
     const dedupKey = `atrisk_slack_${email}_${count}`
     // localStorage persists across tabs/sessions so the same at-risk state doesn't re-alert on reopen
     const alreadySent = count > 0 && !!localStorage.getItem(dedupKey)
@@ -158,7 +163,8 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (tick === 0) setLoading(true)
+    setLoading(true)
+    setSummary(null)
     setError('')
 
     // Load managers leaderboard for VH/SalesHead (separate from agent leaderboard)

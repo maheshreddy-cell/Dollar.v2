@@ -25,6 +25,13 @@ function safeParse(val, fallback = []) {
 }
 
 export default async function handler(req, res) {
+  // Vercel cron requests carry Authorization: Bearer <CRON_SECRET>
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret) {
+    const auth = req.headers.authorization || ''
+    if (auth !== `Bearer ${cronSecret}`) return res.status(401).json({ error: 'Unauthorized' })
+  }
+
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) return res.status(500).json({ error: 'SLACK_WEBHOOK_URL not configured' })
 
