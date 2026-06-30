@@ -1002,7 +1002,8 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
 
   let total = computeHatTrickEarnings(agentDeals).amount
   for (const raw of (allKickers || [])) {
-    const k = parseKickerRow(raw)
+    // Accept pre-parsed objects (from getKickers()) or raw sheet rows
+    const k = (raw && raw.id) ? raw : parseKickerRow(raw)
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
 
@@ -1123,7 +1124,8 @@ export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDea
   }
 
   for (const raw of (allKickers || [])) {
-    const k = parseKickerRow(raw)
+    // Accept pre-parsed objects (from getKickers()) or raw sheet rows
+    const k = (raw && raw.id) ? raw : parseKickerRow(raw)
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
 
