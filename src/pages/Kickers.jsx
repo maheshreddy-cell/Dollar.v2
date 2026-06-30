@@ -1413,8 +1413,11 @@ export default function Kickers() {
   const allVisible = isFullOversight ? kickers : kickers.filter(isVisible)
 
   // Filter to kickers whose date range overlaps the selected month (all boundaries in IST)
+  // Use UTC methods when deriving the last calendar day — new Date("YYYY-MM-01") parses as
+  // UTC midnight, so getFullYear()/getMonth() return the PREVIOUS month between 00:00-05:30 IST.
   const monthStart = istDayStart(month + '-01')
-  const lastDay    = new Date(new Date(month + '-01').getFullYear(), new Date(month + '-01').getMonth() + 1, 0).toISOString().slice(0, 10)
+  const _d0        = new Date(month + '-01')
+  const lastDay    = new Date(Date.UTC(_d0.getUTCFullYear(), _d0.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
   const monthEnd   = istDayEnd(lastDay)
   const monthVisible = allVisible.filter(k => {
     if (!k.dateFrom || !k.dateTo) return true
