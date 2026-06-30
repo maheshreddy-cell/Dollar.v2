@@ -326,8 +326,8 @@ function countdown(k) {
 
 // ── Progress calculation ──────────────────────────────────────────────────────
 function computeProgress(kicker, allDeals, myEmail, weeklyTarget, emailForTargets) {
-  const from = new Date(kicker.dateFrom)
-  const to   = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+  const from = istDayStart(kicker.dateFrom)
+  const to   = istDayEnd(kicker.dateTo)
 
   // PaymentDate is normalized to YYYY-MM-DD by parseSheetDate() — primary date source.
   // Timestamp is raw DD/MM/YYYY from Indian-locale Sheets (JS misparses as M/D/YYYY).
@@ -335,8 +335,8 @@ function computeProgress(kicker, allDeals, myEmail, weeklyTarget, emailForTarget
   const kickerMonth = kicker.dateFrom?.substring(0, 7)
   const inRange = allDeals.filter(d => {
     if (d.PaymentDate) {
-      const dt = new Date(d.PaymentDate)
-      if (!isNaN(dt.getTime())) return dt >= from && dt <= to
+      const dt = istDayStart(d.PaymentDate)
+      if (!isNaN(dt)) return dt >= from && dt <= to
     }
     return kickerMonth ? d.Month === kickerMonth : false
   })
@@ -668,8 +668,8 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
 
   const managerEarners = (isOversight && isManagerKicker && teamMap && Object.keys(teamMap).length > 0)
     ? (() => {
-        const from        = new Date(kicker.dateFrom)
-        const to          = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+        const from        = istDayStart(kicker.dateFrom)
+        const to          = istDayEnd(kicker.dateTo)
         const minVal      = Number(kicker.minSaleValue || 0)
         const targetTeams = kicker.targetTeams || ['ALL']
         const allTeams    = targetTeams.includes('ALL')
@@ -677,7 +677,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
         const byMgr  = {}
         for (const d of deals) {
           if (d.PaymentDate) {
-            const dt = new Date(d.PaymentDate)
+            const dt = istDayStart(d.PaymentDate)
             if (isNaN(dt) || dt < from || dt > to) continue
           } else if (d.Month) {
             const km = kicker.dateFrom?.substring(0, 7)
@@ -720,17 +720,17 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
   // Month-end earners list — oversight view for team_month_end kicker
   const monthEndEarners = (isOversight && isMonthEnd)
     ? (() => {
-        const from     = new Date(kicker.dateFrom)
-        const to       = new Date(kicker.dateTo); to.setHours(23, 59, 59)
+        const from     = istDayStart(kicker.dateFrom)
+        const to       = istDayEnd(kicker.dateTo)
         const minVal   = Number(kicker.minSaleValue || 0)
         const agTargets = kicker.agentTargets || {}
         const s1Payout = Number((kicker.slabs || [])[0]?.payout || 0)
         const s2Payout = Number((kicker.slabs || [])[1]?.payout || 0)
-        // Count qualifying sales per agent
+        // Count qualifying sales per agent (keys are lowercased for lookup)
         const byAgent = {}
         for (const d of deals) {
           if (d.PaymentDate) {
-            const dt = new Date(d.PaymentDate)
+            const dt = istDayStart(d.PaymentDate)
             if (isNaN(dt) || dt < from || dt > to) continue
           } else if (d.Month) {
             const km = kicker.dateFrom?.substring(0, 7)
@@ -746,7 +746,7 @@ function KickerCard({ kicker, deals, agentEmail, agentName, isManagerViewer, isO
         return Object.entries(agTargets).map(([email, targets]) => {
           const s1   = Number(targets?.s1 || 0)
           const s2   = Number(targets?.s2 || 0)
-          const count = byAgent[email] || 0
+          const count = byAgent[email.toLowerCase()] || 0
           const displayName = email.split('@')[0].split(/[._-]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
           let hitTier = null, payout = 0
           if (s2 > 0 && count >= s2) { hitTier = 'S2'; payout = s2Payout }
@@ -1402,12 +1402,13 @@ export default function Kickers() {
   // All kickers visible to this user (VH scoped via isVisible; Admin/SalesHead see all)
   const allVisible = isFullOversight ? kickers : kickers.filter(isVisible)
 
-  // Filter to kickers whose date range overlaps the selected month
-  const monthStart = new Date(month + '-01')
-  const monthEnd   = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59)
+  // Filter to kickers whose date range overlaps the selected month (all boundaries in IST)
+  const monthStart = istDayStart(month + '-01')
+  const lastDay    = new Date(new Date(month + '-01').getFullYear(), new Date(month + '-01').getMonth() + 1, 0).toISOString().slice(0, 10)
+  const monthEnd   = istDayEnd(lastDay)
   const monthVisible = allVisible.filter(k => {
     if (!k.dateFrom || !k.dateTo) return true
-    return new Date(k.dateFrom) <= monthEnd && new Date(k.dateTo) >= monthStart
+    return istDayStart(k.dateFrom) <= monthEnd && istDayEnd(k.dateTo) >= monthStart
   })
 
   // Role category filter

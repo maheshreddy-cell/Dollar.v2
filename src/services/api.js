@@ -361,7 +361,7 @@ export const getDealsForSubtree = async (emails, month) => {
   )
 }
 
-export const createDeal = (data) => {
+export const createDeal = async (data) => {
   // data: { email, customerName, docs, price, dealDate, month }
   const row = [
     uuidv4(),
@@ -374,17 +374,24 @@ export const createDeal = (data) => {
     data.dealDate,
     '',  // ClosedDate empty until cleared
   ]
-  return appsScript.appendRow('Deals', row)
+  const result = await appsScript.appendRow('Deals', row)
+  clearSheetCache('Deals')
+  return result
 }
 
-export const updateDeal = (id, status) => {
+export const updateDeal = async (id, status) => {
   const updates = { Status: status }
   if (status === 'Cleared') updates.ClosedDate = new Date().toISOString().split('T')[0]
-  return appsScript.updateRow('Deals', 'ID', id, updates)
+  const result = await appsScript.updateRow('Deals', 'ID', id, updates)
+  clearSheetCache('Deals')
+  return result
 }
 
-export const deleteDeal = (id) =>
-  appsScript.deleteRow('Deals', 'ID', id)
+export const deleteDeal = async (id) => {
+  const result = await appsScript.deleteRow('Deals', 'ID', id)
+  clearSheetCache('Deals')
+  return result
+}
 
 // ─── Targets ──────────────────────────────────────────────────────────────────
 
@@ -1010,8 +1017,11 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
 
-    const from = new Date(k.dateFrom).getTime()
-    const to   = new Date(k.dateTo).getTime() + 86399999
+    // IST_MS shifts YYYY-MM-DD strings (parsed as UTC midnight) to IST midnight so the
+    // activation guard and date window are correct for IST users.
+    const IST_MS   = 5.5 * 60 * 60 * 1000
+    const from = new Date(k.dateFrom).getTime() + IST_MS
+    const to   = new Date(k.dateTo).getTime()   + IST_MS + 86399999
     if (Date.now() < from) continue
 
     const rawType = k.type || 'sales'
@@ -1020,7 +1030,7 @@ function computeKickerEarningsForAgent(agentRole, agentDeals, allKickers, allDea
     const kickerMonth = (k.dateFrom || '').substring(0, 7)
     function inDateRange(d) {
       if (d.PaymentDate) {
-        const dt = new Date(d.PaymentDate).getTime()
+        const dt = new Date(d.PaymentDate).getTime() + IST_MS
         if (!isNaN(dt)) return dt >= from && dt <= to
       }
       return kickerMonth ? d.Month === kickerMonth : false
@@ -1132,14 +1142,15 @@ export function computeKickerBreakdown(agentRole, agentDeals, allKickers, allDea
     if (!k.id) continue
     if (!k.targetRoles.includes(agentRole)) continue
 
-    const from = new Date(k.dateFrom).getTime()
-    const to   = new Date(k.dateTo).getTime() + 86399999
+    const IST_MS   = 5.5 * 60 * 60 * 1000
+    const from = new Date(k.dateFrom).getTime() + IST_MS
+    const to   = new Date(k.dateTo).getTime()   + IST_MS + 86399999
     if (Date.now() < from) continue
 
     const rawType = k.type || 'sales'
     const kickerMonth = (k.dateFrom || '').substring(0, 7)
     const inRange_ = (d) => {
-      if (d.PaymentDate) { const dt = new Date(d.PaymentDate).getTime(); if (!isNaN(dt)) return dt >= from && dt <= to }
+      if (d.PaymentDate) { const dt = new Date(d.PaymentDate).getTime() + IST_MS; if (!isNaN(dt)) return dt >= from && dt <= to }
       return kickerMonth ? d.Month === kickerMonth : false
     }
 
